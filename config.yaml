@@ -1,0 +1,46 @@
+pipeline:
+  random_seed: 42
+  test_size: 0.20
+  cv_folds: 5
+  n_jobs: -1
+
+datasets:
+  breast_cancer:
+    display_name: "Breast Cancer Wisconsin"
+    task: classification
+    source: sklearn
+  wine:
+    display_name: "Wine Recognition"
+    task: classification
+    source: sklearn
+  iris:
+    display_name: "Iris Species"
+    task: classification
+    source: sklearn
+  digits:
+    display_name: "Handwritten Digits"
+    task: classification
+    source: sklearn
+  synthetic_clf:
+    display_name: "Synthetic Classification"
+    task: classification
+    source: generated
+  synthetic_reg:
+    display_name: "Synthetic Regression"
+    task: regression
+    source: generated
+
+monitoring:
+  drift_significance_level: 0.05
+  psi_moderate_threshold: 0.10
+  psi_significant_threshold: 0.25
+  drift_feature_ratio_threshold: 0.20
+
+storage:
+  db_path: ".pipeline_monitor.db"
+  model_artifacts_dir: ".model_artifacts"
+
+ui:
+  primary_color: "#2563eb"
+  max_experiments_displayed: 200
+  chart_height: 420

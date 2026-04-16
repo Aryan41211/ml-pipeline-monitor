@@ -1,0 +1,497 @@
+"""
+Pipeline Runner page.
+
+Allows the user to select a dataset and algorithm, configure hyperparameters,
+and execute the full training pipeline while monitoring per-stage progress
+and reviewing the results inline.
+"""
+import json
+import os
+import sys
+import time
+
+import numpy as np
+import pandas as pd
+import plotly.express as px
+import plotly.figure_factory as ff
+import plotly.graph_objects as go
+import streamlit as st
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+
+from src.data_loader import DATASET_OPTIONS, load_dataset, get_feature_statistics
+from src.database import initialize_db, save_experiment, save_model
+from src.pipeline import CLF_REGISTRY, REG_REGISTRY, MLPipeline
+
+st.set_page_config(page_title="Pipeline Runner | ML Monitor", layout="wide")
+initialize_db()
+
+# ---------------------------------------------------------------------------
+# CSS (shared with home)
+# ---------------------------------------------------------------------------
+st.markdown(
+    """
+    <style>
+        html, body, [class*="css"] { font-family: 'Inter', 'Segoe UI', sans-serif; }
+        [data-testid="metric-container"] {
+            background: #f8fafc; border: 1px solid #e2e8f0;
+            border-radius: 10px; padding: 18px 20px;
+        }
+        [data-testid="stMetricValue"] { font-size: 1.9rem !important; font-weight: 700; color: #0f172a; }
+        .page-header { padding: 8px 0 24px 0; border-bottom: 2px solid #e2e8f0; margin-bottom: 28px; }
+        .page-header h1 { font-size: 1.75rem; font-weight: 700; color: #0f172a; margin: 0; }
+        .page-header p  { color: #64748b; margin: 4px 0 0 0; font-size: 0.9rem; }
+        .section-title  { font-size: 1rem; font-weight: 600; color: #1e293b;
+                          margin-bottom: 14px; padding-bottom: 6px; border-bottom: 1px solid #f1f5f9; }
+        .stage-row { display: flex; align-items: center; gap: 10px;
+                     padding: 8px 12px; border-radius: 6px; margin-bottom: 4px;
+                     background: #f8fafc; border: 1px solid #e2e8f0; }
+        .stage-dot { width:10px; height:10px; border-radius:50%; flex-shrink:0; }
+        .stage-name { font-size:0.85rem; font-weight:600; color:#1e293b; flex:1; }
+        .stage-dur  { font-size:0.78rem; color:#64748b; }
+        [data-testid="stSidebar"] { background: #f8fafc; }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+# ---------------------------------------------------------------------------
+# Page header
+# ---------------------------------------------------------------------------
+st.markdown(
+    """
+    <div class="page-header">
+      <h1>Pipeline Runner</h1>
+      <p>Configure, execute, and inspect an end-to-end ML training pipeline.</p>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
+
+# ---------------------------------------------------------------------------
+# Helper: hyperparameter widgets per algorithm
+# ---------------------------------------------------------------------------
+def _clf_param_widgets(model_type: str) -> dict:
+    params = {}
+    if model_type == "Random Forest":
+        params["n_estimators"] = st.slider("n_estimators", 50, 500, 100, 50)
+        params["max_depth"]    = st.select_slider(
+            "max_depth", options=["None", 5, 10, 15, 20, 30], value="None"
+        )
+        if params["max_depth"] == "None":
+            params["max_depth"] = None
+        else:
+            params["max_depth"] = int(params["max_depth"])
+        params["min_samples_split"] = st.slider("min_samples_split", 2, 20, 2)
+
+    elif model_type == "XGBoost":
+        params["n_estimators"]  = st.slider("n_estimators",  50, 500, 100, 50)
+        params["learning_rate"] = st.select_slider(
+            "learning_rate", options=[0.01, 0.05, 0.1, 0.2, 0.3], value=0.1
+        )
+        params["max_depth"]     = st.slider("max_depth", 2, 12, 6)
+
+    elif model_type == "Gradient Boosting":
+        params["n_estimators"]  = st.slider("n_estimators",  50, 300, 100, 50)
+        params["learning_rate"] = st.select_slider(
+            "learning_rate", options=[0.01, 0.05, 0.1, 0.2, 0.3], value=0.1
+        )
+        params["max_depth"]     = st.slider("max_depth", 1, 8, 3)
+
+    elif model_type == "Logistic Regression":
+        params["C"]        = st.select_slider("C (regularisation)", [0.001, 0.01, 0.1, 1.0, 10.0, 100.0], value=1.0)
+        params["max_iter"] = st.slider("max_iter", 100, 2000, 1000, 100)
+
+    elif model_type == "SVM":
+        params["C"]      = st.select_slider("C", [0.01, 0.1, 1.0, 10.0, 100.0], value=1.0)
+        params["kernel"] = st.selectbox("kernel", ["rbf", "linear", "poly"])
+
+    elif model_type == "Decision Tree":
+        params["max_depth"] = st.select_slider(
+            "max_depth", options=["None", 3, 5, 8, 12, 20], value="None"
+        )
+        if params["max_depth"] == "None":
+            params["max_depth"] = None
+        else:
+            params["max_depth"] = int(params["max_depth"])
+        params["min_samples_split"] = st.slider("min_samples_split", 2, 20, 2)
+
+    return params
+
+
+def _reg_param_widgets(model_type: str) -> dict:
+    params = {}
+    if model_type == "Random Forest":
+        params["n_estimators"] = st.slider("n_estimators", 50, 500, 100, 50)
+        params["max_depth"]    = st.select_slider(
+            "max_depth", options=["None", 5, 10, 15, 20], value="None"
+        )
+        params["max_depth"] = None if params["max_depth"] == "None" else int(params["max_depth"])
+
+    elif model_type == "XGBoost":
+        params["n_estimators"]  = st.slider("n_estimators",  50, 500, 100, 50)
+        params["learning_rate"] = st.select_slider(
+            "learning_rate", options=[0.01, 0.05, 0.1, 0.2, 0.3], value=0.1
+        )
+        params["max_depth"]     = st.slider("max_depth", 2, 12, 6)
+
+    elif model_type == "Gradient Boosting":
+        params["n_estimators"]  = st.slider("n_estimators", 50, 300, 100, 50)
+        params["learning_rate"] = st.select_slider(
+            "learning_rate", options=[0.01, 0.05, 0.1, 0.2, 0.3], value=0.1
+        )
+        params["max_depth"]     = st.slider("max_depth", 1, 8, 3)
+
+    elif model_type == "Ridge Regression":
+        params["alpha"] = st.select_slider("alpha", [0.001, 0.01, 0.1, 1.0, 10.0, 100.0], value=1.0)
+
+    elif model_type == "SVR":
+        params["C"]      = st.select_slider("C", [0.01, 0.1, 1.0, 10.0, 100.0], value=1.0)
+        params["kernel"] = st.selectbox("kernel", ["rbf", "linear", "poly"])
+
+    elif model_type == "Decision Tree":
+        params["max_depth"] = st.select_slider(
+            "max_depth", options=["None", 3, 5, 8, 12], value="None"
+        )
+        params["max_depth"] = None if params["max_depth"] == "None" else int(params["max_depth"])
+        params["min_samples_split"] = st.slider("min_samples_split", 2, 20, 2)
+
+    return params
+
+
+# ---------------------------------------------------------------------------
+# Sidebar — configuration
+# ---------------------------------------------------------------------------
+with st.sidebar:
+    st.markdown("### Configuration")
+    st.divider()
+
+    dataset_label = st.selectbox("Dataset", list(DATASET_OPTIONS.keys()))
+    dataset_key   = DATASET_OPTIONS[dataset_label]
+
+    test_size    = st.slider("Test split", 0.10, 0.40, 0.20, 0.05)
+    cv_folds     = st.slider("CV folds",   2, 10, 5)
+    random_state = st.number_input("Random seed", min_value=0, max_value=9999, value=42)
+
+    st.divider()
+    st.markdown("**Algorithm**")
+
+    # Determine available algorithms after dataset load attempt
+    # (task is known from DATASET_OPTIONS config)
+    clf_datasets = {"breast_cancer", "wine", "iris", "digits", "synthetic_clf"}
+    task = "classification" if dataset_key in clf_datasets else "regression"
+
+    if task == "classification":
+        algo_options = list(CLF_REGISTRY.keys())
+    else:
+        algo_options = list(REG_REGISTRY.keys())
+
+    model_type = st.selectbox("Model", algo_options)
+
+    st.divider()
+    st.markdown("**Hyperparameters**")
+
+    if task == "classification":
+        params = _clf_param_widgets(model_type)
+    else:
+        params = _reg_param_widgets(model_type)
+
+    st.divider()
+    run_btn = st.button("Run Pipeline", type="primary", use_container_width=True)
+
+
+# ---------------------------------------------------------------------------
+# Dataset preview tab
+# ---------------------------------------------------------------------------
+tab_run, tab_data = st.tabs(["Pipeline Execution", "Dataset Preview"])
+
+with tab_data:
+    with st.spinner("Loading dataset..."):
+        try:
+            ds = load_dataset(dataset_key, test_size=test_size, random_state=int(random_state))
+        except Exception as exc:
+            st.error(f"Failed to load dataset: {exc}")
+            st.stop()
+
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Samples",  f"{ds['stats']['n_samples']:,}")
+    c2.metric("Features", ds["stats"]["n_features"])
+    c3.metric("Train",    f"{ds['stats']['train_size']:,}")
+    c4.metric("Test",     f"{ds['stats']['test_size']:,}")
+
+    if task == "classification":
+        st.caption(
+            f"Classes: {ds['stats']['n_classes']}   |   "
+            f"Missing values: {ds['stats']['missing_values']}"
+        )
+    else:
+        st.caption(
+            f"Target mean: {ds['stats']['target_mean']:.4f}   |   "
+            f"Target std: {ds['stats']['target_std']:.4f}"
+        )
+
+    st.markdown("---")
+    st.markdown('<div class="section-title">Feature Statistics</div>', unsafe_allow_html=True)
+    feat_stats = get_feature_statistics(ds["X_train"])
+    st.dataframe(feat_stats.style.format("{:.4f}", na_rep="—"), use_container_width=True)
+
+    st.markdown('<div class="section-title" style="margin-top:20px">Feature Distributions (first 9)</div>', unsafe_allow_html=True)
+    sample_feats = ds["X_train"].columns[:9].tolist()
+    n_cols = 3
+    rows = [sample_feats[i:i + n_cols] for i in range(0, len(sample_feats), n_cols)]
+    for row in rows:
+        cols = st.columns(n_cols)
+        for col_widget, feat in zip(cols, row):
+            with col_widget:
+                fig = px.histogram(
+                    ds["X_train"],
+                    x=feat,
+                    nbins=30,
+                    color_discrete_sequence=["#2563eb"],
+                    labels={feat: feat},
+                )
+                fig.update_layout(
+                    height=180,
+                    margin=dict(l=0, r=0, t=24, b=0),
+                    showlegend=False,
+                    plot_bgcolor="white",
+                    paper_bgcolor="white",
+                    title=dict(text=feat, font=dict(size=11)),
+                    xaxis=dict(showgrid=False, title=None),
+                    yaxis=dict(showgrid=False, title=None, showticklabels=False),
+                )
+                st.plotly_chart(fig, use_container_width=True)
+
+
+# ---------------------------------------------------------------------------
+# Pipeline execution tab
+# ---------------------------------------------------------------------------
+with tab_run:
+    if "last_result" not in st.session_state:
+        st.session_state["last_result"] = None
+
+    if run_btn:
+        # Load data fresh
+        try:
+            ds = load_dataset(dataset_key, test_size=test_size, random_state=int(random_state))
+        except Exception as exc:
+            st.error(f"Dataset load error: {exc}")
+            st.stop()
+
+        # UI placeholders
+        prog_bar    = st.progress(0.0)
+        status_ph   = st.empty()
+        stages_ph   = st.empty()
+        log_ph      = st.empty()
+
+        stage_log: list = []
+        all_logs: list  = []
+
+        def _progress_cb(stage: str, progress: float, message: str) -> None:
+            prog_bar.progress(progress)
+            status_ph.markdown(
+                f"<div style='color:#2563eb;font-weight:600;font-size:0.9rem'>"
+                f"Running: {stage} — {message}</div>",
+                unsafe_allow_html=True,
+            )
+            ts = time.strftime("%H:%M:%S")
+            all_logs.append(f"[{ts}] [{stage}] {message}")
+            log_ph.code("\n".join(all_logs[-20:]), language=None)
+
+        pipeline = MLPipeline(
+            dataset_name=dataset_label,
+            model_type=model_type,
+            task=task,
+            params=params,
+            cv_folds=cv_folds,
+            random_state=int(random_state),
+            progress_callback=_progress_cb,
+        )
+
+        result = pipeline.run(
+            ds["X_train"], ds["X_test"],
+            ds["y_train"], ds["y_test"],
+        )
+
+        prog_bar.progress(1.0)
+        status_ph.success(
+            f"Run {result.run_id} completed in {result.duration:.2f} s"
+        )
+
+        # Persist
+        save_experiment(
+            run_id=result.run_id,
+            name=f"{dataset_label} / {model_type}",
+            dataset=dataset_label,
+            model_type=model_type,
+            task=task,
+            params=params,
+            metrics=result.metrics,
+            duration=result.duration,
+        )
+        save_model(
+            model_id=result.run_id,
+            run_id=result.run_id,
+            name=f"{model_type}",
+            dataset=dataset_label,
+            model_type=model_type,
+            task=task,
+            metrics=result.metrics,
+            artifact_path="",
+        )
+
+        st.session_state["last_result"] = result
+        st.session_state["last_ds"]     = ds
+
+    # -----------------------------------------------------------------------
+    # Results section
+    # -----------------------------------------------------------------------
+    result = st.session_state.get("last_result")
+    ds_res = st.session_state.get("last_ds")
+
+    if result is None:
+        st.info(
+            "Configure your experiment in the sidebar and click **Run Pipeline** to start."
+        )
+    else:
+        st.markdown("---")
+        st.markdown(
+            f'<div class="section-title">Results — Run {result.run_id}</div>',
+            unsafe_allow_html=True,
+        )
+
+        # Metrics
+        metrics = result.metrics
+        if result.task == "classification":
+            m1, m2, m3, m4, m5 = st.columns(5)
+            m1.metric("Accuracy",  f"{metrics.get('accuracy', 0):.4f}")
+            m2.metric("Precision", f"{metrics.get('precision', 0):.4f}")
+            m3.metric("Recall",    f"{metrics.get('recall', 0):.4f}")
+            m4.metric("F1 Score",  f"{metrics.get('f1_score', 0):.4f}")
+            m5.metric("ROC-AUC",   f"{metrics.get('roc_auc', 0):.4f}" if "roc_auc" in metrics else "—")
+        else:
+            m1, m2, m3 = st.columns(3)
+            m1.metric("RMSE", f"{metrics.get('rmse', 0):.4f}")
+            m2.metric("MAE",  f"{metrics.get('mae', 0):.4f}")
+            m3.metric("R²",   f"{metrics.get('r2', 0):.4f}")
+
+        cv_mean = metrics.get("cv_mean", 0)
+        cv_std  = metrics.get("cv_std", 0)
+        st.caption(f"Cross-validation: {cv_mean:.4f} ± {cv_std:.4f}  ({result.cv_scores.shape[0]}-fold)")
+
+        st.markdown("<br>", unsafe_allow_html=True)
+
+        # Stage summary
+        st.markdown('<div class="section-title">Stage Summary</div>', unsafe_allow_html=True)
+        stage_cols = st.columns(len(result.stages))
+        colors = {"success": "#22c55e", "failed": "#ef4444", "skipped": "#94a3b8"}
+        for i, stage in enumerate(result.stages):
+            with stage_cols[i]:
+                dot_color = colors.get(stage.status, "#94a3b8")
+                st.markdown(
+                    f"""
+                    <div style="text-align:center;padding:12px 6px;
+                                background:#f8fafc;border:1px solid #e2e8f0;
+                                border-radius:8px">
+                        <div style="width:10px;height:10px;border-radius:50%;
+                                    background:{dot_color};margin:0 auto 6px auto"></div>
+                        <div style="font-size:0.72rem;font-weight:600;color:#1e293b;
+                                    line-height:1.3">{stage.name}</div>
+                        <div style="font-size:0.7rem;color:#64748b;margin-top:3px">
+                            {stage.duration:.2f} s</div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+
+        st.markdown("<br>", unsafe_allow_html=True)
+
+        # Charts
+        chart_left, chart_right = st.columns(2, gap="large")
+
+        with chart_left:
+            if result.feature_importances is not None:
+                st.markdown('<div class="section-title">Feature Importances (Top 15)</div>', unsafe_allow_html=True)
+                top_n = result.feature_importances.head(15).sort_values()
+                fig = go.Figure(
+                    go.Bar(
+                        x=top_n.values,
+                        y=top_n.index,
+                        orientation="h",
+                        marker_color="#2563eb",
+                        marker_line_width=0,
+                    )
+                )
+                fig.update_layout(
+                    height=380,
+                    margin=dict(l=0, r=20, t=10, b=0),
+                    plot_bgcolor="white",
+                    paper_bgcolor="white",
+                    xaxis=dict(showgrid=True, gridcolor="#f1f5f9", title="Importance"),
+                    yaxis=dict(showgrid=False, title=None, tickfont=dict(size=11)),
+                )
+                st.plotly_chart(fig, use_container_width=True)
+
+            if result.cv_scores is not None:
+                st.markdown('<div class="section-title" style="margin-top:8px">CV Score Distribution</div>', unsafe_allow_html=True)
+                fold_df = pd.DataFrame({
+                    "Fold": [f"Fold {i+1}" for i in range(len(result.cv_scores))],
+                    "Score": result.cv_scores,
+                })
+                fig_cv = px.bar(
+                    fold_df,
+                    x="Fold",
+                    y="Score",
+                    color_discrete_sequence=["#6366f1"],
+                    text="Score",
+                )
+                fig_cv.update_traces(texttemplate="%{text:.3f}", textposition="outside")
+                fig_cv.update_layout(
+                    height=260,
+                    margin=dict(l=0, r=0, t=10, b=0),
+                    plot_bgcolor="white",
+                    paper_bgcolor="white",
+                    xaxis=dict(showgrid=False),
+                    yaxis=dict(
+                        showgrid=True, gridcolor="#f1f5f9",
+                        range=[
+                            max(0, result.cv_scores.min() - 0.05),
+                            min(1.0, result.cv_scores.max() + 0.05),
+                        ],
+                    ),
+                    showlegend=False,
+                )
+                st.plotly_chart(fig_cv, use_container_width=True)
+
+        with chart_right:
+            if result.task == "classification" and result.confusion_mat is not None:
+                st.markdown('<div class="section-title">Confusion Matrix</div>', unsafe_allow_html=True)
+                cm = result.confusion_mat
+                labels = (
+                    ds_res["target_names"]
+                    if ds_res and ds_res.get("target_names")
+                    else [str(i) for i in range(cm.shape[0])]
+                )
+                fig_cm = ff.create_annotated_heatmap(
+                    z=cm,
+                    x=labels,
+                    y=labels,
+                    colorscale="Blues",
+                    showscale=True,
+                )
+                fig_cm.update_layout(
+                    height=380,
+                    margin=dict(l=60, r=20, t=30, b=60),
+                    xaxis=dict(title="Predicted", side="bottom"),
+                    yaxis=dict(title="Actual", autorange="reversed"),
+                    paper_bgcolor="white",
+                )
+                st.plotly_chart(fig_cm, use_container_width=True)
+
+        # Stage logs expander
+        with st.expander("Stage Logs"):
+            for stage in result.stages:
+                st.markdown(f"**{stage.name}** ({stage.duration:.3f} s)")
+                if stage.logs:
+                    st.code("\n".join(stage.logs), language=None)
+                st.markdown("---")

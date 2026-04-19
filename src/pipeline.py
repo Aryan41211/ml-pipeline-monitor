@@ -190,7 +190,7 @@ class MLPipeline:
         sig = inspect.signature(cls.__init__)
         if "random_state" in sig.parameters:
             base["random_state"] = self.random_state
-        if "n_jobs" in sig.parameters:
+        if "n_jobs" in sig.parameters and self.model_type != "Logistic Regression":
             base.setdefault("n_jobs", self.n_jobs)
 
         # XGBoost-specific tweaks

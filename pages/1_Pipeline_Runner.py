@@ -1,30 +1,79 @@
-"""
-Pipeline Runner page.
+"""Pipeline Runner page for end-to-end model training and persistence."""
 
-Allows the user to select a dataset and algorithm, configure hyperparameters,
-and execute the full training pipeline while monitoring per-stage progress
-and reviewing the results inline.
-"""
-import json
-import os
-import sys
+from datetime import datetime
 import time
+from pathlib import Path
 
-import numpy as np
 import pandas as pd
 import plotly.express as px
 import plotly.figure_factory as ff
 import plotly.graph_objects as go
 import streamlit as st
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-
+from services.pipeline_service import (
+    compute_next_run_ts,
+    run_pipeline_and_persist,
+    should_trigger_scheduled_run,
+)
+from src.auth import is_authenticated, render_auth_controls
+from src.config_loader import load_config
 from src.data_loader import DATASET_OPTIONS, load_dataset, get_feature_statistics
-from src.database import initialize_db, save_experiment, save_model
-from src.pipeline import CLF_REGISTRY, REG_REGISTRY, MLPipeline
+from src.database import initialize_db
+from src.pipeline import CLF_REGISTRY, REG_REGISTRY
 
 st.set_page_config(page_title="Pipeline Runner | ML Monitor", layout="wide")
 initialize_db()
+
+APP_CONFIG = load_config()
+PIPELINE_CONFIG = APP_CONFIG.get("pipeline", {})
+DATASET_CONFIG = APP_CONFIG.get("datasets", {})
+
+
+def _get_automation_state() -> dict:
+    if "automation_state" not in st.session_state:
+        st.session_state["automation_state"] = {
+            "enabled": False,
+            "interval_minutes": 30,
+            "next_run_at": None,
+            "last_run_at": None,
+            "last_run_id": None,
+            "config": None,
+            "history": [],
+        }
+    return st.session_state["automation_state"]
+
+
+def _trigger_automation_if_due() -> None:
+    state = _get_automation_state()
+    if not should_trigger_scheduled_run(state.get("enabled", False), state.get("next_run_at")):
+        return
+
+    cfg = state.get("config")
+    if not cfg:
+        state["enabled"] = False
+        return
+
+    try:
+        payload = run_pipeline_and_persist(**cfg)
+        result = payload["result"]
+        now = datetime.utcnow()
+
+        state["last_run_at"] = now
+        state["last_run_id"] = result.run_id
+        state["next_run_at"] = compute_next_run_ts(state.get("interval_minutes", 30))
+        state["history"] = [
+            {
+                "run_id": result.run_id,
+                "dataset": cfg["dataset_label"],
+                "model": cfg["model_type"],
+                "at": now.isoformat(timespec="seconds"),
+            }
+        ] + state.get("history", [])[:9]
+    except Exception:
+        state["enabled"] = False
+
+
+_trigger_automation_if_due()
 
 # ---------------------------------------------------------------------------
 # CSS (shared with home)
@@ -163,23 +212,37 @@ def _reg_param_widgets(model_type: str) -> dict:
 # Sidebar — configuration
 # ---------------------------------------------------------------------------
 with st.sidebar:
+    st.markdown("### Navigation")
+    st.page_link("app.py", label="Overview")
+    st.page_link("pages/1_Pipeline_Runner.py", label="Pipeline Runner")
+    st.page_link("pages/2_Experiment_Tracking.py", label="Experiment Tracking")
+    st.page_link("pages/3_Model_Registry.py", label="Model Registry")
+    st.page_link("pages/4_Data_Drift.py", label="Data Drift")
+    st.divider()
+
     st.markdown("### Configuration")
     st.divider()
 
     dataset_label = st.selectbox("Dataset", list(DATASET_OPTIONS.keys()))
     dataset_key   = DATASET_OPTIONS[dataset_label]
 
-    test_size    = st.slider("Test split", 0.10, 0.40, 0.20, 0.05)
-    cv_folds     = st.slider("CV folds",   2, 10, 5)
-    random_state = st.number_input("Random seed", min_value=0, max_value=9999, value=42)
+    default_test_size = float(PIPELINE_CONFIG.get("test_size", 0.20))
+    default_cv_folds = int(PIPELINE_CONFIG.get("cv_folds", 5))
+    default_seed = int(PIPELINE_CONFIG.get("random_seed", 42))
+
+    test_size = st.slider("Test split", 0.10, 0.40, default_test_size, 0.05)
+    cv_folds = st.slider("CV folds", 2, 10, default_cv_folds)
+    random_state = st.number_input("Random seed", min_value=0, max_value=9999, value=default_seed)
 
     st.divider()
     st.markdown("**Algorithm**")
 
     # Determine available algorithms after dataset load attempt
     # (task is known from DATASET_OPTIONS config)
-    clf_datasets = {"breast_cancer", "wine", "iris", "digits", "synthetic_clf"}
-    task = "classification" if dataset_key in clf_datasets else "regression"
+    task = DATASET_CONFIG.get(dataset_key, {}).get("task")
+    if task not in {"classification", "regression"}:
+        clf_datasets = {"breast_cancer", "wine", "iris", "digits", "synthetic_clf"}
+        task = "classification" if dataset_key in clf_datasets else "regression"
 
     if task == "classification":
         algo_options = list(CLF_REGISTRY.keys())
@@ -197,13 +260,23 @@ with st.sidebar:
         params = _reg_param_widgets(model_type)
 
     st.divider()
-    run_btn = st.button("Run Pipeline", type="primary", use_container_width=True)
+    auth_ok = render_auth_controls()
+
+    st.divider()
+    run_btn = st.button(
+        "Run Pipeline",
+        type="primary",
+        use_container_width=True,
+        disabled=not auth_ok,
+    )
 
 
 # ---------------------------------------------------------------------------
 # Dataset preview tab
 # ---------------------------------------------------------------------------
-tab_run, tab_data = st.tabs(["Pipeline Execution", "Dataset Preview"])
+tab_run, tab_data, tab_auto = st.tabs(
+    ["Pipeline Execution", "Dataset Preview", "Automation"]
+)
 
 with tab_data:
     with st.spinner("Loading dataset..."):
@@ -270,21 +343,15 @@ with tab_run:
     if "last_result" not in st.session_state:
         st.session_state["last_result"] = None
 
-    if run_btn:
-        # Load data fresh
-        try:
-            ds = load_dataset(dataset_key, test_size=test_size, random_state=int(random_state))
-        except Exception as exc:
-            st.error(f"Dataset load error: {exc}")
-            st.stop()
+    if not is_authenticated():
+        st.warning("Please login from the sidebar to execute pipeline runs.")
 
+    if run_btn:
         # UI placeholders
         prog_bar    = st.progress(0.0)
         status_ph   = st.empty()
-        stages_ph   = st.empty()
         log_ph      = st.empty()
 
-        stage_log: list = []
         all_logs: list  = []
 
         def _progress_cb(stage: str, progress: float, message: str) -> None:
@@ -298,47 +365,36 @@ with tab_run:
             all_logs.append(f"[{ts}] [{stage}] {message}")
             log_ph.code("\n".join(all_logs[-20:]), language=None)
 
-        pipeline = MLPipeline(
-            dataset_name=dataset_label,
-            model_type=model_type,
-            task=task,
-            params=params,
-            cv_folds=cv_folds,
-            random_state=int(random_state),
-            progress_callback=_progress_cb,
-        )
+        try:
+            payload = run_pipeline_and_persist(
+                dataset_label=dataset_label,
+                dataset_key=dataset_key,
+                model_type=model_type,
+                task=task,
+                params=params,
+                test_size=float(test_size),
+                cv_folds=int(cv_folds),
+                random_state=int(random_state),
+                progress_callback=_progress_cb,
+            )
+        except Exception as exc:
+            status_ph.error(f"Pipeline failed: {exc}")
+            st.stop()
 
-        result = pipeline.run(
-            ds["X_train"], ds["X_test"],
-            ds["y_train"], ds["y_test"],
-        )
+        result = payload["result"]
+        ds = payload["dataset"]
+        model_record = payload["model_record"]
+        model_artifact_path = payload["artifacts"]["model_path"]
 
         prog_bar.progress(1.0)
         status_ph.success(
             f"Run {result.run_id} completed in {result.duration:.2f} s"
         )
 
-        # Persist
-        save_experiment(
-            run_id=result.run_id,
-            name=f"{dataset_label} / {model_type}",
-            dataset=dataset_label,
-            model_type=model_type,
-            task=task,
-            params=params,
-            metrics=result.metrics,
-            duration=result.duration,
-        )
-        save_model(
-            model_id=result.run_id,
-            run_id=result.run_id,
-            name=f"{model_type}",
-            dataset=dataset_label,
-            model_type=model_type,
-            task=task,
-            metrics=result.metrics,
-            artifact_path="",
-        )
+        if model_artifact_path:
+            st.caption(
+                f"Artifacts saved. Model v{model_record['version']} at {Path(model_artifact_path).as_posix()}"
+            )
 
         st.session_state["last_result"] = result
         st.session_state["last_ds"]     = ds
@@ -495,3 +551,70 @@ with tab_run:
                 if stage.logs:
                     st.code("\n".join(stage.logs), language=None)
                 st.markdown("---")
+
+
+with tab_auto:
+    st.markdown('<div class="section-title">Scheduled Pipeline Runs (Simulated Cron)</div>', unsafe_allow_html=True)
+    st.caption(
+        "Automation executes whenever this page refreshes and the next run timestamp is due. "
+        "This provides cron-like behavior inside Streamlit sessions."
+    )
+
+    auto = _get_automation_state()
+
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Automation", "Enabled" if auto.get("enabled") else "Disabled")
+    c2.metric("Last Auto Run", auto.get("last_run_id") or "—")
+
+    next_run_label = "—"
+    if auto.get("next_run_at"):
+        next_run_label = auto["next_run_at"].strftime("%Y-%m-%d %H:%M:%S UTC")
+    c3.metric("Next Run", next_run_label)
+
+    enabled = st.toggle("Enable automation", value=bool(auto.get("enabled", False)))
+    interval = st.slider(
+        "Run interval (minutes)",
+        min_value=1,
+        max_value=180,
+        value=int(auto.get("interval_minutes", 30)),
+    )
+
+    col_set, col_stop = st.columns(2)
+    with col_set:
+        set_schedule = st.button("Apply Schedule", type="primary", use_container_width=True)
+    with col_stop:
+        stop_schedule = st.button("Stop Automation", use_container_width=True)
+
+    if set_schedule:
+        if not is_authenticated():
+            st.error("Login required to configure automation.")
+            st.stop()
+        auto["enabled"] = bool(enabled)
+        auto["interval_minutes"] = int(interval)
+        auto["config"] = {
+            "dataset_label": dataset_label,
+            "dataset_key": dataset_key,
+            "model_type": model_type,
+            "task": task,
+            "params": params,
+            "test_size": float(test_size),
+            "cv_folds": int(cv_folds),
+            "random_state": int(random_state),
+        }
+        auto["next_run_at"] = compute_next_run_ts(interval)
+        st.success("Automation schedule updated.")
+
+    if stop_schedule:
+        if not is_authenticated():
+            st.error("Login required to stop automation.")
+            st.stop()
+        auto["enabled"] = False
+        auto["next_run_at"] = None
+        st.info("Automation stopped.")
+
+    history = auto.get("history", [])
+    if history:
+        st.markdown('<div class="section-title" style="margin-top:18px">Recent Automated Runs</div>', unsafe_allow_html=True)
+        st.dataframe(pd.DataFrame(history), use_container_width=True, hide_index=True)
+    else:
+        st.info("No automated runs yet.")

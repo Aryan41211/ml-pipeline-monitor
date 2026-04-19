@@ -1,28 +1,36 @@
-"""
-Persistence layer backed by SQLite.
+"""SQLite persistence layer for experiments, models, and drift reports."""
 
-Stores experiment runs, model registry entries, and drift reports
-without requiring an external tracking server.
-"""
+from __future__ import annotations
+
 import json
-import os
 import sqlite3
+from contextlib import contextmanager
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Iterator, List, Optional
 
-DB_PATH = os.getenv("PIPELINE_DB", ".pipeline_monitor.db")
+from src.db_engine import get_backend
 
 
 def _connect() -> sqlite3.Connection:
-    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA journal_mode=WAL")
-    return conn
+    return get_backend().connect()
+
+
+@contextmanager
+def get_connection() -> Iterator[sqlite3.Connection]:
+    conn = _connect()
+    try:
+        yield conn
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
 
 def initialize_db() -> None:
-    """Create all tables if they do not already exist."""
-    with _connect() as conn:
+    """Create tables, migrate schema, and create useful indexes."""
+    with get_connection() as conn:
         conn.executescript(
             """
             CREATE TABLE IF NOT EXISTS experiments (
@@ -49,11 +57,13 @@ def initialize_db() -> None:
                 name            TEXT    NOT NULL,
                 version         INTEGER NOT NULL DEFAULT 1,
                 dataset         TEXT    NOT NULL,
+                dataset_name    TEXT,
                 model_type      TEXT    NOT NULL,
                 task            TEXT    NOT NULL DEFAULT 'classification',
                 metrics         TEXT,
                 artifact_path   TEXT,
                 stage           TEXT    DEFAULT 'development',
+                created_at      TEXT    DEFAULT CURRENT_TIMESTAMP,
                 registered_at   TEXT    DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (run_id) REFERENCES experiments (run_id)
             );
@@ -70,7 +80,54 @@ def initialize_db() -> None:
                 feature_results  TEXT,
                 created_at       TEXT    DEFAULT CURRENT_TIMESTAMP
             );
+
+            CREATE TABLE IF NOT EXISTS model_lineage (
+                id                INTEGER PRIMARY KEY AUTOINCREMENT,
+                model_id          TEXT    NOT NULL,
+                experiment_id     TEXT    NOT NULL,
+                dataset           TEXT    NOT NULL,
+                params            TEXT,
+                parent_model_id   TEXT,
+                created_at        TEXT    DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (model_id) REFERENCES models(model_id),
+                FOREIGN KEY (experiment_id) REFERENCES experiments(run_id)
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_experiments_dataset_created
+                ON experiments(dataset, created_at DESC);
+
+            CREATE INDEX IF NOT EXISTS idx_models_dataset_stage
+                ON models(dataset, stage);
+
+            CREATE INDEX IF NOT EXISTS idx_models_dataset_version
+                ON models(dataset, version DESC);
+
+            CREATE INDEX IF NOT EXISTS idx_drift_reports_dataset_created
+                ON drift_reports(dataset, created_at DESC);
+
+            CREATE INDEX IF NOT EXISTS idx_model_lineage_dataset_created
+                ON model_lineage(dataset, created_at DESC);
+
+            CREATE INDEX IF NOT EXISTS idx_model_lineage_model
+                ON model_lineage(model_id);
             """
+        )
+
+        model_columns = {
+            row["name"] for row in conn.execute("PRAGMA table_info(models)").fetchall()
+        }
+
+        if "dataset_name" not in model_columns:
+            conn.execute("ALTER TABLE models ADD COLUMN dataset_name TEXT")
+
+        if "created_at" not in model_columns:
+            conn.execute("ALTER TABLE models ADD COLUMN created_at TEXT DEFAULT CURRENT_TIMESTAMP")
+
+        conn.execute(
+            "UPDATE models SET dataset_name = COALESCE(dataset_name, dataset)"
+        )
+        conn.execute(
+            "UPDATE models SET created_at = COALESCE(created_at, registered_at, CURRENT_TIMESTAMP)"
         )
 
 
@@ -85,12 +142,12 @@ def save_experiment(
     model_type: str,
     task: str,
     params: Dict[str, Any],
-    metrics: Dict[str, float],
+    metrics: Dict[str, Any],
     duration: float,
     tags: Optional[Dict[str, Any]] = None,
 ) -> None:
     now = datetime.utcnow().isoformat(timespec="seconds")
-    with _connect() as conn:
+    with get_connection() as conn:
         conn.execute(
             """
             INSERT OR REPLACE INTO experiments
@@ -115,7 +172,7 @@ def save_experiment(
 
 
 def get_experiments(limit: int = 200) -> List[Dict[str, Any]]:
-    with _connect() as conn:
+    with get_connection() as conn:
         rows = conn.execute(
             "SELECT * FROM experiments ORDER BY created_at DESC LIMIT ?",
             (limit,),
@@ -124,7 +181,7 @@ def get_experiments(limit: int = 200) -> List[Dict[str, Any]]:
 
 
 def get_experiment_by_run_id(run_id: str) -> Optional[Dict[str, Any]]:
-    with _connect() as conn:
+    with get_connection() as conn:
         row = conn.execute(
             "SELECT * FROM experiments WHERE run_id = ?", (run_id,)
         ).fetchone()
@@ -142,17 +199,27 @@ def save_model(
     dataset: str,
     model_type: str,
     task: str,
-    metrics: Dict[str, float],
+    metrics: Dict[str, Any],
     artifact_path: str,
-    version: int = 1,
-) -> None:
-    with _connect() as conn:
+    params: Optional[Dict[str, Any]] = None,
+    experiment_id: Optional[str] = None,
+    version: Optional[int] = None,
+) -> Dict[str, Any]:
+    now = datetime.utcnow().isoformat(timespec="seconds")
+    with get_connection() as conn:
+        if version is None:
+            row = conn.execute(
+                "SELECT COALESCE(MAX(version), 0) AS max_version FROM models WHERE dataset = ?",
+                (dataset,),
+            ).fetchone()
+            version = int(row["max_version"]) + 1
+
         conn.execute(
             """
             INSERT OR REPLACE INTO models
-                (model_id, run_id, name, version, dataset, model_type, task,
-                 metrics, artifact_path)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                (model_id, run_id, name, version, dataset, dataset_name, model_type, task,
+                 metrics, artifact_path, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 model_id,
@@ -160,16 +227,45 @@ def save_model(
                 name,
                 version,
                 dataset,
+                dataset,
                 model_type,
                 task,
                 json.dumps(metrics),
                 artifact_path,
+                now,
             ),
         )
 
+        prev = conn.execute(
+            """
+            SELECT model_id
+            FROM models
+            WHERE dataset = ? AND version < ?
+            ORDER BY version DESC
+            LIMIT 1
+            """,
+            (dataset, version),
+        ).fetchone()
+
+        save_model_lineage(
+            model_id=model_id,
+            experiment_id=experiment_id or run_id,
+            dataset=dataset,
+            params=params or {},
+            parent_model_id=prev["model_id"] if prev else None,
+            conn=conn,
+        )
+
+    return {
+        "model_id": model_id,
+        "version": version,
+        "artifact_path": artifact_path,
+        "created_at": now,
+    }
+
 
 def get_models(limit: int = 100) -> List[Dict[str, Any]]:
-    with _connect() as conn:
+    with get_connection() as conn:
         rows = conn.execute(
             "SELECT * FROM models ORDER BY registered_at DESC LIMIT ?",
             (limit,),
@@ -177,15 +273,124 @@ def get_models(limit: int = 100) -> List[Dict[str, Any]]:
     return [dict(r) for r in rows]
 
 
+def get_latest_production_model(dataset: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    with get_connection() as conn:
+        if dataset:
+            row = conn.execute(
+                """
+                SELECT *
+                FROM models
+                WHERE stage = 'production' AND dataset = ?
+                ORDER BY created_at DESC, version DESC
+                LIMIT 1
+                """,
+                (dataset,),
+            ).fetchone()
+        else:
+            row = conn.execute(
+                """
+                SELECT *
+                FROM models
+                WHERE stage = 'production'
+                ORDER BY created_at DESC, version DESC
+                LIMIT 1
+                """
+            ).fetchone()
+
+    return dict(row) if row else None
+
+
 def update_model_stage(model_id: str, stage: str) -> None:
     valid = {"development", "staging", "production", "archived"}
     if stage not in valid:
         raise ValueError(f"Stage must be one of {valid}")
-    with _connect() as conn:
+
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT model_id, dataset FROM models WHERE model_id = ?",
+            (model_id,),
+        ).fetchone()
+        if row is None:
+            raise ValueError(f"Unknown model_id: {model_id}")
+
+        if stage == "production":
+            conn.execute(
+                """
+                UPDATE models
+                SET stage = 'staging'
+                WHERE dataset = ? AND stage = 'production' AND model_id != ?
+                """,
+                (row["dataset"], model_id),
+            )
+
         conn.execute(
             "UPDATE models SET stage = ? WHERE model_id = ?",
             (stage, model_id),
         )
+
+
+def save_model_lineage(
+    model_id: str,
+    experiment_id: str,
+    dataset: str,
+    params: Dict[str, Any],
+    parent_model_id: Optional[str] = None,
+    conn: Optional[sqlite3.Connection] = None,
+) -> None:
+    payload = json.dumps(params or {})
+
+    if conn is not None:
+        conn.execute(
+            """
+            INSERT INTO model_lineage
+                (model_id, experiment_id, dataset, params, parent_model_id)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (model_id, experiment_id, dataset, payload, parent_model_id),
+        )
+        return
+
+    with get_connection() as local_conn:
+        local_conn.execute(
+            """
+            INSERT INTO model_lineage
+                (model_id, experiment_id, dataset, params, parent_model_id)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (model_id, experiment_id, dataset, payload, parent_model_id),
+        )
+
+
+def get_model_lineage(
+    limit: int = 200,
+    dataset: Optional[str] = None,
+) -> List[Dict[str, Any]]:
+    with get_connection() as conn:
+        if dataset:
+            rows = conn.execute(
+                """
+                SELECT ml.*, m.version, m.stage
+                FROM model_lineage ml
+                LEFT JOIN models m ON m.model_id = ml.model_id
+                WHERE ml.dataset = ?
+                ORDER BY ml.created_at DESC
+                LIMIT ?
+                """,
+                (dataset, limit),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                """
+                SELECT ml.*, m.version, m.stage
+                FROM model_lineage ml
+                LEFT JOIN models m ON m.model_id = ml.model_id
+                ORDER BY ml.created_at DESC
+                LIMIT ?
+                """,
+                (limit,),
+            ).fetchall()
+
+    return [dict(r) for r in rows]
 
 
 # ---------------------------------------------------------------------------
@@ -202,7 +407,7 @@ def save_drift_report(
     features_drifted: int,
     feature_results: Dict[str, Any],
 ) -> None:
-    with _connect() as conn:
+    with get_connection() as conn:
         conn.execute(
             """
             INSERT OR REPLACE INTO drift_reports
@@ -224,7 +429,7 @@ def save_drift_report(
 
 
 def get_drift_reports(limit: int = 50) -> List[Dict[str, Any]]:
-    with _connect() as conn:
+    with get_connection() as conn:
         rows = conn.execute(
             "SELECT * FROM drift_reports ORDER BY created_at DESC LIMIT ?",
             (limit,),

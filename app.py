@@ -6,16 +6,13 @@ and current host resource utilisation.  Use the sidebar navigation to access
 the Pipeline Runner, Experiment Tracking, Model Registry, and Data Drift pages.
 """
 import json
-import os
-import sys
 
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 
-sys.path.insert(0, os.path.dirname(__file__))
-
+from src.config_loader import load_config
 from src.database import get_experiments, get_models, initialize_db
 from src.system_monitor import get_system_metrics
 
@@ -30,6 +27,8 @@ st.set_page_config(
 )
 
 initialize_db()
+APP_CONFIG = load_config()
+MAX_EXPERIMENTS = int(APP_CONFIG.get("ui", {}).get("max_experiments_displayed", 200))
 
 # ---------------------------------------------------------------------------
 # Global CSS
@@ -159,7 +158,7 @@ st.markdown(
 # ---------------------------------------------------------------------------
 # Load data
 # ---------------------------------------------------------------------------
-experiments = get_experiments(limit=200)
+experiments = get_experiments(limit=MAX_EXPERIMENTS)
 models = get_models(limit=100)
 
 exp_df = pd.DataFrame(experiments) if experiments else pd.DataFrame()

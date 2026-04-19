@@ -5,24 +5,19 @@ Compares a reference dataset split against a perturbed (simulated current)
 distribution using the Kolmogorov-Smirnov test and Population Stability Index.
 Operators can control the perturbation intensity to explore drift thresholds.
 """
-import os
-import sys
-import uuid
-
-import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
-import plotly.express as px
 import streamlit as st
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-
+from services.drift_service import run_drift_and_persist
+from src.config_loader import load_config
 from src.data_loader import DATASET_OPTIONS, load_dataset
-from src.database import get_drift_reports, initialize_db, save_drift_report
-from src.drift_detector import run_drift_analysis, compute_psi
+from src.database import get_drift_reports, initialize_db
 
 st.set_page_config(page_title="Data Drift | ML Monitor", layout="wide")
 initialize_db()
+APP_CONFIG = load_config()
+MONITORING_CFG = APP_CONFIG.get("monitoring", {})
 
 st.markdown(
     """
@@ -70,6 +65,14 @@ st.markdown(
 # Sidebar — configuration
 # ---------------------------------------------------------------------------
 with st.sidebar:
+    st.markdown("### Navigation")
+    st.page_link("app.py", label="Overview")
+    st.page_link("pages/1_Pipeline_Runner.py", label="Pipeline Runner")
+    st.page_link("pages/2_Experiment_Tracking.py", label="Experiment Tracking")
+    st.page_link("pages/3_Model_Registry.py", label="Model Registry")
+    st.page_link("pages/4_Data_Drift.py", label="Data Drift")
+    st.divider()
+
     st.markdown("### Configuration")
     st.divider()
 
@@ -100,36 +103,29 @@ with st.sidebar:
     alpha = st.select_slider(
         "Significance level (alpha)",
         options=[0.01, 0.05, 0.10],
-        value=0.05,
+        value=float(MONITORING_CFG.get("drift_significance_level", 0.05)),
     )
 
     st.divider()
     run_btn = st.button("Run Drift Analysis", type="primary", use_container_width=True)
 
 # ---------------------------------------------------------------------------
-# Load reference data
+# Load baseline preview dataset
 # ---------------------------------------------------------------------------
 @st.cache_data(show_spinner=False)
-def _load(key: str):
-    return load_dataset(key, test_size=0.40, random_state=42)
+def _load_preview(key: str):
+    return load_dataset(key)
 
 
 with st.spinner("Loading reference dataset..."):
     try:
-        ds = _load(dataset_key)
+        ds = _load_preview(dataset_key)
     except Exception as exc:
         st.error(f"Failed to load dataset: {exc}")
         st.stop()
 
 reference = ds["X_train"].copy()
-current   = ds["X_test"].copy()
-
-# Apply perturbations to "current" window
-rng = np.random.default_rng(seed=7)
-if noise_level > 0:
-    current = current + rng.normal(0, noise_level, size=current.shape)
-if mean_shift > 0:
-    current = current + mean_shift
+current = ds["X_test"].copy()
 
 # ---------------------------------------------------------------------------
 # Split preview
@@ -148,27 +144,19 @@ st.markdown("<br>", unsafe_allow_html=True)
 if "drift_result" not in st.session_state or run_btn:
     if run_btn or "drift_result" not in st.session_state:
         with st.spinner("Running statistical tests..."):
-            report = run_drift_analysis(
-                pd.DataFrame(reference, columns=ds["feature_names"]),
-                pd.DataFrame(current,   columns=ds["feature_names"]),
-                alpha=alpha,
+            payload = run_drift_and_persist(
+                dataset_label=dataset_label,
+                dataset_key=dataset_key,
+                noise_level=float(noise_level),
+                mean_shift=float(mean_shift),
+                alpha=float(alpha),
             )
-        st.session_state["drift_result"]   = report
-        st.session_state["drift_reference"] = reference.copy()
-        st.session_state["drift_current"]   = current.copy()
-        st.session_state["drift_features"]  = ds["feature_names"]
 
-        report_id = str(uuid.uuid4())[:8].upper()
-        save_drift_report(
-            report_id=report_id,
-            dataset=dataset_label,
-            reference_size=len(reference),
-            current_size=len(current),
-            drift_detected=report["overall_drift"],
-            drift_score=report["average_psi"],
-            features_drifted=report["features_drifted"],
-            feature_results=report["feature_results"],
-        )
+        report = payload["report"]
+        st.session_state["drift_result"]   = report
+        st.session_state["drift_reference"] = payload["reference"].copy()
+        st.session_state["drift_current"]   = payload["current"].copy()
+        st.session_state["drift_features"]  = payload["feature_names"]
 
 report     = st.session_state.get("drift_result")
 ref_arr    = st.session_state.get("drift_reference", reference)
@@ -182,36 +170,25 @@ if report is None:
 # ---------------------------------------------------------------------------
 # Summary alert
 # ---------------------------------------------------------------------------
-if report["overall_drift"]:
+overall_severity = report.get("overall_severity", "stable")
+if overall_severity == "critical":
     severity_msg = (
-        f"Drift detected — {report['features_drifted']} of "
-        f"{report['features_analyzed']} features show significant distribution shift "
+        f"Critical drift detected — {report['features_drifted']} of "
+        f"{report['features_analyzed']} features shifted (avg PSI = {report['average_psi']:.4f})."
+    )
+    st.markdown(f'<div class="alert-box alert-red">{severity_msg}</div>', unsafe_allow_html=True)
+elif overall_severity == "warning":
+    severity_msg = (
+        f"Warning: moderate drift observed — drift ratio {report['drift_ratio']:.1%} "
         f"(avg PSI = {report['average_psi']:.4f})."
     )
+    st.markdown(f'<div class="alert-box alert-yellow">{severity_msg}</div>', unsafe_allow_html=True)
+else:
     st.markdown(
-        f'<div class="alert-box alert-red">{severity_msg}</div>',
+        f'<div class="alert-box alert-green">No significant drift detected. '
+        f'Avg PSI = {report["average_psi"]:.4f}.</div>',
         unsafe_allow_html=True,
     )
-else:
-    n_mod = sum(
-        1 for r in report["feature_results"] if r["severity"] == "moderate"
-    )
-    if n_mod > 0:
-        st.markdown(
-            f'<div class="alert-box alert-yellow">'
-            f'Moderate shift detected in {n_mod} feature(s).  '
-            f'Overall distribution is stable (avg PSI = {report["average_psi"]:.4f}).'
-            f'</div>',
-            unsafe_allow_html=True,
-        )
-    else:
-        st.markdown(
-            f'<div class="alert-box alert-green">'
-            f'No significant drift detected.  '
-            f'Avg PSI = {report["average_psi"]:.4f}  —  distributions are stable.'
-            f'</div>',
-            unsafe_allow_html=True,
-        )
 
 # ---------------------------------------------------------------------------
 # KPI row
@@ -221,6 +198,12 @@ k1.metric("Features Analyzed", report["features_analyzed"])
 k2.metric("Features Drifted",  report["features_drifted"])
 k3.metric("Drift Ratio",       f"{report['drift_ratio']:.1%}")
 k4.metric("Avg PSI",           f"{report['average_psi']:.4f}")
+
+sev_counts = pd.DataFrame(report["feature_results"])["severity"].value_counts() if report["feature_results"] else pd.Series(dtype=int)
+sc1, sc2, sc3 = st.columns(3)
+sc1.metric("Critical Features", int(sev_counts.get("significant", 0)))
+sc2.metric("Warning Features", int(sev_counts.get("moderate", 0)))
+sc3.metric("Stable Features", int(sev_counts.get("none", 0)))
 
 st.markdown("<br>", unsafe_allow_html=True)
 
@@ -238,13 +221,29 @@ with tab_table:
     if feat_df.empty:
         st.info("No feature results available.")
     else:
-        def _sev_color(sev: str) -> str:
-            return {"significant": "#fee2e2", "moderate": "#fef9c3", "none": "#f0fdf4"}.get(sev, "white")
-
         styled = feat_df.copy()
         styled["drift_detected"] = styled["drift_detected"].map({True: "Yes", False: "No"})
         styled.columns = [c.replace("_", " ").title() for c in styled.columns]
-        st.dataframe(styled, use_container_width=True, hide_index=True)
+        st.dataframe(
+            styled.style.apply(
+                lambda row: [
+                    "background-color: #fee2e2" if row["Drift Detected"] == "Yes" else ""
+                    for _ in row
+                ],
+                axis=1,
+            ),
+            use_container_width=True,
+            hide_index=True,
+        )
+
+        affected = feat_df[feat_df["drift_detected"]].sort_values("psi", ascending=False)
+        if not affected.empty:
+            st.markdown('<div class="section-title" style="margin-top:20px">Most Affected Features</div>', unsafe_allow_html=True)
+            st.dataframe(
+                affected[["feature", "severity", "psi", "p_value"]].head(10),
+                use_container_width=True,
+                hide_index=True,
+            )
 
         # PSI bar chart
         st.markdown('<div class="section-title" style="margin-top:20px">PSI by Feature</div>', unsafe_allow_html=True)

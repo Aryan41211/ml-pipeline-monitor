@@ -10,11 +10,12 @@ import numpy as np
 import pandas as pd
 from sklearn import datasets
 from sklearn.model_selection import train_test_split
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict
+
+from src.config_loader import load_config
 
 
-# Human-readable labels -> internal key used in config.yaml
-DATASET_OPTIONS: Dict[str, str] = {
+DEFAULT_DATASET_OPTIONS: Dict[str, str] = {
     "Breast Cancer Wisconsin": "breast_cancer",
     "Wine Recognition": "wine",
     "Iris Species": "iris",
@@ -22,6 +23,25 @@ DATASET_OPTIONS: Dict[str, str] = {
     "Synthetic Classification": "synthetic_clf",
     "Synthetic Regression": "synthetic_reg",
 }
+
+
+def _dataset_options_from_config() -> Dict[str, str]:
+    cfg_datasets = load_config().get("datasets", {})
+    if not isinstance(cfg_datasets, dict) or not cfg_datasets:
+        return DEFAULT_DATASET_OPTIONS
+
+    options: Dict[str, str] = {}
+    for key, value in cfg_datasets.items():
+        if not isinstance(value, dict):
+            continue
+        display_name = value.get("display_name", key)
+        options[str(display_name)] = key
+
+    return options or DEFAULT_DATASET_OPTIONS
+
+
+# Human-readable labels -> internal key used in config.yaml
+DATASET_OPTIONS: Dict[str, str] = _dataset_options_from_config()
 
 
 def _make_sklearn_bundle(loader_fn, **kwargs) -> Dict[str, Any]:

@@ -1,0 +1,15 @@
+version: "3.9"
+
+services:
+  app:
+    build: .
+    container_name: ml-pipeline-monitor
+    ports:
+      - "8501:8501"
+    environment:
+      - PIPELINE_DB=/app/data/pipeline_monitor.db
+    volumes:
+      - ./artifacts:/app/artifacts
+      - ./data:/app/data
+      - ./logs:/app/logs
+    restart: unless-stopped

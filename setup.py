@@ -29,7 +29,8 @@ setup(
     ],
     entry_points={
         "console_scripts": [
-            "mlmonitor=app:main",
+            "mlmonitor=src.cli:main",
+            "mlmonitor-api=services.api.main:run",
         ],
     },
 )

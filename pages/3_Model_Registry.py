@@ -6,17 +6,14 @@ models through development → staging → production lifecycle stages, and
 renders side-by-side performance comparisons.
 """
 import json
-import os
-import sys
 
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-
-from src.database import get_models, initialize_db, update_model_stage
+from services.model_service import list_lineage, list_models, set_model_stage
+from src.database import initialize_db
 
 st.set_page_config(page_title="Model Registry | ML Monitor", layout="wide")
 initialize_db()
@@ -89,7 +86,7 @@ def _badge(stage: str) -> str:
 # ---------------------------------------------------------------------------
 # Load data
 # ---------------------------------------------------------------------------
-raw = get_models(limit=100)
+raw = list_models(limit=100)
 
 if not raw:
     st.info(
@@ -138,6 +135,14 @@ df = pd.DataFrame(rows)
 # Sidebar filters
 # ---------------------------------------------------------------------------
 with st.sidebar:
+    st.markdown("### Navigation")
+    st.page_link("app.py", label="Overview")
+    st.page_link("pages/1_Pipeline_Runner.py", label="Pipeline Runner")
+    st.page_link("pages/2_Experiment_Tracking.py", label="Experiment Tracking")
+    st.page_link("pages/3_Model_Registry.py", label="Model Registry")
+    st.page_link("pages/4_Data_Drift.py", label="Data Drift")
+    st.divider()
+
     st.markdown("### Filters")
     st.divider()
 
@@ -180,8 +185,8 @@ st.markdown("<br>", unsafe_allow_html=True)
 # ---------------------------------------------------------------------------
 # Main content
 # ---------------------------------------------------------------------------
-tab_cards, tab_compare, tab_manage = st.tabs(
-    ["Model Cards", "Performance Comparison", "Stage Management"]
+tab_cards, tab_compare, tab_manage, tab_lineage = st.tabs(
+    ["Model Cards", "Performance Comparison", "Stage Management", "Model Lineage"]
 )
 
 with tab_cards:
@@ -204,6 +209,7 @@ with tab_cards:
                           <h4>{row['name']}  &nbsp; {_badge(row['stage'])}</h4>
                           <div class="meta">
                             Run ID: {row['model_id']} &nbsp;|&nbsp;
+                                                        Version: v{row['version']} &nbsp;|&nbsp;
                             Dataset: {row['dataset']} &nbsp;|&nbsp;
                             Task: {row['task'].title()} &nbsp;|&nbsp;
                             Registered: {row['registered_at'][:10] if row['registered_at'] else '—'}
@@ -324,10 +330,58 @@ with tab_manage:
             with col_btn:
                 if st.button("Save", key=f"save_{row['model_id']}"):
                     try:
-                        update_model_stage(row["model_id"], new_stage)
+                        set_model_stage(row["model_id"], new_stage)
                         st.success("Saved")
                         st.rerun()
                     except Exception as exc:
                         st.error(str(exc))
 
             st.divider()
+with tab_lineage:
+    st.markdown('<div class="section-title">Model Lineage</div>', unsafe_allow_html=True)
+    st.caption("Track dataset, parameters, experiment ID, and parent model relationship.")
+
+    dataset_filter = st.selectbox(
+        "Lineage dataset filter",
+        options=["All"] + sorted(df["dataset"].dropna().unique().tolist()),
+        key="lineage_ds_filter",
+    )
+
+    lineage_dataset = None if dataset_filter == "All" else dataset_filter
+    lineage_rows = list_lineage(limit=300, dataset=lineage_dataset)
+
+    if not lineage_rows:
+        st.info("No lineage records available yet.")
+    else:
+        lineage_df = pd.DataFrame(lineage_rows)
+        lineage_df["params"] = lineage_df["params"].apply(
+            lambda x: json.loads(x) if isinstance(x, str) and x else {}
+        )
+
+        display = lineage_df[
+            ["model_id", "experiment_id", "dataset", "version", "stage", "parent_model_id", "created_at", "params"]
+        ].copy()
+        display.columns = [c.replace("_", " ").title() for c in display.columns]
+        st.dataframe(display, use_container_width=True, hide_index=True)
+
+        if "version" in lineage_df.columns and lineage_df["version"].notna().any():
+            lineage_df_plot = lineage_df.dropna(subset=["version"]).copy()
+            lineage_df_plot["version"] = lineage_df_plot["version"].astype(int)
+            fig = px.line(
+                lineage_df_plot.sort_values("version"),
+                x="version",
+                y="dataset",
+                color="stage",
+                markers=True,
+                hover_data=["model_id", "experiment_id", "parent_model_id"],
+                labels={"version": "Model Version", "dataset": "Dataset"},
+            )
+            fig.update_layout(
+                height=320,
+                margin=dict(l=0, r=0, t=10, b=0),
+                plot_bgcolor="white",
+                paper_bgcolor="white",
+                xaxis=dict(showgrid=True, gridcolor="#f1f5f9"),
+                yaxis=dict(showgrid=False),
+            )
+            st.plotly_chart(fig, use_container_width=True)

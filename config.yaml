@@ -37,8 +37,24 @@ monitoring:
   drift_feature_ratio_threshold: 0.20
 
 storage:
+  backend: "sqlite"
   db_path: ".pipeline_monitor.db"
-  model_artifacts_dir: ".model_artifacts"
+  artifacts_root: "artifacts"
+
+auth:
+  username: "admin"
+  password: "admin123"
+
+logging:
+  level: "INFO"
+  file: "logs/app.log"
+  max_bytes: 5000000
+  backup_count: 3
+
+mlflow:
+  enabled: false
+  tracking_uri: ""
+  experiment: "ml-pipeline-monitor"
 
 ui:
   primary_color: "#2563eb"

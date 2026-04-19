@@ -31,6 +31,7 @@ from sklearn.metrics import (
     precision_score,
     r2_score,
     recall_score,
+    roc_curve,
     roc_auc_score,
 )
 from sklearn.model_selection import KFold, StratifiedKFold, cross_val_score
@@ -146,6 +147,7 @@ class MLPipeline:
         params: Dict[str, Any],
         cv_folds: int = 5,
         random_state: int = 42,
+        n_jobs: int | None = None,
         progress_callback: Optional[ProgressCallback] = None,
     ) -> None:
         self.dataset_name = dataset_name
@@ -154,6 +156,14 @@ class MLPipeline:
         self.params = params
         self.cv_folds = cv_folds
         self.random_state = random_state
+        n_jobs_value = -1 if n_jobs is None else n_jobs
+        try:
+            n_jobs_value = int(n_jobs_value)
+        except (TypeError, ValueError):
+            n_jobs_value = -1
+        if n_jobs_value == 0:
+            n_jobs_value = -1
+        self.n_jobs = n_jobs_value
         self._cb = progress_callback
         self.run_id = str(uuid.uuid4())[:8].upper()
 
@@ -167,6 +177,8 @@ class MLPipeline:
 
     def _build_estimator(self) -> Any:
         registry = CLF_REGISTRY if self.task == "classification" else REG_REGISTRY
+        if self.model_type not in registry:
+            raise ValueError(f"Unsupported model type '{self.model_type}' for task '{self.task}'")
         cls = registry[self.model_type]
 
         # Merge defaults with user overrides, then strip unsupported keys
@@ -178,6 +190,8 @@ class MLPipeline:
         sig = inspect.signature(cls.__init__)
         if "random_state" in sig.parameters:
             base["random_state"] = self.random_state
+        if "n_jobs" in sig.parameters:
+            base.setdefault("n_jobs", self.n_jobs)
 
         # XGBoost-specific tweaks
         if self.model_type == "XGBoost":
@@ -237,7 +251,6 @@ class MLPipeline:
 
         self._emit("Data Validation", 0.12, "Validation passed — no schema violations")
         result.stages.append(StageResult("Data Validation", "success", time.perf_counter() - t0, logs))
-        time.sleep(0.25)
 
         # ------------------------------------------------------------------
         # Stage 2 — Preprocessing
@@ -269,7 +282,6 @@ class MLPipeline:
 
         self._emit("Preprocessing", 0.24, "Preprocessing complete")
         result.stages.append(StageResult("Preprocessing", "success", time.perf_counter() - t0, logs))
-        time.sleep(0.2)
 
         # ------------------------------------------------------------------
         # Stage 3 — Feature Analysis
@@ -291,7 +303,6 @@ class MLPipeline:
 
         self._emit("Feature Analysis", 0.36, "Feature analysis complete")
         result.stages.append(StageResult("Feature Analysis", "success", time.perf_counter() - t0, logs))
-        time.sleep(0.2)
 
         # ------------------------------------------------------------------
         # Stage 4 — Cross-Validation
@@ -316,7 +327,12 @@ class MLPipeline:
             scoring_label = "R²"
 
         cv_scores = cross_val_score(
-            cv_estimator, X_tr_sc, y_train, cv=cv, scoring=scoring, n_jobs=-1
+            cv_estimator,
+            X_tr_sc,
+            y_train,
+            cv=cv,
+            scoring=scoring,
+            n_jobs=self.n_jobs,
         )
 
         logs.append(
@@ -331,7 +347,6 @@ class MLPipeline:
             f"CV {scoring_label} = {cv_scores.mean():.4f}",
         )
         result.stages.append(StageResult("Cross-Validation", "success", time.perf_counter() - t0, logs))
-        time.sleep(0.15)
 
         # ------------------------------------------------------------------
         # Stage 5 — Model Training
@@ -357,7 +372,6 @@ class MLPipeline:
                 {"fit_duration_s": round(fit_duration, 3)},
             )
         )
-        time.sleep(0.15)
 
         # ------------------------------------------------------------------
         # Stage 6 — Evaluation
@@ -388,6 +402,9 @@ class MLPipeline:
                         metrics["roc_auc"] = round(
                             roc_auc_score(y_test, y_prob[:, 1]), 4
                         )
+                        fpr, tpr, _ = roc_curve(y_test, y_prob[:, 1])
+                        metrics["roc_curve_fpr"] = [round(float(v), 6) for v in fpr.tolist()]
+                        metrics["roc_curve_tpr"] = [round(float(v), 6) for v in tpr.tolist()]
                     else:
                         metrics["roc_auc"] = round(
                             roc_auc_score(y_test, y_prob, multi_class="ovr"), 4
@@ -398,7 +415,10 @@ class MLPipeline:
             result.confusion_mat = confusion_matrix(y_test, y_pred)
 
             for k, v in metrics.items():
-                logs.append(f"{k:<12}: {v:.4f}")
+                if isinstance(v, list):
+                    logs.append(f"{k:<12}: [{len(v)} points]")
+                else:
+                    logs.append(f"{k:<12}: {float(v):.4f}")
 
         else:
             metrics["rmse"] = round(float(np.sqrt(mean_squared_error(y_test, y_pred))), 4)
@@ -414,7 +434,6 @@ class MLPipeline:
 
         self._emit("Evaluation", 0.90, "Evaluation complete")
         result.stages.append(StageResult("Evaluation", "success", time.perf_counter() - t0, logs))
-        time.sleep(0.1)
 
         # ------------------------------------------------------------------
         # Stage 7 — Feature Importance
@@ -435,7 +454,7 @@ class MLPipeline:
             )
         elif hasattr(model, "coef_"):
             coef = model.coef_
-            coef_abs = np.abs(coef).mean(axis=0) if coef.ndim > 1 else np.abs(coef[0])
+            coef_abs = np.abs(coef).mean(axis=0) if np.ndim(coef) > 1 else np.abs(np.ravel(coef))
             importances = pd.Series(coef_abs, index=X_train.columns).sort_values(
                 ascending=False
             )

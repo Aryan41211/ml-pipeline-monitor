@@ -6,17 +6,14 @@ algorithm, and renders metric comparison charts to help identify the best
 performing configurations.
 """
 import json
-import os
-import sys
 
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-
-from src.database import get_experiments, initialize_db
+from services.pipeline_service import list_experiments
+from src.database import initialize_db
 
 st.set_page_config(page_title="Experiment Tracking | ML Monitor", layout="wide")
 initialize_db()
@@ -54,7 +51,7 @@ st.markdown(
 # ---------------------------------------------------------------------------
 # Load and parse
 # ---------------------------------------------------------------------------
-raw = get_experiments(limit=200)
+raw = list_experiments(limit=200)
 
 if not raw:
     st.info("No experiments found.  Run your first pipeline on the **Pipeline Runner** page.")
@@ -95,6 +92,8 @@ for exp in raw:
             # cv
             "cv_mean":   m.get("cv_mean"),
             "cv_std":    m.get("cv_std"),
+            "roc_curve_fpr": m.get("roc_curve_fpr") if isinstance(m.get("roc_curve_fpr"), list) else None,
+            "roc_curve_tpr": m.get("roc_curve_tpr") if isinstance(m.get("roc_curve_tpr"), list) else None,
         }
     )
 
@@ -104,6 +103,14 @@ df = pd.DataFrame(rows)
 # Sidebar filters
 # ---------------------------------------------------------------------------
 with st.sidebar:
+    st.markdown("### Navigation")
+    st.page_link("app.py", label="Overview")
+    st.page_link("pages/1_Pipeline_Runner.py", label="Pipeline Runner")
+    st.page_link("pages/2_Experiment_Tracking.py", label="Experiment Tracking")
+    st.page_link("pages/3_Model_Registry.py", label="Model Registry")
+    st.page_link("pages/4_Data_Drift.py", label="Data Drift")
+    st.divider()
+
     st.markdown("### Filters")
     st.divider()
 
@@ -187,8 +194,8 @@ st.markdown("<br>", unsafe_allow_html=True)
 # ---------------------------------------------------------------------------
 # Charts
 # ---------------------------------------------------------------------------
-tab_clf, tab_reg, tab_compare = st.tabs(
-    ["Classification Metrics", "Regression Metrics", "Parameter Analysis"]
+tab_clf, tab_reg, tab_compare, tab_multi = st.tabs(
+    ["Classification Metrics", "Regression Metrics", "Parameter Analysis", "Experiment Comparison"]
 )
 
 with tab_clf:
@@ -370,3 +377,105 @@ with tab_compare:
             legend=dict(title="Algorithm"),
         )
         st.plotly_chart(fig_cv, use_container_width=True)
+
+
+with tab_multi:
+    st.markdown('<div class="section-title">Compare Multiple Experiments</div>', unsafe_allow_html=True)
+    st.caption("Select experiments to compare Accuracy, F1 score, and ROC behavior.")
+
+    clf_candidates = filtered[filtered["task"] == "classification"].copy()
+    if clf_candidates.empty:
+        st.info("No classification experiments available for comparison under current filters.")
+    else:
+        labels = [
+            f"{row.run_id} | {row.algorithm} | {row.dataset}"
+            for row in clf_candidates.itertuples(index=False)
+        ]
+        label_to_run = dict(zip(labels, clf_candidates["run_id"].tolist()))
+
+        selected_labels = st.multiselect(
+            "Experiments",
+            options=labels,
+            default=labels[: min(4, len(labels))],
+            help="Choose two or more runs for side-by-side comparison.",
+        )
+
+        selected_ids = [label_to_run[x] for x in selected_labels]
+        chosen = clf_candidates[clf_candidates["run_id"].isin(selected_ids)].copy()
+
+        if chosen.empty:
+            st.info("Select at least one experiment.")
+        else:
+            s1, s2, s3 = st.columns(3)
+            s1.metric("Selected Runs", len(chosen))
+            s2.metric(
+                "Best Accuracy",
+                f"{chosen['accuracy'].max():.4f}" if chosen["accuracy"].notna().any() else "—",
+            )
+            s3.metric(
+                "Best F1",
+                f"{chosen['f1_score'].max():.4f}" if chosen["f1_score"].notna().any() else "—",
+            )
+
+            left, right = st.columns(2, gap="large")
+
+            with left:
+                bar_df = chosen[["run_id", "accuracy", "f1_score"]].copy()
+                melted = bar_df.melt(id_vars=["run_id"], value_vars=["accuracy", "f1_score"]).dropna()
+                if melted.empty:
+                    st.info("Selected runs are missing accuracy/F1 metrics.")
+                else:
+                    fig = px.bar(
+                        melted,
+                        x="run_id",
+                        y="value",
+                        color="variable",
+                        barmode="group",
+                        labels={"value": "Score", "run_id": "Run ID", "variable": "Metric"},
+                        color_discrete_sequence=["#2563eb", "#16a34a"],
+                    )
+                    fig.update_layout(
+                        height=360,
+                        margin=dict(l=0, r=0, t=10, b=0),
+                        plot_bgcolor="white",
+                        paper_bgcolor="white",
+                        yaxis=dict(range=[0, 1.05], showgrid=True, gridcolor="#f1f5f9"),
+                        xaxis=dict(showgrid=False),
+                    )
+                    st.plotly_chart(fig, use_container_width=True)
+
+            with right:
+                roc_rows = chosen.dropna(subset=["roc_curve_fpr", "roc_curve_tpr"]).copy()
+                if roc_rows.empty:
+                    st.info("ROC curve points unavailable for selected runs.")
+                else:
+                    fig_roc = go.Figure()
+                    for row in roc_rows.itertuples(index=False):
+                        fig_roc.add_trace(
+                            go.Scatter(
+                                x=row.roc_curve_fpr,
+                                y=row.roc_curve_tpr,
+                                mode="lines",
+                                name=f"{row.run_id} ({row.algorithm})",
+                            )
+                        )
+
+                    fig_roc.add_trace(
+                        go.Scatter(
+                            x=[0, 1],
+                            y=[0, 1],
+                            mode="lines",
+                            name="Random baseline",
+                            line=dict(dash="dash", color="#94a3b8"),
+                        )
+                    )
+                    fig_roc.update_layout(
+                        height=360,
+                        margin=dict(l=0, r=0, t=10, b=0),
+                        plot_bgcolor="white",
+                        paper_bgcolor="white",
+                        xaxis=dict(title="False Positive Rate", showgrid=True, gridcolor="#f1f5f9"),
+                        yaxis=dict(title="True Positive Rate", showgrid=True, gridcolor="#f1f5f9"),
+                        legend=dict(title=None),
+                    )
+                    st.plotly_chart(fig_roc, use_container_width=True)

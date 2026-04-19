@@ -15,6 +15,8 @@ import numpy as np
 import pandas as pd
 from scipy import stats
 
+from src.config_loader import load_config
+
 
 # ---------------------------------------------------------------------------
 # PSI
@@ -77,10 +79,16 @@ class FeatureDriftResult:
     severity: str     # 'none' | 'moderate' | 'significant'
 
 
-def _classify_severity(p_value: float, psi: float, alpha: float) -> str:
-    if psi > 0.25 or p_value < 0.01:
+def _classify_severity(
+    p_value: float,
+    psi: float,
+    alpha: float,
+    moderate_threshold: float,
+    significant_threshold: float,
+) -> str:
+    if psi > significant_threshold or p_value < 0.01:
         return "significant"
-    if psi > 0.10 or p_value < alpha:
+    if psi > moderate_threshold or p_value < alpha:
         return "moderate"
     return "none"
 
@@ -89,6 +97,8 @@ def analyze_feature(
     reference: pd.Series,
     current: pd.Series,
     alpha: float = 0.05,
+    moderate_threshold: float = 0.10,
+    significant_threshold: float = 0.25,
 ) -> FeatureDriftResult:
     """
     Run KS test + PSI for a single numeric feature.
@@ -108,8 +118,14 @@ def analyze_feature(
     ks_stat, p_value = stats.ks_2samp(ref_clean, cur_clean)
     psi = compute_psi(ref_clean, cur_clean)
 
-    drift_detected = (p_value < alpha) or (psi > 0.10)
-    severity = _classify_severity(p_value, psi, alpha)
+    drift_detected = (p_value < alpha) or (psi > moderate_threshold)
+    severity = _classify_severity(
+        p_value,
+        psi,
+        alpha,
+        moderate_threshold,
+        significant_threshold,
+    )
 
     return FeatureDriftResult(
         feature=str(reference.name),
@@ -129,6 +145,9 @@ def run_drift_analysis(
     reference: pd.DataFrame,
     current: pd.DataFrame,
     alpha: float = 0.05,
+    moderate_threshold: float = 0.10,
+    significant_threshold: float = 0.25,
+    feature_ratio_threshold: float = 0.20,
 ) -> Dict[str, Any]:
     """
     Compare two DataFrames column by column and return a drift report.
@@ -143,11 +162,24 @@ def run_drift_analysis(
         average_psi        : float
         feature_results    : list[dict]
     """
+    cfg = load_config().get("monitoring", {})
+    moderate_threshold = float(cfg.get("psi_moderate_threshold", moderate_threshold))
+    significant_threshold = float(cfg.get("psi_significant_threshold", significant_threshold))
+    feature_ratio_threshold = float(
+        cfg.get("drift_feature_ratio_threshold", feature_ratio_threshold)
+    )
+
     common = [c for c in reference.columns if c in current.columns]
     results: List[Dict[str, Any]] = []
 
     for col in common:
-        r = analyze_feature(reference[col], current[col], alpha=alpha)
+        r = analyze_feature(
+            reference[col],
+            current[col],
+            alpha=alpha,
+            moderate_threshold=moderate_threshold,
+            significant_threshold=significant_threshold,
+        )
         results.append(
             {
                 "feature": r.feature,
@@ -163,14 +195,21 @@ def run_drift_analysis(
     drift_ratio = n_drifted / len(results) if results else 0.0
     avg_psi = float(np.mean([r["psi"] for r in results])) if results else 0.0
 
-    # Dataset-level drift: >20 % of features show drift
-    overall_drift = drift_ratio > 0.20
+    overall_drift = drift_ratio > feature_ratio_threshold
+
+    if drift_ratio >= 0.50 or avg_psi >= significant_threshold:
+        overall_severity = "critical"
+    elif drift_ratio >= feature_ratio_threshold or avg_psi >= moderate_threshold:
+        overall_severity = "warning"
+    else:
+        overall_severity = "stable"
 
     return {
         "features_analyzed": len(results),
         "features_drifted": n_drifted,
         "drift_ratio": round(drift_ratio, 4),
         "overall_drift": overall_drift,
+        "overall_severity": overall_severity,
         "average_psi": round(avg_psi, 5),
         "feature_results": results,
     }

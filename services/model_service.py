@@ -1,0 +1,112 @@
+"""Model service for registry operations and online inference."""
+
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
+
+import joblib
+import pandas as pd
+
+from src.database import (
+    get_latest_production_model,
+    get_model_lineage,
+    get_models,
+    update_model_stage,
+)
+
+
+def list_models(limit: int = 100, dataset: Optional[str] = None) -> List[Dict[str, Any]]:
+    """Return model registry records with optional dataset filter."""
+    records = get_models(limit=limit)
+    if dataset:
+        return [row for row in records if row.get("dataset") == dataset]
+    return records
+
+
+def list_lineage(limit: int = 200, dataset: Optional[str] = None) -> List[Dict[str, Any]]:
+    """Return model lineage records."""
+    return get_model_lineage(limit=limit, dataset=dataset)
+
+
+def set_model_stage(model_id: str, stage: str) -> None:
+    """Promote/demote model lifecycle stage."""
+    update_model_stage(model_id=model_id, stage=stage)
+
+
+def _derive_scaler_path(model_path: Path) -> Path:
+    """Infer scaler artifact path from stored model artifact path convention."""
+    scaler_name = model_path.name.replace("_model.joblib", "_scaler.joblib")
+    return model_path.parent.parent / "scalers" / scaler_name
+
+
+def load_production_artifacts(
+    dataset: Optional[str] = None,
+) -> Tuple[Any, Optional[Any], Dict[str, Any]]:
+    """Load latest production model (+ optional scaler) and its metadata."""
+    model_meta = get_latest_production_model(dataset=dataset)
+    if model_meta is None:
+        ds_msg = f" for dataset '{dataset}'" if dataset else ""
+        raise ValueError(f"No production model found{ds_msg}")
+
+    artifact_path = model_meta.get("artifact_path")
+    if not artifact_path:
+        raise ValueError("Production model is missing artifact_path")
+
+    model_path = Path(str(artifact_path))
+    if not model_path.exists():
+        raise FileNotFoundError(f"Model artifact not found at {model_path}")
+
+    model = joblib.load(model_path)
+
+    scaler = None
+    scaler_path = _derive_scaler_path(model_path)
+    if scaler_path.exists():
+        scaler = joblib.load(scaler_path)
+
+    return model, scaler, model_meta
+
+
+def _to_dataframe(payload: Any) -> pd.DataFrame:
+    """Normalize prediction input payload into a DataFrame."""
+    if isinstance(payload, dict):
+        return pd.DataFrame([payload])
+
+    if isinstance(payload, list) and payload and isinstance(payload[0], dict):
+        return pd.DataFrame(payload)
+
+    if isinstance(payload, list) and payload and isinstance(payload[0], (int, float)):
+        return pd.DataFrame([payload])
+
+    if isinstance(payload, list) and payload and isinstance(payload[0], list):
+        return pd.DataFrame(payload)
+
+    raise ValueError(
+        "Invalid input payload. Use a feature dictionary, list of feature dictionaries, "
+        "a single feature vector, or a list of vectors."
+    )
+
+
+def predict_from_payload(payload: Any, dataset: Optional[str] = None) -> Dict[str, Any]:
+    """Run prediction against latest production model."""
+    model, scaler, model_meta = load_production_artifacts(dataset=dataset)
+    X = _to_dataframe(payload)
+
+    X_infer = scaler.transform(X) if scaler is not None else X
+    preds = model.predict(X_infer)
+
+    response: Dict[str, Any] = {
+        "model_id": model_meta.get("model_id"),
+        "dataset": model_meta.get("dataset"),
+        "version": model_meta.get("version"),
+        "stage": model_meta.get("stage"),
+        "predictions": preds.tolist(),
+    }
+
+    if hasattr(model, "predict_proba"):
+        try:
+            response["probabilities"] = model.predict_proba(X_infer).tolist()
+        except Exception:
+            pass
+
+    return response

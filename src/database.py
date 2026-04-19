@@ -11,6 +11,23 @@ from typing import Any, Dict, Iterator, List, Optional
 from src.db_engine import get_backend
 
 
+def _json_default(value: Any) -> Any:
+    """Convert numpy/pandas scalar-like values to JSON-native types."""
+    if hasattr(value, "tolist"):
+        return value.tolist()
+    if hasattr(value, "item"):
+        return value.item()
+    if isinstance(value, datetime):
+        return value.isoformat(timespec="seconds")
+    if isinstance(value, set):
+        return list(value)
+    raise TypeError(f"Object of type {type(value).__name__} is not JSON serializable")
+
+
+def _to_json(payload: Any) -> str:
+    return json.dumps(payload, default=_json_default)
+
+
 def _connect() -> sqlite3.Connection:
     return get_backend().connect()
 
@@ -93,6 +110,17 @@ def initialize_db() -> None:
                 FOREIGN KEY (experiment_id) REFERENCES experiments(run_id)
             );
 
+            CREATE TABLE IF NOT EXISTS model_stage_events (
+                id                INTEGER PRIMARY KEY AUTOINCREMENT,
+                model_id          TEXT    NOT NULL,
+                dataset           TEXT    NOT NULL,
+                from_stage        TEXT,
+                to_stage          TEXT    NOT NULL,
+                reason            TEXT,
+                created_at        TEXT    DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (model_id) REFERENCES models(model_id)
+            );
+
             CREATE INDEX IF NOT EXISTS idx_experiments_dataset_created
                 ON experiments(dataset, created_at DESC);
 
@@ -110,6 +138,12 @@ def initialize_db() -> None:
 
             CREATE INDEX IF NOT EXISTS idx_model_lineage_model
                 ON model_lineage(model_id);
+
+            CREATE INDEX IF NOT EXISTS idx_stage_events_model_created
+                ON model_stage_events(model_id, created_at DESC);
+
+            CREATE INDEX IF NOT EXISTS idx_stage_events_dataset_created
+                ON model_stage_events(dataset, created_at DESC);
             """
         )
 
@@ -164,9 +198,9 @@ def save_experiment(
                 now,
                 now,
                 duration,
-                json.dumps(params),
-                json.dumps(metrics),
-                json.dumps(tags or {}),
+                _to_json(params),
+                _to_json(metrics),
+                _to_json(tags or {}),
             ),
         )
 
@@ -230,7 +264,7 @@ def save_model(
                 dataset,
                 model_type,
                 task,
-                json.dumps(metrics),
+                _to_json(metrics),
                 artifact_path,
                 now,
             ),
@@ -254,6 +288,14 @@ def save_model(
             params=params or {},
             parent_model_id=prev["model_id"] if prev else None,
             conn=conn,
+        )
+
+        conn.execute(
+            """
+            INSERT INTO model_stage_events (model_id, dataset, from_stage, to_stage, reason)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (model_id, dataset, None, "development", "initial_registration"),
         )
 
     return {
@@ -307,13 +349,26 @@ def update_model_stage(model_id: str, stage: str) -> None:
 
     with get_connection() as conn:
         row = conn.execute(
-            "SELECT model_id, dataset FROM models WHERE model_id = ?",
+            "SELECT model_id, dataset, stage FROM models WHERE model_id = ?",
             (model_id,),
         ).fetchone()
         if row is None:
             raise ValueError(f"Unknown model_id: {model_id}")
 
+        old_stage = row["stage"] or "development"
+        if old_stage == stage:
+            return
+
         if stage == "production":
+            to_demote = conn.execute(
+                """
+                SELECT model_id
+                FROM models
+                WHERE dataset = ? AND stage = 'production' AND model_id != ?
+                """,
+                (row["dataset"], model_id),
+            ).fetchall()
+
             conn.execute(
                 """
                 UPDATE models
@@ -323,10 +378,58 @@ def update_model_stage(model_id: str, stage: str) -> None:
                 (row["dataset"], model_id),
             )
 
+            for demoted in to_demote:
+                conn.execute(
+                    """
+                    INSERT INTO model_stage_events (model_id, dataset, from_stage, to_stage, reason)
+                    VALUES (?, ?, ?, ?, ?)
+                    """,
+                    (demoted["model_id"], row["dataset"], "production", "staging", "auto_demote_on_replacement"),
+                )
+
         conn.execute(
             "UPDATE models SET stage = ? WHERE model_id = ?",
             (stage, model_id),
         )
+
+        conn.execute(
+            """
+            INSERT INTO model_stage_events (model_id, dataset, from_stage, to_stage, reason)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (model_id, row["dataset"], old_stage, stage, "manual_update"),
+        )
+
+
+def get_model_stage_events(model_id: str, limit: int = 50) -> List[Dict[str, Any]]:
+    with get_connection() as conn:
+        rows = conn.execute(
+            """
+            SELECT model_id, dataset, from_stage, to_stage, reason, created_at
+            FROM model_stage_events
+            WHERE model_id = ?
+            ORDER BY created_at DESC
+            LIMIT ?
+            """,
+            (model_id, limit),
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def get_recent_production_models(dataset: str, limit: int = 2) -> List[Dict[str, Any]]:
+    with get_connection() as conn:
+        rows = conn.execute(
+            """
+            SELECT DISTINCT m.model_id, m.name, m.version, m.dataset, m.stage, m.registered_at
+            FROM model_stage_events e
+            JOIN models m ON m.model_id = e.model_id
+            WHERE e.dataset = ? AND e.to_stage = 'production'
+            ORDER BY e.created_at DESC
+            LIMIT ?
+            """,
+            (dataset, limit),
+        ).fetchall()
+    return [dict(r) for r in rows]
 
 
 def save_model_lineage(
@@ -337,7 +440,7 @@ def save_model_lineage(
     parent_model_id: Optional[str] = None,
     conn: Optional[sqlite3.Connection] = None,
 ) -> None:
-    payload = json.dumps(params or {})
+    payload = _to_json(params or {})
 
     if conn is not None:
         conn.execute(
@@ -423,7 +526,7 @@ def save_drift_report(
                 int(drift_detected),
                 drift_score,
                 features_drifted,
-                json.dumps(feature_results),
+                _to_json(feature_results),
             ),
         )
 

@@ -10,8 +10,10 @@ import pandas as pd
 
 from src.database import (
     get_latest_production_model,
+    get_model_stage_events,
     get_model_lineage,
     get_models,
+    get_recent_production_models,
     update_model_stage,
 )
 
@@ -32,6 +34,34 @@ def list_lineage(limit: int = 200, dataset: Optional[str] = None) -> List[Dict[s
 def set_model_stage(model_id: str, stage: str) -> None:
     """Promote/demote model lifecycle stage."""
     update_model_stage(model_id=model_id, stage=stage)
+
+
+def get_stage_timeline(model_id: str, limit: int = 50) -> List[Dict[str, Any]]:
+    """Return stage change history for a model, newest first."""
+    return get_model_stage_events(model_id=model_id, limit=limit)
+
+
+def get_rollback_hint(dataset: str) -> Dict[str, Any]:
+    """Return current and previous production model hints for rollback UX."""
+    recent = get_recent_production_models(dataset=dataset, limit=2)
+    current = recent[0] if len(recent) >= 1 else None
+    previous = recent[1] if len(recent) >= 2 else None
+    return {
+        "current_production": current,
+        "previous_production": previous,
+    }
+
+
+def revert_to_previous_production(dataset: str) -> Dict[str, Any]:
+    """Promote the previous production model back to production for a dataset."""
+    hint = get_rollback_hint(dataset)
+    previous = hint.get("previous_production")
+    if not previous:
+        raise ValueError("No previous production model available to revert.")
+
+    model_id = str(previous.get("model_id"))
+    update_model_stage(model_id=model_id, stage="production")
+    return previous
 
 
 def _derive_scaler_path(model_path: Path) -> Path:

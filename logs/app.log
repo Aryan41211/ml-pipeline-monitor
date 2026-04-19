@@ -1,0 +1,12 @@
+{"time": "2026-04-19T22:58:09", "level": "ERROR", "logger": "alerts", "message": "ALERT: Data drift detected for dataset=Breast Cancer Wisconsin; ratio=0.97"}
+{"time": "2026-04-19T22:58:09", "level": "WARNING", "logger": "drift_service", "message": "Drift detected dataset=Breast Cancer Wisconsin severity=critical features_drifted=29"}
+{"time": "2026-04-19T23:05:11", "level": "INFO", "logger": "pipeline_service", "message": "Feature store miss: cached new splits for key=426d045574a1db53"}
+{"time": "2026-04-19T23:05:20", "level": "INFO", "logger": "pipeline_service", "message": "Pipeline run completed run_id=24C39744 dataset=Breast Cancer Wisconsin model=Logistic Regression version=1"}
+{"time": "2026-04-19T23:05:39", "level": "INFO", "logger": "pipeline_service", "message": "Feature store hit: reused splits for key=426d045574a1db53"}
+{"time": "2026-04-19T23:05:51", "level": "INFO", "logger": "pipeline_service", "message": "Pipeline run completed run_id=2794CC8C dataset=Breast Cancer Wisconsin model=Random Forest version=2"}
+{"time": "2026-04-19T23:06:15", "level": "INFO", "logger": "pipeline_service", "message": "Feature store hit: reused splits for key=426d045574a1db53"}
+{"time": "2026-04-19T23:06:28", "level": "INFO", "logger": "pipeline_service", "message": "Pipeline run completed run_id=344442E4 dataset=Breast Cancer Wisconsin model=Random Forest version=3"}
+{"time": "2026-04-20T00:31:43", "level": "INFO", "logger": "user_actions", "message": "{\"event\": \"user_action\", \"action\": \"refresh_dashboard\", \"page\": \"overview\", \"metadata\": {}}"}
+{"time": "2026-04-20T01:32:17", "level": "WARNING", "logger": "drift_service", "message": "Drift detected dataset=Iris severity=critical features_drifted=1"}
+{"time": "2026-04-20T01:32:32", "level": "WARNING", "logger": "drift_service", "message": "Drift detected dataset=Iris severity=critical features_drifted=1"}
+{"time": "2026-04-20T01:35:26", "level": "WARNING", "logger": "drift_service", "message": "Drift detected dataset=Iris severity=critical features_drifted=1"}

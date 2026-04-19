@@ -61,3 +61,15 @@ def get_app_logger(name: str = "ml_monitor") -> logging.Logger:
     logger.addHandler(console_handler)
     logger.propagate = False
     return logger
+
+
+def log_user_action(action: str, *, page: str, metadata: Dict[str, Any] | None = None) -> None:
+    """Emit structured user action logs for UI observability."""
+    logger = get_app_logger("user_actions")
+    payload = {
+        "event": "user_action",
+        "action": str(action),
+        "page": str(page),
+        "metadata": metadata or {},
+    }
+    logger.info(json.dumps(payload, ensure_ascii=True))

@@ -9,12 +9,12 @@ import joblib
 
 from src.alerts import emit_console_alert
 from src.config_loader import get_artifact_dirs, load_config
-from src.data_loader import load_dataset
+from src.data_loader import DATASET_OPTIONS, get_feature_statistics, load_dataset
 from src.database import get_experiments, save_experiment, save_model
 from src.feature_store import load_cached_splits, make_feature_key, save_cached_splits
 from src.logger import get_app_logger
 from src.mlflow_tracker import log_pipeline_run
-from src.pipeline import MLPipeline, PipelineResult
+from src.pipeline import CLF_REGISTRY, MLPipeline, PipelineResult, REG_REGISTRY
 
 
 ProgressCallback = Callable[[str, float, str], None]
@@ -24,6 +24,44 @@ LOGGER = get_app_logger("pipeline_service")
 def list_experiments(limit: int = 200) -> list[Dict[str, Any]]:
     """Return persisted experiments for analytics views."""
     return get_experiments(limit=limit)
+
+
+def get_pipeline_defaults() -> Dict[str, Any]:
+    """Return default pipeline controls from config."""
+    cfg = load_config().get("pipeline", {})
+    return {
+        "test_size": float(cfg.get("test_size", 0.20)),
+        "cv_folds": int(cfg.get("cv_folds", 5)),
+        "random_seed": int(cfg.get("random_seed", 42)),
+        "n_jobs": int(cfg.get("n_jobs", -1)),
+    }
+
+
+def get_dataset_options() -> Dict[str, str]:
+    """Expose dataset options to UI without direct core imports."""
+    return dict(DATASET_OPTIONS)
+
+
+def get_task_and_model_options(dataset_key: str) -> Dict[str, Any]:
+    """Resolve task type and available model choices for a dataset key."""
+    app_cfg = load_config()
+    ds_cfg = app_cfg.get("datasets", {})
+    task = ds_cfg.get(dataset_key, {}).get("task")
+    if task not in {"classification", "regression"}:
+        clf_datasets = {"breast_cancer", "wine", "iris", "digits", "synthetic_clf"}
+        task = "classification" if dataset_key in clf_datasets else "regression"
+
+    return {
+        "task": task,
+        "model_options": list(CLF_REGISTRY.keys()) if task == "classification" else list(REG_REGISTRY.keys()),
+    }
+
+
+def get_dataset_preview(dataset_key: str, *, test_size: float, random_state: int) -> Dict[str, Any]:
+    """Load dataset preview and feature statistics for UI pages."""
+    ds = load_dataset(dataset_key, test_size=float(test_size), random_state=int(random_state))
+    feat_stats = get_feature_statistics(ds["X_train"])
+    return {"dataset": ds, "feature_stats": feat_stats}
 
 
 def _persist_artifacts(run_id: str, model: object, scaler: object) -> Dict[str, str]:

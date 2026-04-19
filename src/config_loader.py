@@ -31,8 +31,7 @@ DEFAULT_CONFIG: Dict[str, Any] = {
         "artifacts_root": "artifacts",
     },
     "auth": {
-        "username": "admin",
-        "password": "admin123",
+        "enabled": True,
     },
     "logging": {
         "level": "INFO",

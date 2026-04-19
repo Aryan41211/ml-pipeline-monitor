@@ -1,4 +1,4 @@
-"""Pipeline Runner page for end-to-end model training and persistence."""
+﻿"""Pipeline Runner page for end-to-end model training and persistence."""
 
 from datetime import datetime
 import time
@@ -10,23 +10,33 @@ import plotly.figure_factory as ff
 import plotly.graph_objects as go
 import streamlit as st
 
+from services.app_service import initialize_application
 from services.pipeline_service import (
     compute_next_run_ts,
+    get_dataset_options,
+    get_dataset_preview,
+    get_pipeline_defaults,
+    get_task_and_model_options,
     run_pipeline_and_persist,
     should_trigger_scheduled_run,
 )
-from src.auth import is_authenticated, render_auth_controls
-from src.config_loader import load_config
-from src.data_loader import DATASET_OPTIONS, load_dataset, get_feature_statistics
-from src.database import initialize_db
-from src.pipeline import CLF_REGISTRY, REG_REGISTRY
+from services.telemetry_service import track_user_action
+from src import auth
+from src.ui_theme import (
+    apply_ui_theme,
+    render_page_header_with_action,
+    render_section_title,
+    render_sidebar_brand,
+    render_sidebar_nav,
+    status_badge_html,
+)
 
 st.set_page_config(page_title="Pipeline Runner | ML Monitor", layout="wide")
-initialize_db()
+initialize_application()
+apply_ui_theme()
 
-APP_CONFIG = load_config()
-PIPELINE_CONFIG = APP_CONFIG.get("pipeline", {})
-DATASET_CONFIG = APP_CONFIG.get("datasets", {})
+PIPELINE_CONFIG = get_pipeline_defaults()
+DATASET_OPTIONS = get_dataset_options()
 
 
 def _get_automation_state() -> dict:
@@ -74,48 +84,6 @@ def _trigger_automation_if_due() -> None:
 
 
 _trigger_automation_if_due()
-
-# ---------------------------------------------------------------------------
-# CSS (shared with home)
-# ---------------------------------------------------------------------------
-st.markdown(
-    """
-    <style>
-        html, body, [class*="css"] { font-family: 'Inter', 'Segoe UI', sans-serif; }
-        [data-testid="metric-container"] {
-            background: #f8fafc; border: 1px solid #e2e8f0;
-            border-radius: 10px; padding: 18px 20px;
-        }
-        [data-testid="stMetricValue"] { font-size: 1.9rem !important; font-weight: 700; color: #0f172a; }
-        .page-header { padding: 8px 0 24px 0; border-bottom: 2px solid #e2e8f0; margin-bottom: 28px; }
-        .page-header h1 { font-size: 1.75rem; font-weight: 700; color: #0f172a; margin: 0; }
-        .page-header p  { color: #64748b; margin: 4px 0 0 0; font-size: 0.9rem; }
-        .section-title  { font-size: 1rem; font-weight: 600; color: #1e293b;
-                          margin-bottom: 14px; padding-bottom: 6px; border-bottom: 1px solid #f1f5f9; }
-        .stage-row { display: flex; align-items: center; gap: 10px;
-                     padding: 8px 12px; border-radius: 6px; margin-bottom: 4px;
-                     background: #f8fafc; border: 1px solid #e2e8f0; }
-        .stage-dot { width:10px; height:10px; border-radius:50%; flex-shrink:0; }
-        .stage-name { font-size:0.85rem; font-weight:600; color:#1e293b; flex:1; }
-        .stage-dur  { font-size:0.78rem; color:#64748b; }
-        [data-testid="stSidebar"] { background: #f8fafc; }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
-
-# ---------------------------------------------------------------------------
-# Page header
-# ---------------------------------------------------------------------------
-st.markdown(
-    """
-    <div class="page-header">
-      <h1>Pipeline Runner</h1>
-      <p>Configure, execute, and inspect an end-to-end ML training pipeline.</p>
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
 
 # ---------------------------------------------------------------------------
 # Helper: hyperparameter widgets per algorithm
@@ -209,15 +177,12 @@ def _reg_param_widgets(model_type: str) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# Sidebar — configuration
+# Sidebar â€” configuration
 # ---------------------------------------------------------------------------
 with st.sidebar:
+    render_sidebar_brand()
     st.markdown("### Navigation")
-    st.page_link("app.py", label="Overview")
-    st.page_link("pages/1_Pipeline_Runner.py", label="Pipeline Runner")
-    st.page_link("pages/2_Experiment_Tracking.py", label="Experiment Tracking")
-    st.page_link("pages/3_Model_Registry.py", label="Model Registry")
-    st.page_link("pages/4_Data_Drift.py", label="Data Drift")
+    render_sidebar_nav()
     st.divider()
 
     st.markdown("### Configuration")
@@ -237,17 +202,9 @@ with st.sidebar:
     st.divider()
     st.markdown("**Algorithm**")
 
-    # Determine available algorithms after dataset load attempt
-    # (task is known from DATASET_OPTIONS config)
-    task = DATASET_CONFIG.get(dataset_key, {}).get("task")
-    if task not in {"classification", "regression"}:
-        clf_datasets = {"breast_cancer", "wine", "iris", "digits", "synthetic_clf"}
-        task = "classification" if dataset_key in clf_datasets else "regression"
-
-    if task == "classification":
-        algo_options = list(CLF_REGISTRY.keys())
-    else:
-        algo_options = list(REG_REGISTRY.keys())
+    task_meta = get_task_and_model_options(dataset_key)
+    task = task_meta["task"]
+    algo_options = task_meta["model_options"]
 
     model_type = st.selectbox("Model", algo_options)
 
@@ -260,15 +217,49 @@ with st.sidebar:
         params = _reg_param_widgets(model_type)
 
     st.divider()
-    auth_ok = render_auth_controls()
+    st.markdown("### Access")
+    auth_ok = auth.render_auth_controls()
+    can_execute = auth.can_run_pipeline()
+    if auth_ok and not can_execute:
+        st.warning("Viewer role is read-only. Operator or admin role is required to run pipelines.")
 
     st.divider()
     run_btn = st.button(
         "Run Pipeline",
         type="primary",
-        use_container_width=True,
-        disabled=not auth_ok,
+        width="stretch",
+        disabled=not can_execute,
     )
+
+run_btn_top = render_page_header_with_action(
+    "Pipeline runner",
+    "Configure and execute a training run with live stage tracking.",
+    "Run Pipeline",
+    action_key="pipeline_run_top",
+    disabled=not can_execute,
+    help_text="Uses current sidebar configuration.",
+)
+run_btn = bool(run_btn or run_btn_top)
+if run_btn_top:
+    track_user_action(
+        "pipeline_runner",
+        "run_pipeline_clicked_top",
+        {"dataset": dataset_label, "model": model_type},
+    )
+
+k1, k2, k3, k4 = st.columns(4)
+k1.metric("Dataset", dataset_label)
+k2.metric("Model", model_type)
+k3.metric("Task", task.title())
+if not auth.is_auth_enabled():
+    access_text = "Auth disabled (admin)"
+elif auth_ok:
+    access_text = f"Signed in ({auth.current_role()})"
+else:
+    access_text = "Login required"
+k4.metric("Access", access_text)
+
+st.markdown("<br>", unsafe_allow_html=True)
 
 
 # ---------------------------------------------------------------------------
@@ -279,11 +270,20 @@ tab_run, tab_data, tab_auto = st.tabs(
 )
 
 with tab_data:
+    @st.cache_data(ttl=120, show_spinner=False)
+    def _cached_preview(ds_key: str, split: float, seed: int):
+        return get_dataset_preview(ds_key, test_size=split, random_state=seed)
+
     with st.spinner("Loading dataset..."):
         try:
-            ds = load_dataset(dataset_key, test_size=test_size, random_state=int(random_state))
+            preview_payload = _cached_preview(dataset_key, float(test_size), int(random_state))
+            ds = preview_payload["dataset"]
+            feat_stats = preview_payload["feature_stats"]
         except Exception as exc:
-            st.error(f"Failed to load dataset: {exc}")
+            st.error("Failed to load dataset preview.")
+            st.caption(f"Details: {exc}")
+            if st.button("Retry", key="pipeline_preview_retry", type="primary"):
+                st.rerun()
             st.stop()
 
     c1, c2, c3, c4 = st.columns(4)
@@ -304,11 +304,10 @@ with tab_data:
         )
 
     st.markdown("---")
-    st.markdown('<div class="section-title">Feature Statistics</div>', unsafe_allow_html=True)
-    feat_stats = get_feature_statistics(ds["X_train"])
-    st.dataframe(feat_stats.style.format("{:.4f}", na_rep="—"), use_container_width=True)
+    render_section_title("Feature Statistics")
+    st.dataframe(feat_stats.style.format("{:.4f}", na_rep="â€”"), width="stretch")
 
-    st.markdown('<div class="section-title" style="margin-top:20px">Feature Distributions (first 9)</div>', unsafe_allow_html=True)
+    render_section_title("Feature Distributions (first 9)", margin_top_px=20)
     sample_feats = ds["X_train"].columns[:9].tolist()
     n_cols = 3
     rows = [sample_feats[i:i + n_cols] for i in range(0, len(sample_feats), n_cols)]
@@ -333,7 +332,7 @@ with tab_data:
                     xaxis=dict(showgrid=False, title=None),
                     yaxis=dict(showgrid=False, title=None, showticklabels=False),
                 )
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, width="stretch")
 
 
 # ---------------------------------------------------------------------------
@@ -343,10 +342,21 @@ with tab_run:
     if "last_result" not in st.session_state:
         st.session_state["last_result"] = None
 
-    if not is_authenticated():
-        st.warning("Please login from the sidebar to execute pipeline runs.")
+    if not auth.is_authenticated():
+        st.warning("Please login from the sidebar to execute pipeline runs and populate dashboard data.")
+        st.caption("No experiments or models appear in other pages until at least one run finishes.")
+    elif not auth.can_run_pipeline():
+        st.warning("Your current role is read-only. Operator or admin role is required to execute pipeline runs.")
 
     if run_btn:
+        if not auth.can_run_pipeline():
+            st.error("Permission denied: this action requires operator or admin role.")
+            st.stop()
+        track_user_action(
+            "pipeline_runner",
+            "run_pipeline_execute",
+            {"dataset": dataset_label, "model": model_type, "task": task},
+        )
         # UI placeholders
         prog_bar    = st.progress(0.0)
         status_ph   = st.empty()
@@ -358,7 +368,7 @@ with tab_run:
             prog_bar.progress(progress)
             status_ph.markdown(
                 f"<div style='color:#2563eb;font-weight:600;font-size:0.9rem'>"
-                f"Running: {stage} — {message}</div>",
+                f"Running: {stage} â€” {message}</div>",
                 unsafe_allow_html=True,
             )
             ts = time.strftime("%H:%M:%S")
@@ -378,7 +388,10 @@ with tab_run:
                 progress_callback=_progress_cb,
             )
         except Exception as exc:
-            status_ph.error(f"Pipeline failed: {exc}")
+            status_ph.error("Pipeline failed. Please review your configuration and retry.")
+            st.caption(f"Details: {exc}")
+            if st.button("Retry run", key="pipeline_run_retry", type="primary"):
+                st.rerun()
             st.stop()
 
         result = payload["result"]
@@ -412,8 +425,8 @@ with tab_run:
     else:
         st.markdown("---")
         st.markdown(
-            f'<div class="section-title">Results — Run {result.run_id}</div>',
-            unsafe_allow_html=True,
+            f'<div class="section-title">Results - Run {result.run_id}</div>',
+            unsafe_allow_html=True
         )
 
         # Metrics
@@ -424,21 +437,21 @@ with tab_run:
             m2.metric("Precision", f"{metrics.get('precision', 0):.4f}")
             m3.metric("Recall",    f"{metrics.get('recall', 0):.4f}")
             m4.metric("F1 Score",  f"{metrics.get('f1_score', 0):.4f}")
-            m5.metric("ROC-AUC",   f"{metrics.get('roc_auc', 0):.4f}" if "roc_auc" in metrics else "—")
+            m5.metric("ROC-AUC",   f"{metrics.get('roc_auc', 0):.4f}" if "roc_auc" in metrics else "â€”")
         else:
             m1, m2, m3 = st.columns(3)
             m1.metric("RMSE", f"{metrics.get('rmse', 0):.4f}")
             m2.metric("MAE",  f"{metrics.get('mae', 0):.4f}")
-            m3.metric("R²",   f"{metrics.get('r2', 0):.4f}")
+            m3.metric("RÂ²",   f"{metrics.get('r2', 0):.4f}")
 
         cv_mean = metrics.get("cv_mean", 0)
         cv_std  = metrics.get("cv_std", 0)
-        st.caption(f"Cross-validation: {cv_mean:.4f} ± {cv_std:.4f}  ({result.cv_scores.shape[0]}-fold)")
+        st.caption(f"Cross-validation: {cv_mean:.4f} Â± {cv_std:.4f}  ({result.cv_scores.shape[0]}-fold)")
 
         st.markdown("<br>", unsafe_allow_html=True)
 
         # Stage summary
-        st.markdown('<div class="section-title">Stage Summary</div>', unsafe_allow_html=True)
+        render_section_title("Stage Summary")
         stage_cols = st.columns(len(result.stages))
         colors = {"success": "#22c55e", "failed": "#ef4444", "skipped": "#94a3b8"}
         for i, stage in enumerate(result.stages):
@@ -453,7 +466,8 @@ with tab_run:
                                     background:{dot_color};margin:0 auto 6px auto"></div>
                         <div style="font-size:0.72rem;font-weight:600;color:#1e293b;
                                     line-height:1.3">{stage.name}</div>
-                        <div style="font-size:0.7rem;color:#64748b;margin-top:3px">
+                        <div style="margin-top:4px">{status_badge_html(stage.status)}</div>
+                        <div style="font-size:0.7rem;color:#64748b;margin-top:4px">
                             {stage.duration:.2f} s</div>
                     </div>
                     """,
@@ -486,7 +500,7 @@ with tab_run:
                     xaxis=dict(showgrid=True, gridcolor="#f1f5f9", title="Importance"),
                     yaxis=dict(showgrid=False, title=None, tickfont=dict(size=11)),
                 )
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, width="stretch")
 
             if result.cv_scores is not None:
                 st.markdown('<div class="section-title" style="margin-top:8px">CV Score Distribution</div>', unsafe_allow_html=True)
@@ -517,7 +531,7 @@ with tab_run:
                     ),
                     showlegend=False,
                 )
-                st.plotly_chart(fig_cv, use_container_width=True)
+                st.plotly_chart(fig_cv, width="stretch")
 
         with chart_right:
             if result.task == "classification" and result.confusion_mat is not None:
@@ -542,7 +556,7 @@ with tab_run:
                     yaxis=dict(title="Actual", autorange="reversed"),
                     paper_bgcolor="white",
                 )
-                st.plotly_chart(fig_cm, use_container_width=True)
+                st.plotly_chart(fig_cm, width="stretch")
 
         # Stage logs expander
         with st.expander("Stage Logs"):
@@ -564,9 +578,9 @@ with tab_auto:
 
     c1, c2, c3 = st.columns(3)
     c1.metric("Automation", "Enabled" if auto.get("enabled") else "Disabled")
-    c2.metric("Last Auto Run", auto.get("last_run_id") or "—")
+    c2.metric("Last Auto Run", auto.get("last_run_id") or "â€”")
 
-    next_run_label = "—"
+    next_run_label = "â€”"
     if auto.get("next_run_at"):
         next_run_label = auto["next_run_at"].strftime("%Y-%m-%d %H:%M:%S UTC")
     c3.metric("Next Run", next_run_label)
@@ -581,13 +595,13 @@ with tab_auto:
 
     col_set, col_stop = st.columns(2)
     with col_set:
-        set_schedule = st.button("Apply Schedule", type="primary", use_container_width=True)
+        set_schedule = st.button("Apply Schedule", type="primary", width="stretch")
     with col_stop:
-        stop_schedule = st.button("Stop Automation", use_container_width=True)
+        stop_schedule = st.button("Stop Automation", width="stretch")
 
     if set_schedule:
-        if not is_authenticated():
-            st.error("Login required to configure automation.")
+        if not auth.can_run_pipeline():
+            st.error("Operator or admin role required to configure automation.")
             st.stop()
         auto["enabled"] = bool(enabled)
         auto["interval_minutes"] = int(interval)
@@ -605,8 +619,8 @@ with tab_auto:
         st.success("Automation schedule updated.")
 
     if stop_schedule:
-        if not is_authenticated():
-            st.error("Login required to stop automation.")
+        if not auth.can_run_pipeline():
+            st.error("Operator or admin role required to stop automation.")
             st.stop()
         auto["enabled"] = False
         auto["next_run_at"] = None
@@ -615,6 +629,7 @@ with tab_auto:
     history = auto.get("history", [])
     if history:
         st.markdown('<div class="section-title" style="margin-top:18px">Recent Automated Runs</div>', unsafe_allow_html=True)
-        st.dataframe(pd.DataFrame(history), use_container_width=True, hide_index=True)
+        st.dataframe(pd.DataFrame(history), width="stretch", hide_index=True)
     else:
         st.info("No automated runs yet.")
+

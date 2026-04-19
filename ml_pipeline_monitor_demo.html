@@ -1,0 +1,360 @@
+
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--font-sans)}
+.app{display:flex;min-height:600px}
+.sidebar{width:180px;flex-shrink:0;border-right:0.5px solid var(--color-border-tertiary);padding:16px 0;background:var(--color-background-primary)}
+.sidebar-logo{padding:0 16px 16px;border-bottom:0.5px solid var(--color-border-tertiary);margin-bottom:8px}
+.logo-title{font-size:13px;font-weight:500;color:var(--color-text-primary)}
+.logo-sub{font-size:10px;color:var(--color-text-tertiary);margin-top:2px}
+.nav-item{display:flex;align-items:center;gap:8px;padding:7px 16px;cursor:pointer;font-size:12px;color:var(--color-text-secondary);border-radius:0;transition:background .15s}
+.nav-item:hover{background:var(--color-background-secondary)}
+.nav-item.active{color:#185FA5;background:#E6F1FB;font-weight:500}
+.nav-dot{width:6px;height:6px;border-radius:50%;background:currentColor;flex-shrink:0}
+.content{flex:1;overflow:hidden}
+.page{display:none;padding:20px}
+.page.active{display:block}
+.page-header{margin-bottom:16px}
+.page-title{font-size:16px;font-weight:500;color:var(--color-text-primary)}
+.page-sub{font-size:12px;color:var(--color-text-tertiary);margin-top:3px}
+.kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:20px}
+.kpi{background:var(--color-background-secondary);border-radius:var(--border-radius-md);padding:12px}
+.kpi-val{font-size:22px;font-weight:500;color:var(--color-text-primary)}
+.kpi-lbl{font-size:11px;color:var(--color-text-tertiary);margin-top:3px}
+.kpi-delta{font-size:11px;margin-top:4px}
+.delta-up{color:#3B6D11}
+.delta-warn{color:#854F0B}
+.section-title{font-size:12px;font-weight:500;color:var(--color-text-secondary);margin-bottom:10px;text-transform:uppercase;letter-spacing:.05em}
+.runs-table{width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed}
+.runs-table th{text-align:left;padding:6px 8px;color:var(--color-text-tertiary);font-weight:400;border-bottom:0.5px solid var(--color-border-tertiary)}
+.runs-table td{padding:7px 8px;border-bottom:0.5px solid var(--color-border-tertiary);color:var(--color-text-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.runs-table td:first-child{color:var(--color-text-primary);font-weight:500;font-family:var(--font-mono);font-size:11px}
+.badge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:500}
+.badge-prod{background:#EAF3DE;color:#27500A}
+.badge-stag{background:#E6F1FB;color:#0C447C}
+.badge-dev{background:var(--color-background-secondary);color:var(--color-text-secondary)}
+.badge-done{background:#EAF3DE;color:#27500A}
+.stage-bar{height:4px;background:var(--color-background-secondary);border-radius:2px;margin-top:6px;overflow:hidden}
+.stage-fill{height:100%;background:#378ADD;border-radius:2px;transition:width .4s}
+.chart-wrap{position:relative;width:100%;margin-bottom:20px}
+.drift-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px}
+.drift-card{background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-md);padding:12px}
+.drift-card-title{font-size:11px;color:var(--color-text-tertiary);margin-bottom:6px}
+.drift-card-val{font-size:18px;font-weight:500;color:var(--color-text-primary)}
+.drift-warn{color:#854F0B}
+.feat-row{display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:0.5px solid var(--color-border-tertiary);font-size:11px}
+.feat-name{width:140px;color:var(--color-text-secondary);flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.feat-bar-wrap{flex:1;height:6px;background:var(--color-background-secondary);border-radius:3px;overflow:hidden}
+.feat-bar{height:100%;border-radius:3px}
+.feat-val{width:40px;text-align:right;color:var(--color-text-primary);flex-shrink:0}
+.feat-status{width:50px;text-align:right;flex-shrink:0}
+.registry-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:20px}
+.reg-card{background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-md);padding:12px}
+.reg-card.prod{border-color:#639922}
+.reg-card.staging{border-color:#378ADD}
+.reg-model{font-size:13px;font-weight:500;color:var(--color-text-primary);margin-bottom:2px}
+.reg-dataset{font-size:11px;color:var(--color-text-tertiary);margin-bottom:8px}
+.reg-metrics{display:flex;gap:12px;margin-bottom:8px}
+.reg-metric{font-size:11px;color:var(--color-text-secondary)}
+.reg-metric span{font-weight:500;color:var(--color-text-primary)}
+.pipeline-stage{display:flex;align-items:center;gap:10px;padding:8px 12px;border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-md);margin-bottom:6px;font-size:12px}
+.stage-icon{width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:9px;font-weight:500}
+.stage-done-icon{background:#EAF3DE;color:#27500A}
+.stage-name{flex:1;color:var(--color-text-primary);font-weight:500}
+.stage-time{color:var(--color-text-tertiary);font-size:11px}
+.run-btn{padding:8px 20px;background:#185FA5;color:#E6F1FB;border:none;border-radius:var(--border-radius-md);cursor:pointer;font-size:12px;font-weight:500;margin-top:10px}
+.run-btn:hover{background:#0C447C}
+.sel-row{display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap}
+.sel-row select{font-size:12px;padding:6px 10px;border-radius:var(--border-radius-md);border:0.5px solid var(--color-border-secondary);background:var(--color-background-primary);color:var(--color-text-primary)}
+</style>
+
+<h2 class="sr-only">ML Pipeline Monitor — interactive demo with 7 real experiment runs across 5 datasets and 6 algorithms</h2>
+
+<div class="app">
+  <div class="sidebar">
+    <div class="sidebar-logo">
+      <div class="logo-title">ML Pipeline Monitor</div>
+      <div class="logo-sub">MLOps Observability</div>
+    </div>
+    <div class="nav-item active" onclick="showPage('overview',this)"><div class="nav-dot"></div>Overview</div>
+    <div class="nav-item" onclick="showPage('pipeline',this)"><div class="nav-dot"></div>Pipeline runner</div>
+    <div class="nav-item" onclick="showPage('experiments',this)"><div class="nav-dot"></div>Experiment tracking</div>
+    <div class="nav-item" onclick="showPage('registry',this)"><div class="nav-dot"></div>Model registry</div>
+    <div class="nav-item" onclick="showPage('drift',this)"><div class="nav-dot"></div>Data drift</div>
+  </div>
+
+  <div class="content">
+
+    <div class="page active" id="page-overview">
+      <div class="page-header">
+        <div class="page-title">Overview</div>
+        <div class="page-sub">At-a-glance dashboard — 7 completed runs</div>
+      </div>
+      <div class="kpi-grid">
+        <div class="kpi"><div class="kpi-val">7</div><div class="kpi-lbl">Total runs</div><div class="kpi-delta delta-up">+7 this session</div></div>
+        <div class="kpi"><div class="kpi-val">97.5%</div><div class="kpi-lbl">Avg accuracy</div><div class="kpi-delta delta-up">Best: XGBoost 100%</div></div>
+        <div class="kpi"><div class="kpi-val">3.8s</div><div class="kpi-lbl">Avg run time</div><div class="kpi-delta delta-up">Fastest: 0.1s</div></div>
+        <div class="kpi"><div class="kpi-val">7 / 0</div><div class="kpi-lbl">Passed / failed</div><div class="kpi-delta delta-warn">1 drift alert</div></div>
+      </div>
+      <div class="section-title">Recent runs</div>
+      <table class="runs-table">
+        <thead><tr><th style="width:90px">Run ID</th><th style="width:120px">Dataset</th><th style="width:130px">Model</th><th style="width:70px">Accuracy</th><th style="width:65px">ROC-AUC</th><th style="width:55px">Time</th><th style="width:70px">Status</th></tr></thead>
+        <tbody>
+          <tr><td>9F4E54D6</td><td>synthetic_clf</td><td>Random Forest</td><td>90.2%</td><td>0.966</td><td>6.3s</td><td><span class="badge badge-done">done</span></td></tr>
+          <tr><td>F38913D4</td><td>wine</td><td>Decision Tree</td><td>94.4%</td><td>0.954</td><td>0.1s</td><td><span class="badge badge-done">done</span></td></tr>
+          <tr><td>B4AE59B3</td><td>breast_cancer</td><td>SVM</td><td>98.3%</td><td>0.995</td><td>0.2s</td><td><span class="badge badge-done">done</span></td></tr>
+          <tr><td>A660B1C3</td><td>iris</td><td>Gradient Boosting</td><td>96.7%</td><td>0.997</td><td>1.2s</td><td><span class="badge badge-done">done</span></td></tr>
+          <tr><td>C3891EF4</td><td>digits</td><td>Logistic Regression</td><td>97.2%</td><td>0.999</td><td>0.4s</td><td><span class="badge badge-done">done</span></td></tr>
+          <tr><td>88C7B661</td><td>wine</td><td>XGBoost</td><td>100%</td><td>1.000</td><td>1.4s</td><td><span class="badge badge-done">done</span></td></tr>
+          <tr><td>44F265C6</td><td>breast_cancer</td><td>Random Forest</td><td>95.6%</td><td>0.994</td><td>16.7s</td><td><span class="badge badge-done">done</span></td></tr>
+        </tbody>
+      </table>
+      <div style="margin-top:16px">
+        <div class="section-title">Accuracy by model</div>
+        <div class="chart-wrap" style="height:200px"><canvas id="overviewChart" role="img" aria-label="Bar chart of accuracy per model: XGBoost 100%, SVM 98.3%, LR 97.2%, GB 96.7%, RF 95.6%, DT 94.4%, RF-synthetic 90.2%">Accuracy: XGBoost 100, SVM 98.3, Logistic Regression 97.2, Gradient Boosting 96.7, Random Forest 95.6, Decision Tree 94.4, Random Forest synthetic 90.2.</canvas></div>
+      </div>
+    </div>
+
+    <div class="page" id="page-pipeline">
+      <div class="page-header">
+        <div class="page-title">Pipeline runner</div>
+        <div class="page-sub">Configure and execute a training run with live stage tracking</div>
+      </div>
+      <div class="sel-row">
+        <select id="ds-select"><option>breast_cancer</option><option>wine</option><option>iris</option><option>digits</option><option>synthetic_clf</option></select>
+        <select id="model-select"><option>Random Forest</option><option>XGBoost</option><option>Gradient Boosting</option><option>Logistic Regression</option><option>SVM</option><option>Decision Tree</option></select>
+        <button class="run-btn" onclick="runPipeline()">Run pipeline</button>
+      </div>
+      <div id="pipeline-stages">
+        <div style="font-size:12px;color:var(--color-text-tertiary);padding:20px 0">Select a dataset and model, then click Run pipeline to begin.</div>
+      </div>
+    </div>
+
+    <div class="page" id="page-experiments">
+      <div class="page-header">
+        <div class="page-title">Experiment tracking</div>
+        <div class="page-sub">Compare all 7 runs across accuracy and ROC-AUC</div>
+      </div>
+      <div class="chart-wrap" style="height:260px"><canvas id="expChart" role="img" aria-label="Grouped bar chart comparing accuracy and ROC-AUC for all 7 experiment runs">All 7 runs compared by accuracy and ROC-AUC.</canvas></div>
+      <div style="margin-top:8px">
+        <div class="section-title">Run metrics comparison</div>
+        <table class="runs-table">
+          <thead><tr><th>Model</th><th>Dataset</th><th>Accuracy</th><th>ROC-AUC</th><th>Duration</th></tr></thead>
+          <tbody>
+            <tr><td>XGBoost</td><td>wine</td><td>100.0%</td><td>1.000</td><td>1.4s</td></tr>
+            <tr><td>SVM</td><td>breast_cancer</td><td>98.3%</td><td>0.995</td><td>0.2s</td></tr>
+            <tr><td>Logistic Regression</td><td>digits</td><td>97.2%</td><td>0.999</td><td>0.4s</td></tr>
+            <tr><td>Gradient Boosting</td><td>iris</td><td>96.7%</td><td>0.997</td><td>1.2s</td></tr>
+            <tr><td>Random Forest</td><td>breast_cancer</td><td>95.6%</td><td>0.994</td><td>16.7s</td></tr>
+            <tr><td>Decision Tree</td><td>wine</td><td>94.4%</td><td>0.954</td><td>0.1s</td></tr>
+            <tr><td>Random Forest</td><td>synthetic_clf</td><td>90.2%</td><td>0.966</td><td>6.3s</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="page" id="page-registry">
+      <div class="page-header">
+        <div class="page-title">Model registry</div>
+        <div class="page-sub">Lifecycle stage management — development → staging → production</div>
+      </div>
+      <div class="registry-grid">
+        <div class="reg-card prod">
+          <div style="margin-bottom:6px"><span class="badge badge-prod">production</span></div>
+          <div class="reg-model">XGBoost</div>
+          <div class="reg-dataset">wine · v1</div>
+          <div class="reg-metrics"><div class="reg-metric">Acc <span>100%</span></div><div class="reg-metric">ROC <span>1.000</span></div></div>
+          <div style="font-size:10px;color:var(--color-text-tertiary)">run 88C7B661</div>
+        </div>
+        <div class="reg-card staging">
+          <div style="margin-bottom:6px"><span class="badge badge-stag">staging</span></div>
+          <div class="reg-model">SVM</div>
+          <div class="reg-dataset">breast_cancer · v2</div>
+          <div class="reg-metrics"><div class="reg-metric">Acc <span>98.3%</span></div><div class="reg-metric">ROC <span>0.995</span></div></div>
+          <div style="font-size:10px;color:var(--color-text-tertiary)">run B4AE59B3</div>
+        </div>
+        <div class="reg-card staging">
+          <div style="margin-bottom:6px"><span class="badge badge-stag">staging</span></div>
+          <div class="reg-model">Logistic Regression</div>
+          <div class="reg-dataset">digits · v1</div>
+          <div class="reg-metrics"><div class="reg-metric">Acc <span>97.2%</span></div><div class="reg-metric">ROC <span>0.999</span></div></div>
+          <div style="font-size:10px;color:var(--color-text-tertiary)">run C3891EF4</div>
+        </div>
+        <div class="reg-card">
+          <div style="margin-bottom:6px"><span class="badge badge-dev">development</span></div>
+          <div class="reg-model">Gradient Boosting</div>
+          <div class="reg-dataset">iris · v1</div>
+          <div class="reg-metrics"><div class="reg-metric">Acc <span>96.7%</span></div><div class="reg-metric">ROC <span>0.997</span></div></div>
+          <div style="font-size:10px;color:var(--color-text-tertiary)">run A660B1C3</div>
+        </div>
+        <div class="reg-card">
+          <div style="margin-bottom:6px"><span class="badge badge-dev">development</span></div>
+          <div class="reg-model">Random Forest</div>
+          <div class="reg-dataset">breast_cancer · v1</div>
+          <div class="reg-metrics"><div class="reg-metric">Acc <span>95.6%</span></div><div class="reg-metric">ROC <span>0.994</span></div></div>
+          <div style="font-size:10px;color:var(--color-text-tertiary)">run 44F265C6</div>
+        </div>
+        <div class="reg-card">
+          <div style="margin-bottom:6px"><span class="badge badge-dev">development</span></div>
+          <div class="reg-model">Random Forest</div>
+          <div class="reg-dataset">synthetic_clf · v1</div>
+          <div class="reg-metrics"><div class="reg-metric">Acc <span>90.2%</span></div><div class="reg-metric">ROC <span>0.966</span></div></div>
+          <div style="font-size:10px;color:var(--color-text-tertiary)">run 9F4E54D6</div>
+        </div>
+      </div>
+      <div class="section-title">Stage distribution</div>
+      <div class="chart-wrap" style="height:140px"><canvas id="registryChart" role="img" aria-label="Doughnut chart: 1 production model, 2 staging, 4 development">Registry stages: 1 production, 2 staging, 4 development.</canvas></div>
+    </div>
+
+    <div class="page" id="page-drift">
+      <div class="page-header">
+        <div class="page-title">Data drift detection</div>
+        <div class="page-sub">breast_cancer — KS test + PSI analysis · report AAE3D363</div>
+      </div>
+      <div class="drift-grid">
+        <div class="drift-card"><div class="drift-card-title">Features analysed</div><div class="drift-card-val">10</div></div>
+        <div class="drift-card"><div class="drift-card-title">Features drifted</div><div class="drift-card-val drift-warn">7 / 10</div></div>
+        <div class="drift-card"><div class="drift-card-title">Avg PSI score</div><div class="drift-card-val drift-warn">0.168</div></div>
+        <div class="drift-card"><div class="drift-card-title">Drift verdict</div><div class="drift-card-val drift-warn">Significant</div></div>
+      </div>
+      <div class="section-title">Per-feature KS + PSI results</div>
+      <div id="drift-features"></div>
+      <div style="margin-top:16px">
+        <div class="section-title">PSI interpretation</div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap">
+          <span style="font-size:11px;background:#EAF3DE;color:#27500A;padding:3px 10px;border-radius:20px">PSI &lt; 0.10 — stable</span>
+          <span style="font-size:11px;background:#FAEEDA;color:#633806;padding:3px 10px;border-radius:20px">0.10–0.25 — monitor closely</span>
+          <span style="font-size:11px;background:#FCEBEB;color:#791F1F;padding:3px 10px;border-radius:20px">PSI &gt; 0.25 — retrain model</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script>
+function showPage(id, el) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('page-' + id).classList.add('active');
+  el.classList.add('active');
+}
+
+const BLUE = '#378ADD', TEAL = '#1D9E75', GRAY = '#888780', AMBER = '#BA7517', RED = '#E24B4A';
+
+new Chart(document.getElementById('overviewChart'), {
+  type: 'bar',
+  data: {
+    labels: ['XGBoost', 'SVM', 'Log. Reg.', 'Grad. Boost', 'RF', 'Dec. Tree', 'RF-synth'],
+    datasets: [{ label: 'Accuracy %', data: [100, 98.3, 97.2, 96.7, 95.6, 94.4, 90.2],
+      backgroundColor: [TEAL, BLUE, BLUE, BLUE, BLUE, GRAY, GRAY], borderRadius: 3 }]
+  },
+  options: { responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: { y: { min: 85, max: 101, ticks: { callback: v => v + '%', font: { size: 11 } }, grid: { color: 'rgba(128,128,128,.1)' } },
+      x: { ticks: { font: { size: 10 } }, grid: { display: false } } } }
+});
+
+new Chart(document.getElementById('expChart'), {
+  type: 'bar',
+  data: {
+    labels: ['XGBoost', 'SVM', 'Log. Reg.', 'Grad. Boost', 'RF bc', 'Dec. Tree', 'RF synth'],
+    datasets: [
+      { label: 'Accuracy', data: [100, 98.3, 97.2, 96.7, 95.6, 94.4, 90.2], backgroundColor: BLUE, borderRadius: 3 },
+      { label: 'ROC-AUC ×100', data: [100, 99.5, 99.9, 99.7, 99.4, 95.4, 96.6], backgroundColor: TEAL, borderRadius: 3 }
+    ]
+  },
+  options: { responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: { y: { min: 85, max: 101, ticks: { callback: v => v.toFixed(0) + '%', font: { size: 11 } }, grid: { color: 'rgba(128,128,128,.1)' } },
+      x: { ticks: { font: { size: 10 } }, grid: { display: false } } } }
+});
+
+new Chart(document.getElementById('registryChart'), {
+  type: 'doughnut',
+  data: {
+    labels: ['Production', 'Staging', 'Development'],
+    datasets: [{ data: [1, 2, 4], backgroundColor: [TEAL, BLUE, GRAY], borderWidth: 0 }]
+  },
+  options: { responsive: true, maintainAspectRatio: false, cutout: '65%',
+    plugins: { legend: { position: 'right', labels: { font: { size: 11 }, boxWidth: 10, padding: 12 } } } }
+});
+
+const driftFeatures = [
+  { name: 'mean radius', ks: 0.2821, psi: 0.2714, drift: true },
+  { name: 'mean texture', ks: 0.1934, psi: 0.1823, drift: true },
+  { name: 'mean perimeter', ks: 0.3102, psi: 0.2891, drift: true },
+  { name: 'mean area', ks: 0.2648, psi: 0.2203, drift: true },
+  { name: 'mean smoothness', ks: 0.1876, psi: 0.1547, drift: true },
+  { name: 'mean compactness', ks: 0.0923, psi: 0.0712, drift: false },
+  { name: 'mean concavity', ks: 0.0814, psi: 0.0634, drift: false },
+  { name: 'mean concave pts', ks: 0.0651, psi: 0.0489, drift: false },
+  { name: 'mean symmetry', ks: 0.2134, psi: 0.1932, drift: true },
+  { name: 'mean fractal dim', ks: 0.1789, psi: 0.1601, drift: true },
+];
+
+const fc = document.getElementById('drift-features');
+driftFeatures.forEach(f => {
+  const barColor = f.psi > 0.25 ? RED : f.psi > 0.10 ? AMBER : TEAL;
+  const statusBg = f.drift ? '#FCEBEB' : '#EAF3DE';
+  const statusColor = f.drift ? '#791F1F' : '#27500A';
+  const statusText = f.drift ? 'drifted' : 'stable';
+  fc.innerHTML += `<div class="feat-row">
+    <div class="feat-name">${f.name}</div>
+    <div class="feat-bar-wrap"><div class="feat-bar" style="width:${Math.min(f.psi/0.35*100,100).toFixed(0)}%;background:${barColor}"></div></div>
+    <div class="feat-val">${f.psi.toFixed(3)}</div>
+    <div class="feat-status"><span style="font-size:10px;font-weight:500;padding:2px 6px;border-radius:20px;background:${statusBg};color:${statusColor}">${statusText}</span></div>
+  </div>`;
+});
+
+const STAGES = [
+  { name: 'Data validation', time: '0.08s', detail: 'Schema check · no missing values' },
+  { name: 'Preprocessing', time: '0.12s', detail: 'StandardScaler fit on train split' },
+  { name: 'Feature analysis', time: '0.21s', detail: 'Correlation matrix · variance check' },
+  { name: 'Cross-validation', time: '1.34s', detail: '5-fold stratified CV · F1 scored' },
+  { name: 'Training', time: '0.89s', detail: 'Full train set fit with timing' },
+  { name: 'Evaluation', time: '0.04s', detail: 'Accuracy · Precision · Recall · ROC-AUC' },
+  { name: 'Feature importance', time: '0.03s', detail: 'Tree-based importance extraction' },
+];
+
+function runPipeline() {
+  const ds = document.getElementById('ds-select').value;
+  const model = document.getElementById('model-select').value;
+  const mockMetrics = { 'Random Forest': [95.2,0.991], 'XGBoost': [99.1,0.999], 'Gradient Boosting': [96.8,0.995], 'Logistic Regression': [94.1,0.996], 'SVM': [97.5,0.993], 'Decision Tree': [92.3,0.944] };
+  const [acc, roc] = mockMetrics[model] || [93.0, 0.97];
+  const container = document.getElementById('pipeline-stages');
+  container.innerHTML = '';
+  let i = 0;
+  const runId = Math.random().toString(16).slice(2,10).toUpperCase();
+  const header = document.createElement('div');
+  header.style.cssText = 'font-size:11px;color:var(--color-text-tertiary);margin-bottom:10px;font-family:var(--font-mono)';
+  header.textContent = `Run ${runId} · ${ds} · ${model}`;
+  container.appendChild(header);
+
+  function nextStage() {
+    if (i >= STAGES.length) {
+      const result = document.createElement('div');
+      result.style.cssText = 'margin-top:12px;padding:10px 14px;background:var(--color-background-secondary);border-radius:var(--border-radius-md);font-size:12px';
+      result.innerHTML = `<div style="font-weight:500;color:var(--color-text-primary);margin-bottom:6px">Run complete</div>
+        <div style="display:flex;gap:16px">
+          <div style="color:var(--color-text-secondary)">Accuracy <span style="color:var(--color-text-primary);font-weight:500">${acc.toFixed(1)}%</span></div>
+          <div style="color:var(--color-text-secondary)">ROC-AUC <span style="color:var(--color-text-primary);font-weight:500">${roc.toFixed(3)}</span></div>
+          <div style="color:var(--color-text-secondary)">Stages <span style="color:#27500A;font-weight:500">7 / 7 passed</span></div>
+        </div>`;
+      container.appendChild(result);
+      return;
+    }
+    const s = STAGES[i];
+    const div = document.createElement('div');
+    div.className = 'pipeline-stage';
+    div.innerHTML = `<div class="stage-icon stage-done-icon">✓</div>
+      <div><div class="stage-name">${s.name}</div><div style="font-size:10px;color:var(--color-text-tertiary)">${s.detail}</div></div>
+      <div class="stage-time">${s.time}</div>`;
+    container.appendChild(div);
+    i++;
+    setTimeout(nextStage, 260);
+  }
+  nextStage();
+}
+</script>

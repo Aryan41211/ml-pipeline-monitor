@@ -1,177 +1,96 @@
-"""
-ML Pipeline Monitor — Home Dashboard
+﻿"""
+ML Pipeline Monitor â€” Home Dashboard
 
 Provides an at-a-glance view of experiment history, model registry health,
 and current host resource utilisation.  Use the sidebar navigation to access
 the Pipeline Runner, Experiment Tracking, Model Registry, and Data Drift pages.
 """
+from datetime import datetime
+from html import escape
 import json
 
 import pandas as pd
 import plotly.express as px
-import plotly.graph_objects as go
 import streamlit as st
 
-from src.config_loader import load_config
-from src.database import get_experiments, get_models, initialize_db
-from src.system_monitor import get_system_metrics
+from services.app_service import get_dashboard_snapshot, get_ui_settings, initialize_application
+from services.pipeline_service import get_dataset_options, run_pipeline_and_persist
+from services.telemetry_service import track_user_action
+from src.auth import can_run_pipeline, current_role, is_auth_enabled, render_auth_controls
+from src.ui_theme import (
+    apply_ui_theme,
+    render_empty_data_explainer,
+    render_section_title,
+    render_sidebar_brand,
+    render_sidebar_nav,
+)
 
 # ---------------------------------------------------------------------------
-# Page config — must be the first Streamlit call
+# Page config â€” must be the first Streamlit call
 # ---------------------------------------------------------------------------
 st.set_page_config(
     page_title="ML Pipeline Monitor",
     layout="wide",
     initial_sidebar_state="expanded",
-    menu_items={"About": "ML Pipeline Monitor — production MLOps observability platform."},
+    menu_items={"About": "ML Pipeline Monitor â€” production MLOps observability platform."},
 )
 
-initialize_db()
-APP_CONFIG = load_config()
-MAX_EXPERIMENTS = int(APP_CONFIG.get("ui", {}).get("max_experiments_displayed", 200))
-
-# ---------------------------------------------------------------------------
-# Global CSS
-# ---------------------------------------------------------------------------
-st.markdown(
-    """
-    <style>
-        /* ---- typography ---- */
-        html, body, [class*="css"] { font-family: 'Inter', 'Segoe UI', sans-serif; }
-
-        /* ---- metric cards ---- */
-        [data-testid="metric-container"] {
-            background: #f8fafc;
-            border: 1px solid #e2e8f0;
-            border-radius: 10px;
-            padding: 18px 20px;
-        }
-        [data-testid="metric-container"] > div:first-child {
-            color: #64748b;
-            font-size: 0.78rem;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-        }
-        [data-testid="stMetricValue"] {
-            font-size: 1.9rem !important;
-            font-weight: 700;
-            color: #0f172a;
-        }
-
-        /* ---- page header ---- */
-        .page-header {
-            padding: 8px 0 24px 0;
-            border-bottom: 2px solid #e2e8f0;
-            margin-bottom: 28px;
-        }
-        .page-header h1 {
-            font-size: 1.75rem;
-            font-weight: 700;
-            color: #0f172a;
-            margin: 0;
-        }
-        .page-header p {
-            color: #64748b;
-            margin: 4px 0 0 0;
-            font-size: 0.9rem;
-        }
-
-        /* ---- section headings ---- */
-        .section-title {
-            font-size: 1rem;
-            font-weight: 600;
-            color: #1e293b;
-            margin-bottom: 14px;
-            padding-bottom: 6px;
-            border-bottom: 1px solid #f1f5f9;
-        }
-
-        /* ---- status pills ---- */
-        .pill {
-            display: inline-block;
-            padding: 2px 10px;
-            border-radius: 999px;
-            font-size: 0.72rem;
-            font-weight: 600;
-        }
-        .pill-green  { background: #dcfce7; color: #16a34a; }
-        .pill-yellow { background: #fef9c3; color: #854d0e; }
-        .pill-blue   { background: #dbeafe; color: #1d4ed8; }
-        .pill-red    { background: #fee2e2; color: #dc2626; }
-        .pill-gray   { background: #f1f5f9; color: #475569; }
-
-        /* ---- sidebar tweaks ---- */
-        [data-testid="stSidebar"] { background: #f8fafc; }
-        [data-testid="stSidebar"] .block-container { padding-top: 1.5rem; }
-
-        /* ---- dataframe ---- */
-        .stDataFrame { border-radius: 8px; overflow: hidden; }
-
-        /* ---- progress bars ---- */
-        .resource-bar {
-            height: 8px;
-            border-radius: 4px;
-            background: #e2e8f0;
-            overflow: hidden;
-            margin-top: 4px;
-        }
-        .resource-bar-fill {
-            height: 100%;
-            border-radius: 4px;
-        }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
+initialize_application()
+UI_SETTINGS = get_ui_settings()
+MAX_EXPERIMENTS = int(UI_SETTINGS.get("max_experiments_displayed", 200))
+DATASET_OPTIONS = get_dataset_options()
+apply_ui_theme()
+if "overview_limit" not in st.session_state:
+    st.session_state["overview_limit"] = MAX_EXPERIMENTS
 
 # ---------------------------------------------------------------------------
 # Sidebar
 # ---------------------------------------------------------------------------
 with st.sidebar:
-    st.markdown("### ML Pipeline Monitor")
-    st.caption("v1.0.0  —  MLOps observability")
+    render_sidebar_brand()
+    st.markdown("### Navigation")
+    render_sidebar_nav()
     st.divider()
-    st.markdown("**Navigation**")
-    st.page_link("app.py",                             label="Overview",             icon=None)
-    st.page_link("pages/1_Pipeline_Runner.py",         label="Pipeline Runner",      icon=None)
-    st.page_link("pages/2_Experiment_Tracking.py",     label="Experiment Tracking",  icon=None)
-    st.page_link("pages/3_Model_Registry.py",          label="Model Registry",       icon=None)
-    st.page_link("pages/4_Data_Drift.py",              label="Data Drift",           icon=None)
-    st.divider()
-    if st.button("Refresh dashboard", use_container_width=True):
-        st.rerun()
 
-# ---------------------------------------------------------------------------
-# Header
-# ---------------------------------------------------------------------------
-st.markdown(
-    """
-    <div class="page-header">
-      <h1>Overview</h1>
-      <p>Real-time summary of experiments, model registry, and infrastructure health.</p>
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
+    st.markdown("### Configuration")
+    st.session_state["overview_limit"] = int(
+        st.number_input(
+            "Experiments to display",
+            min_value=20,
+            max_value=500,
+            value=int(st.session_state["overview_limit"]),
+            step=20,
+        )
+    )
+    st.divider()
+
+    st.markdown("### Access")
+    auth_ok = render_auth_controls()
+    if auth_ok:
+        st.caption(f"Role: {current_role()}")
 
 # ---------------------------------------------------------------------------
 # Load data
 # ---------------------------------------------------------------------------
-experiments = get_experiments(limit=MAX_EXPERIMENTS)
-models = get_models(limit=100)
+@st.cache_data(ttl=20, show_spinner=False)
+def _load_dashboard(limit: int) -> dict:
+    return get_dashboard_snapshot(limit=limit)
+
+
+try:
+    snapshot = _load_dashboard(int(st.session_state["overview_limit"]))
+    experiments = snapshot.get("experiments", [])
+    models = snapshot.get("models", [])
+    sys_snapshot = snapshot.get("system", {})
+except Exception as exc:
+    st.error("Dashboard data could not be loaded right now.")
+    st.caption(f"Details: {exc}")
+    if st.button("Retry", type="primary", key="overview_retry"):
+        st.rerun()
+    st.stop()
 
 exp_df = pd.DataFrame(experiments) if experiments else pd.DataFrame()
 mdl_df = pd.DataFrame(models) if models else pd.DataFrame()
-
-# ---------------------------------------------------------------------------
-# KPI row
-# ---------------------------------------------------------------------------
-total_runs = len(exp_df)
-registered_models = len(mdl_df)
-
-best_accuracy = None
-avg_duration = None
 
 if not exp_df.empty:
     def _parse_metrics(row):
@@ -181,179 +100,385 @@ if not exp_df.empty:
             return {}
 
     exp_df["_metrics"] = exp_df["metrics"].apply(_parse_metrics)
-    accs = [m.get("accuracy") for m in exp_df["_metrics"] if isinstance(m, dict) and "accuracy" in m]
-    if accs:
-        best_accuracy = max(accs)
-    if "duration_seconds" in exp_df.columns:
-        avg_duration = exp_df["duration_seconds"].mean()
+# ---------------------------------------------------------------------------
+# Premium overview helpers
+# ---------------------------------------------------------------------------
+st.markdown(
+    """
+    <style>
+      .ov-hero { margin: 2px 0 14px 0; }
+      .ov-title { font-size: 2rem; font-weight: 800; letter-spacing: -0.02em; color: #0b1220; line-height: 1.1; }
+      .ov-sub { margin-top: 5px; color: #5b6472; font-size: 0.93rem; }
+
+      .ov-kpi {
+        border-radius: 12px;
+        padding: 14px 14px 12px 14px;
+        background: linear-gradient(160deg, #ffffff 0%, #f7f9fc 100%);
+        border: 1px solid #e5e9f1;
+        box-shadow: 0 6px 16px rgba(15, 23, 42, 0.05);
+        transition: transform 0.18s ease, box-shadow 0.18s ease;
+        min-height: 120px;
+      }
+      .ov-kpi:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 14px 24px rgba(15, 23, 42, 0.11);
+      }
+      .ov-kpi-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+      .ov-kpi-icon {
+        width: 28px; height: 28px; border-radius: 8px; display: inline-flex;
+        align-items: center; justify-content: center; font-size: 14px; font-weight: 700;
+        background: #e7eef9; color: #1f4f9a;
+      }
+      .ov-kpi-label { font-size: 0.78rem; color: #637083; }
+      .ov-kpi-value { font-size: 1.45rem; font-weight: 800; color: #0b1220; line-height: 1.1; }
+      .ov-kpi-sub { margin-top: 4px; font-size: 0.78rem; color: #5f6a7a; }
+
+      .ov-panel {
+        border: 1px solid #e5e9f1;
+        border-radius: 12px;
+        padding: 12px;
+        background: #ffffff;
+      }
+      .ov-table-wrap {
+        border: 1px solid #e6ebf3;
+        border-radius: 10px;
+        overflow: hidden;
+      }
+      table.ov-table { width: 100%; border-collapse: collapse; font-size: 0.81rem; }
+      table.ov-table thead tr { background: #f4f7fb; }
+      table.ov-table th {
+        text-align: left; padding: 9px 10px; color: #4f5f75; font-weight: 700; border-bottom: 1px solid #e6ebf3;
+      }
+      table.ov-table td {
+        padding: 9px 10px; border-bottom: 1px solid #edf1f7; color: #1e2a3b;
+      }
+      table.ov-table tbody tr:hover { background: #f8fbff; }
+      .ov-badge {
+        display: inline-flex; align-items: center; gap: 5px;
+        padding: 2px 8px; border-radius: 999px; font-size: 0.72rem; font-weight: 600;
+      }
+      .ov-badge.model { background: #eaf2ff; color: #1e4fa3; }
+      .ov-badge.dataset { background: #eef9f4; color: #1d7a54; }
+      .ov-acc.high { color: #15803d; font-weight: 700; }
+      .ov-acc.mid { color: #b45309; font-weight: 700; }
+      .ov-acc.low { color: #b91c1c; font-weight: 700; }
+      .ov-acc.na { color: #677489; }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+
+def _apply_dark_plotly(fig, *, height: int = 280, x_title: str | None = None, y_title: str | None = None):
+    fig.update_layout(
+        template="plotly_dark",
+        height=height,
+        transition={"duration": 420, "easing": "cubic-in-out"},
+        margin={"l": 8, "r": 8, "t": 16, "b": 12},
+        paper_bgcolor="#0b1220",
+        plot_bgcolor="#0b1220",
+        font={"family": "Inter, Segoe UI, sans-serif", "color": "#dbe5f4"},
+    )
+    fig.update_xaxes(showgrid=False, title=x_title, zeroline=False)
+    fig.update_yaxes(showgrid=False, title=y_title, zeroline=False)
+    return fig
+
+
+def _accuracy_class(value) -> str:
+    if value is None or pd.isna(value):
+        return "na"
+    val = float(value)
+    if val >= 0.90:
+        return "high"
+    if val >= 0.75:
+        return "mid"
+    return "low"
+
+
+def _render_kpi_card(icon_html: str, label: str, value: str, subtext: str) -> str:
+    return (
+        "<div class='ov-kpi'>"
+        "<div class='ov-kpi-head'>"
+        f"<div class='ov-kpi-label'>{escape(label)}</div>"
+        f"<span class='ov-kpi-icon'>{icon_html}</span>"
+        "</div>"
+        f"<div class='ov-kpi-value'>{escape(value)}</div>"
+        f"<div class='ov-kpi-sub'>{escape(subtext)}</div>"
+        "</div>"
+    )
+
+
+def _render_recent_runs_table(source_df: pd.DataFrame, limit: int = 12) -> str:
+    recent_df = source_df.head(limit).copy()
+    rows_html = []
+    for row in recent_df.itertuples(index=False):
+        metrics = row._metrics if hasattr(row, "_metrics") else {}
+        if isinstance(metrics, str):
+            try:
+                metrics = json.loads(metrics)
+            except Exception:
+                metrics = {}
+        metrics = metrics or {}
+
+        accuracy = metrics.get("accuracy")
+        accuracy_str = f"{float(accuracy):.3f}" if accuracy is not None and pd.notna(accuracy) else "--"
+        acc_class = _accuracy_class(accuracy)
+        duration = f"{float(row.duration_seconds):.2f}s" if pd.notna(getattr(row, "duration_seconds", None)) else "--"
+        created = str(getattr(row, "created_at", ""))[:19].replace("T", " ")
+
+        rows_html.append(
+            "<tr>"
+            f"<td>{escape(str(row.run_id)[:8])}</td>"
+            f"<td><span class='ov-badge dataset'>{escape(str(row.dataset))}</span></td>"
+            f"<td><span class='ov-badge model'>{escape(str(row.model_type))}</span></td>"
+            f"<td>{escape(str(row.task).title())}</td>"
+            f"<td class='ov-acc {acc_class}'>{accuracy_str}</td>"
+            f"<td>{duration}</td>"
+            f"<td>{escape(created)}</td>"
+            "</tr>"
+        )
+
+    if not rows_html:
+        rows_html.append("<tr><td colspan='7' style='text-align:center;color:#677489'>No runs available</td></tr>")
+
+    return (
+        "<div class='ov-table-wrap'>"
+        "<table class='ov-table'>"
+        "<thead><tr>"
+        "<th>Run</th><th>Dataset</th><th>Model</th><th>Task</th><th>Accuracy</th><th>Duration</th><th>Created</th>"
+        "</tr></thead>"
+        f"<tbody>{''.join(rows_html)}</tbody>"
+        "</table>"
+        "</div>"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Header + KPI summary
+# ---------------------------------------------------------------------------
+head_left, head_right = st.columns([6, 1])
+with head_left:
+    st.markdown(
+        """
+        <div class='ov-hero'>
+          <div class='ov-title'>Overview Analytics Command Center</div>
+          <div class='ov-sub'>Production telemetry across experiments, model inventory, and system posture.</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+with head_right:
+    st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
+    if st.button("Refresh", key="overview_refresh", type="primary", width="stretch"):
+        track_user_action("overview", "refresh_dashboard")
+        st.rerun()
+
+total_runs = len(exp_df)
+registered_models = len(mdl_df)
+production_models = int((mdl_df["stage"] == "production").sum()) if not mdl_df.empty and "stage" in mdl_df.columns else 0
+best_accuracy = None
+best_accuracy_model = "No classification runs yet"
+avg_duration = None
+fastest_duration = None
+runs_today = 0
+
+if not exp_df.empty:
+    acc_pairs = []
+    for _, row in exp_df.iterrows():
+        m = row.get("_metrics", {}) or {}
+        if isinstance(m, dict) and m.get("accuracy") is not None:
+            acc_pairs.append((float(m.get("accuracy")), row.get("model_type", "unknown")))
+    if acc_pairs:
+        best_accuracy, best_model = max(acc_pairs, key=lambda x: x[0])
+        best_accuracy_model = f"best model: {best_model}"
+
+    if "duration_seconds" in exp_df.columns and exp_df["duration_seconds"].notna().any():
+        avg_duration = float(exp_df["duration_seconds"].mean())
+        fastest_duration = float(exp_df["duration_seconds"].min())
+
+    if "created_at" in exp_df.columns and exp_df["created_at"].notna().any():
+        created_series = pd.to_datetime(exp_df["created_at"], errors="coerce")
+        today = datetime.utcnow().date()
+        runs_today = int((created_series.dt.date == today).sum())
 
 k1, k2, k3, k4 = st.columns(4)
-
-with k1:
-    st.metric("Total Experiments", f"{total_runs:,}")
-with k2:
-    st.metric(
+k1.markdown(
+    _render_kpi_card("&#128202;", "Total Experiments", f"{total_runs:,}", f"+{runs_today} today"),
+    unsafe_allow_html=True,
+)
+k2.markdown(
+    _render_kpi_card(
+        "&#127942;",
         "Best Accuracy",
-        f"{best_accuracy:.4f}" if best_accuracy is not None else "—",
-    )
-with k3:
-    st.metric(
-        "Avg. Pipeline Duration",
-        f"{avg_duration:.1f} s" if avg_duration is not None else "—",
-    )
-with k4:
-    st.metric("Registered Models", f"{registered_models:,}")
+        f"{best_accuracy:.3f}" if best_accuracy is not None else "--",
+        best_accuracy_model,
+    ),
+    unsafe_allow_html=True,
+)
+k3.markdown(
+    _render_kpi_card(
+        "&#9201;",
+        "Pipeline Speed",
+        f"{avg_duration:.2f}s" if avg_duration is not None else "--",
+        f"fastest: {fastest_duration:.2f}s" if fastest_duration is not None else "no timings yet",
+    ),
+    unsafe_allow_html=True,
+)
+k4.markdown(
+    _render_kpi_card("&#129504;", "Model Inventory", f"{registered_models:,}", f"production: {production_models}"),
+    unsafe_allow_html=True,
+)
 
-st.markdown("<br>", unsafe_allow_html=True)
+st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
 
 # ---------------------------------------------------------------------------
-# Main content: recent experiments + system health
+# Main content layout
 # ---------------------------------------------------------------------------
-left_col, right_col = st.columns([2, 1], gap="large")
+if exp_df.empty:
+    render_section_title("First Run")
+    render_empty_data_explainer(
+        "This workspace has no persisted runs yet, so analytics sections are waiting for the first execution.",
+        "Run your first pipeline from Pipeline Runner or generate a sample run.",
+        "After one run, this overview will auto-populate KPI cards, run history, and trend charts.",
+    )
 
-with left_col:
-    st.markdown('<div class="section-title">Recent Experiments</div>', unsafe_allow_html=True)
-
-    if exp_df.empty:
-        st.info(
-            "No experiments recorded yet.  "
-            "Head to the **Pipeline Runner** page to train your first model."
-        )
-    else:
-        # Parse and format display dataframe
-        display_cols = ["run_id", "dataset", "model_type", "task", "duration_seconds", "created_at"]
-        display_cols = [c for c in display_cols if c in exp_df.columns]
-        recent = exp_df.head(10)[display_cols].copy()
-
-        # Attach primary metric
-        primary_metric = []
-        for _, row in exp_df.head(10).iterrows():
-            m = row.get("_metrics", {}) or {}
-            if isinstance(m, str):
-                try:
-                    m = json.loads(m)
-                except Exception:
-                    m = {}
-            val = m.get("accuracy") or m.get("f1_score") or m.get("r2")
-            primary_metric.append(round(val, 4) if val is not None else None)
-
-        recent["primary_metric"] = primary_metric
-        if "duration_seconds" in recent.columns:
-            recent["duration_seconds"] = recent["duration_seconds"].apply(
-                lambda x: f"{x:.2f} s" if pd.notna(x) else "—"
+    cta1, cta2, cta3 = st.columns(3)
+    with cta1:
+        st.page_link("pages/1_Pipeline_Runner.py", label="Run first pipeline")
+    with cta2:
+        if st.button(
+            "Generate sample run",
+            type="primary",
+            width="stretch",
+            disabled=not can_run_pipeline(),
+        ):
+            if not can_run_pipeline():
+                st.error("Operator or admin role required to generate sample runs.")
+                st.stop()
+            default_label = (
+                "Breast Cancer Wisconsin"
+                if "Breast Cancer Wisconsin" in DATASET_OPTIONS
+                else list(DATASET_OPTIONS.keys())[0]
             )
-        recent.columns = [c.replace("_", " ").title() for c in recent.columns]
-        st.dataframe(recent, use_container_width=True, hide_index=True)
+            default_key = DATASET_OPTIONS[default_label]
+            with st.spinner("Generating sample run..."):
+                track_user_action("overview", "generate_sample_run", {"model": "Random Forest"})
+                run_pipeline_and_persist(
+                    dataset_label=default_label,
+                    dataset_key=default_key,
+                    model_type="Random Forest",
+                    task="classification",
+                    params={"n_estimators": 100, "max_depth": None, "min_samples_split": 2},
+                    test_size=0.20,
+                    cv_folds=5,
+                    random_state=42,
+                )
+            st.success("Sample run generated. Refreshing dashboard...")
+            st.rerun()
+        if is_auth_enabled() and not can_run_pipeline():
+            st.caption("Viewer role is read-only.")
+    with cta3:
+        st.page_link("pages/3_Model_Registry.py", label="Open model registry")
+else:
+    top_left, top_right = st.columns([1.6, 1], gap="large")
 
-    # Activity chart — experiments over time
-    if not exp_df.empty and "created_at" in exp_df.columns:
-        st.markdown('<div class="section-title" style="margin-top:24px">Experiment Activity</div>', unsafe_allow_html=True)
+    with top_left:
+        render_section_title("Recent Runs")
+        st.markdown("<div class='ov-panel'>", unsafe_allow_html=True)
+        st.markdown(_render_recent_runs_table(exp_df), unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    with top_right:
+        render_section_title("Experiment Activity")
+        st.markdown("<div class='ov-panel'>", unsafe_allow_html=True)
         exp_df["date"] = pd.to_datetime(exp_df["created_at"]).dt.date
         activity = exp_df.groupby("date").size().reset_index(name="count")
         fig = px.bar(
             activity,
             x="date",
             y="count",
-            labels={"date": "Date", "count": "Experiments"},
-            color_discrete_sequence=["#2563eb"],
+            labels={"date": "", "count": "Runs"},
+            color_discrete_sequence=["#5ba3ff"],
         )
-        fig.update_layout(
-            height=240,
-            margin=dict(l=0, r=0, t=10, b=0),
-            plot_bgcolor="white",
-            paper_bgcolor="white",
-            xaxis=dict(showgrid=False, title=None),
-            yaxis=dict(showgrid=True, gridcolor="#f1f5f9", title=None),
-            showlegend=False,
-        )
-        st.plotly_chart(fig, use_container_width=True)
+        fig.update_traces(marker_line_width=0, opacity=0.88)
+        _apply_dark_plotly(fig, height=285, x_title="", y_title="Runs")
+        st.plotly_chart(fig, width="stretch")
+        st.markdown("</div>", unsafe_allow_html=True)
 
-with right_col:
-    # -----------------------------------------------------------------------
-    # System health
-    # -----------------------------------------------------------------------
-    st.markdown('<div class="section-title">System Health</div>', unsafe_allow_html=True)
+    lower_left, lower_right = st.columns([1, 1], gap="large")
+    with lower_left:
+        render_section_title("System Health")
+        st.markdown("<div class='ov-panel'>", unsafe_allow_html=True)
+        try:
+            sys_m = sys_snapshot if isinstance(sys_snapshot, dict) and sys_snapshot else {}
+            if not sys_m:
+                raise RuntimeError("System metrics unavailable")
 
-    try:
-        sys_m = get_system_metrics()
+            def _bar_color(pct: float) -> str:
+                if pct < 60:
+                    return "#22c55e"
+                if pct < 85:
+                    return "#f59e0b"
+                return "#ef4444"
 
-        def _bar_color(pct: float) -> str:
-            if pct < 60:
-                return "#22c55e"
-            if pct < 85:
-                return "#f59e0b"
-            return "#ef4444"
+            for label, pct in [
+                ("CPU", sys_m["cpu_percent"]),
+                ("Memory", sys_m["memory_percent"]),
+                ("Disk", sys_m["disk_percent"]),
+            ]:
+                color = _bar_color(pct)
+                st.markdown(
+                    f"""
+                    <div style="margin-bottom:14px">
+                      <div style="display:flex;justify-content:space-between;font-size:0.82rem;color:#374151;margin-bottom:4px">
+                        <span>{label}</span>
+                        <span style="font-weight:700">{pct:.1f}%</span>
+                      </div>
+                      <div class="resource-bar"><div class="resource-bar-fill" style="width:{pct}%;background:{color}"></div></div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
 
-        for label, pct in [
-            ("CPU", sys_m["cpu_percent"]),
-            ("Memory", sys_m["memory_percent"]),
-            ("Disk", sys_m["disk_percent"]),
-        ]:
-            color = _bar_color(pct)
-            st.markdown(
-                f"""
-                <div style="margin-bottom:14px">
-                  <div style="display:flex;justify-content:space-between;
-                              font-size:0.82rem;color:#374151;margin-bottom:4px">
-                    <span>{label}</span>
-                    <span style="font-weight:600">{pct:.1f}%</span>
-                  </div>
-                  <div class="resource-bar">
-                    <div class="resource-bar-fill"
-                         style="width:{pct}%;background:{color}"></div>
-                  </div>
-                </div>
-                """,
-                unsafe_allow_html=True,
+            st.caption(
+                f"CPU cores: {sys_m['cpu_logical_cores']} logical / {sys_m['cpu_physical_cores']} physical"
             )
+            st.caption(
+                f"Memory: {sys_m['memory_used_gb']:.1f} GB used / {sys_m['memory_total_gb']:.1f} GB total"
+            )
+            st.caption(
+                f"Disk: {sys_m['disk_free_gb']:.1f} GB free / {sys_m['disk_total_gb']:.1f} GB total"
+            )
+        except Exception as exc:
+            st.warning(f"System metrics unavailable: {exc}")
+        st.markdown("</div>", unsafe_allow_html=True)
 
-        st.markdown("<br>", unsafe_allow_html=True)
-        st.caption(
-            f"CPU cores: {sys_m['cpu_logical_cores']} logical / "
-            f"{sys_m['cpu_physical_cores']} physical"
-        )
-        st.caption(
-            f"Memory: {sys_m['memory_used_gb']:.1f} GB used / "
-            f"{sys_m['memory_total_gb']:.1f} GB total"
-        )
-        st.caption(
-            f"Disk: {sys_m['disk_free_gb']:.1f} GB free / "
-            f"{sys_m['disk_total_gb']:.1f} GB total"
-        )
-    except Exception as exc:
-        st.warning(f"System metrics unavailable: {exc}")
-
-    # -----------------------------------------------------------------------
-    # Algorithm distribution
-    # -----------------------------------------------------------------------
-    if not exp_df.empty and "model_type" in exp_df.columns:
-        st.markdown(
-            '<div class="section-title" style="margin-top:28px">Experiments by Algorithm</div>',
-            unsafe_allow_html=True,
-        )
-        algo_counts = exp_df["model_type"].value_counts().reset_index()
-        algo_counts.columns = ["Algorithm", "Count"]
-        fig2 = px.pie(
-            algo_counts,
-            names="Algorithm",
-            values="Count",
-            color_discrete_sequence=px.colors.qualitative.Set2,
-            hole=0.5,
-        )
-        fig2.update_layout(
-            height=260,
-            margin=dict(l=0, r=0, t=10, b=0),
-            showlegend=True,
-            legend=dict(orientation="v", font=dict(size=11)),
-            paper_bgcolor="white",
-        )
-        fig2.update_traces(textposition="inside", textinfo="percent")
-        st.plotly_chart(fig2, use_container_width=True)
+    with lower_right:
+        render_section_title("Algorithm Mix")
+        st.markdown("<div class='ov-panel'>", unsafe_allow_html=True)
+        if "model_type" in exp_df.columns and exp_df["model_type"].notna().any():
+            algo_counts = exp_df["model_type"].value_counts().reset_index()
+            algo_counts.columns = ["Algorithm", "Count"]
+            fig2 = px.pie(
+                algo_counts,
+                names="Algorithm",
+                values="Count",
+                color_discrete_sequence=["#7cb7ff", "#50d4ad", "#ff9f7b", "#ffd166", "#c4b5fd", "#9ae6b4"],
+                hole=0.58,
+            )
+            fig2.update_traces(textposition="inside", textinfo="percent", pull=[0.02] + [0] * (len(algo_counts) - 1))
+            _apply_dark_plotly(fig2, height=285)
+            fig2.update_layout(showlegend=True, legend={"orientation": "v", "font": {"size": 10}})
+            st.plotly_chart(fig2, width="stretch")
+        else:
+            st.info("No algorithm distribution available yet.")
+        st.markdown("</div>", unsafe_allow_html=True)
 
 # ---------------------------------------------------------------------------
 # Footer note
 # ---------------------------------------------------------------------------
 st.divider()
 st.caption(
-    "ML Pipeline Monitor  —  built with Streamlit, scikit-learn, XGBoost, Plotly, and SQLite."
+    "ML Pipeline Monitor  â€”  built with Streamlit, scikit-learn, XGBoost, Plotly, and SQLite."
 )
+

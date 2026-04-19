@@ -10,12 +10,44 @@ import pandas as pd
 
 from src.alerts import emit_console_alert
 from src.config_loader import load_config
-from src.data_loader import load_dataset
-from src.database import save_drift_report
+from src.data_loader import DATASET_OPTIONS, load_dataset
+from src.database import get_drift_reports, save_drift_report
 from src.drift_detector import run_drift_analysis
 from src.logger import get_app_logger
 
 LOGGER = get_app_logger("drift_service")
+
+
+def get_dataset_options() -> Dict[str, str]:
+    """Expose dataset options to UI via service layer."""
+    return dict(DATASET_OPTIONS)
+
+
+def list_drift_reports(limit: int = 50) -> list[Dict[str, Any]]:
+    """Return persisted drift reports."""
+    return get_drift_reports(limit=limit)
+
+
+def get_drift_preview_dataset(dataset_key: str) -> Dict[str, Any]:
+    """Return baseline dataset preview used in drift UI."""
+    cfg = load_config()
+    pipeline_cfg = cfg.get("pipeline", {})
+    return load_dataset(
+        dataset_key,
+        test_size=float(pipeline_cfg.get("test_size", 0.40)),
+        random_state=int(pipeline_cfg.get("random_seed", 42)),
+    )
+
+
+def get_monitoring_defaults() -> Dict[str, Any]:
+    """Return monitoring/drift threshold defaults from config."""
+    cfg = load_config().get("monitoring", {})
+    return {
+        "drift_significance_level": float(cfg.get("drift_significance_level", 0.05)),
+        "psi_moderate_threshold": float(cfg.get("psi_moderate_threshold", 0.10)),
+        "psi_significant_threshold": float(cfg.get("psi_significant_threshold", 0.25)),
+        "drift_feature_ratio_threshold": float(cfg.get("drift_feature_ratio_threshold", 0.20)),
+    }
 
 
 def _severity_from_report(report: Dict[str, Any]) -> str:

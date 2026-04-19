@@ -160,6 +160,30 @@ The database path can be overridden with the `PIPELINE_DB` environment variable:
 PIPELINE_DB=/data/experiments.db streamlit run app.py
 ```
 
+### Authentication via Environment Variables
+
+Authentication is environment-only (no default credentials in `config.yaml`).
+
+Set either a single-user credential pair:
+
+```bash
+AUTH_USERNAME=admin
+AUTH_PASSWORD=secure_pass
+AUTH_ROLE=admin   # optional: viewer | operator | admin
+```
+
+Or set a JSON user map for multi-user access:
+
+```bash
+AUTH_USERS_JSON='{"viewer":{"password":"view_pass","role":"viewer"},"operator":{"password":"op_pass","role":"operator"},"admin":{"password":"admin_pass","role":"admin"}}'
+```
+
+Optional auth toggle:
+
+```bash
+MLMONITOR_AUTH_ENABLED=true
+```
+
 ---
 
 ## Pipeline Stages

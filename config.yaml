@@ -42,8 +42,7 @@ storage:
   artifacts_root: "artifacts"
 
 auth:
-  username: "admin"
-  password: "admin123"
+  enabled: true
 
 logging:
   level: "INFO"

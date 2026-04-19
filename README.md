@@ -82,10 +82,14 @@ All datasets are sourced from scikit-learn's built-in dataset library — no ext
 
 ```
 ml-pipeline-monitor/
-├── app.py                          # Home dashboard (Streamlit entry point)
+├── app.py                          # Home dashboard (Streamlit app file)
+├── run_app.py                      # Recommended launcher (auto-detects free port)
 ├── requirements.txt
 ├── setup.py
 ├── config.yaml                     # Application configuration
+├── .github/
+│   └── workflows/
+│       └── ci.yml                  # GitHub Actions test + coverage gate
 ├── src/
 │   ├── pipeline.py                 # Core ML pipeline with stage orchestration
 │   ├── data_loader.py              # Dataset loading and splitting utilities
@@ -122,7 +126,15 @@ source .venv/bin/activate      # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-### Running the application
+### Running the application (recommended)
+
+Use the launcher script to avoid port conflicts. It finds the first available port starting at 8501, starts Streamlit, and prints the final URL.
+
+```bash
+python run_app.py
+```
+
+### Running the application (manual)
 
 ```bash
 streamlit run app.py
@@ -133,8 +145,25 @@ The app will open at `http://localhost:8501`.
 ### Running tests
 
 ```bash
-pytest tests/ -v
+pytest -q
 ```
+
+Coverage is enforced through `pytest.ini` (includes `src/` and `services/`).
+If total coverage drops below the configured minimum, pytest exits with a failure code.
+
+---
+
+## CI (GitHub Actions)
+
+CI runs on every push and pull request via `.github/workflows/ci.yml`.
+
+It performs:
+
+- checkout repository
+- setup Python 3.10 and 3.11
+- install dependencies from `requirements.txt`
+- run `pytest -q` (tests + coverage gate from `pytest.ini`)
+- upload HTML coverage report artifact (`htmlcov`)
 
 ---
 

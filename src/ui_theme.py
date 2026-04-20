@@ -627,6 +627,7 @@ def render_kpi_card(
     )
 
 
+
 def alert_html(message: str, tone: str = "info") -> str:
     tone_key = _resolve_tone(tone, default=tone)
     return f'<div class="ui-alert {tone_key}">{message}</div>'
@@ -648,6 +649,7 @@ def render_sidebar_brand() -> None:
     )
 
 
+
 def render_sidebar_nav() -> None:
     """Render demo-aligned app navigation in the sidebar."""
     st.page_link("app.py", label="Overview")
@@ -656,6 +658,7 @@ def render_sidebar_nav() -> None:
     st.page_link("pages/3_Model_Registry.py", label="Model registry")
     st.page_link("pages/4_Data_Drift.py", label="Data drift")
     st.page_link("pages/5_Data_Health.py", label="Data health")
+
 
 
 def render_page_header(title: str, subtitle: str) -> None:
@@ -668,6 +671,8 @@ def render_page_header(title: str, subtitle: str) -> None:
         """,
         unsafe_allow_html=True,
     )
+
+
 
 
 def render_page_header_with_action(

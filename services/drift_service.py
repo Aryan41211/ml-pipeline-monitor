@@ -8,7 +8,7 @@ from typing import Any, Dict
 import numpy as np
 import pandas as pd
 
-from src.alerts import emit_console_alert
+from src.alerts import emit_console_alert, emit_email_alert
 from src.config_loader import load_config
 from src.data_loader import DATASET_OPTIONS, load_dataset
 from src.database import get_drift_reports, save_drift_report
@@ -117,6 +117,17 @@ def run_drift_and_persist(
         emit_console_alert(
             report.get("overall_severity", "warning"),
             f"Data drift detected for dataset={dataset_label}; ratio={report['drift_ratio']:.2f}",
+        )
+        emit_email_alert(
+            report.get("overall_severity", "warning"),
+            subject="Data drift alert",
+            message=f"Drift detected for dataset={dataset_label}",
+            metadata={
+                "dataset": dataset_label,
+                "drift_ratio": report.get("drift_ratio"),
+                "average_psi": report.get("average_psi"),
+                "features_drifted": report.get("features_drifted"),
+            },
         )
         LOGGER.warning(
             "Drift detected dataset=%s severity=%s features_drifted=%s",

@@ -7,7 +7,7 @@ from typing import Any, Callable, Dict, Optional
 
 import joblib
 
-from src.alerts import emit_console_alert
+from src.alerts import emit_console_alert, emit_email_alert
 from src.config_loader import get_artifact_dirs, load_config
 from src.data_loader import DATASET_OPTIONS, get_feature_statistics, load_dataset
 from src.database import get_experiments, save_experiment, save_model
@@ -128,6 +128,12 @@ def run_pipeline_and_persist(
         )
     except Exception as exc:
         emit_console_alert("critical", f"Pipeline failure for dataset={dataset_label}: {exc}")
+        emit_email_alert(
+            "critical",
+            subject="Pipeline failure detected",
+            message=f"Pipeline run failed for dataset={dataset_label}, model={model_type}",
+            metadata={"dataset": dataset_label, "model_type": model_type, "error": str(exc)},
+        )
         LOGGER.exception("Pipeline run failed")
         raise
 

@@ -183,6 +183,11 @@ with st.sidebar:
     render_sidebar_brand()
     st.markdown("### Navigation")
     render_sidebar_nav()
+    st.markdown("#### Quick links")
+    st.page_link("app.py", label="Overview")
+    st.page_link("pages/2_Experiment_Tracking.py", label="Experiments")
+    st.page_link("pages/3_Model_Registry.py", label="Registry")
+    st.page_link("pages/4_Data_Drift.py", label="Drift")
     st.divider()
 
     st.markdown("### Configuration")
@@ -576,7 +581,7 @@ with tab_auto:
 
     auto = _get_automation_state()
 
-    c1, c2, c3 = st.columns(3)
+    c1, c2, c3, c4 = st.columns(4)
     c1.metric("Automation", "Enabled" if auto.get("enabled") else "Disabled")
     c2.metric("Last Auto Run", auto.get("last_run_id") or "â€”")
 
@@ -584,6 +589,9 @@ with tab_auto:
     if auto.get("next_run_at"):
         next_run_label = auto["next_run_at"].strftime("%Y-%m-%d %H:%M:%S UTC")
     c3.metric("Next Run", next_run_label)
+    c4.metric("Stored Auto Runs", str(len(auto.get("history", []))))
+
+    st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
 
     enabled = st.toggle("Enable automation", value=bool(auto.get("enabled", False)))
     interval = st.slider(

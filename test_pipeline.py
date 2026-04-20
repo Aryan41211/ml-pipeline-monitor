@@ -9,11 +9,6 @@ import pytest
 from sklearn.datasets import make_classification, make_regression
 from sklearn.model_selection import train_test_split
 
-import sys
-import os
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-
 from src.drift_detector import compute_psi, run_drift_analysis
 from src.pipeline import MLPipeline
 from src.data_loader import load_dataset, DATASET_OPTIONS

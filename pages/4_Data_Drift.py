@@ -32,7 +32,6 @@ from src.ui_theme import (
     render_sidebar_brand,
     render_sidebar_nav,
     render_summary_table,
-    status_badge_html,
 )
 
 st.set_page_config(page_title="Data Drift | ML Monitor", layout="wide")
@@ -191,6 +190,16 @@ if report is None:
     st.info("Click **Run Drift Analysis** to start.")
     st.stop()
 
+
+def _feature_severity_label(raw: str) -> str:
+    mapping = {"none": "low", "moderate": "medium", "significant": "high"}
+    return mapping.get(str(raw or "none"), "low")
+
+
+def _overall_severity_label(raw: str) -> str:
+    mapping = {"stable": "low", "warning": "medium", "critical": "high"}
+    return mapping.get(str(raw or "stable"), "low")
+
 st.markdown(
         """
         <style>
@@ -267,6 +276,11 @@ else:
         columns=["feature", "severity", "drift_detected", "psi", "p_value", "ks_statistic", "drift_priority_score"]
     )
 
+if not feat_df_all.empty:
+    feat_df_all["severity_label"] = feat_df_all["severity"].apply(_feature_severity_label)
+else:
+    feat_df_all["severity_label"] = pd.Series(dtype=str)
+
 critical_count = int((feat_df_all["severity"] == "significant").sum()) if not feat_df_all.empty else 0
 moderate_count = int((feat_df_all["severity"] == "moderate").sum()) if not feat_df_all.empty else 0
 critical_ratio = (critical_count / report["features_analyzed"]) if report.get("features_analyzed") else 0.0
@@ -298,6 +312,8 @@ if not recommended_actions:
 # Summary alert
 # ---------------------------------------------------------------------------
 overall_severity = report.get("overall_severity", "stable")
+overall_severity_label = _overall_severity_label(overall_severity)
+
 if overall_severity == "critical":
     severity_msg = (
         f"Critical drift detected â€” {report['features_drifted']} of "
@@ -315,6 +331,24 @@ else:
         f'No significant drift detected. Avg PSI = {report["average_psi"]:.4f}.',
         tone="success",
     )
+
+affected_features = (
+    feat_df_all[feat_df_all["drift_detected"]]
+    .sort_values("psi", ascending=False)["feature"]
+    .astype(str)
+    .tolist()
+    if not feat_df_all.empty
+    else []
+)
+
+banner_tone = "danger" if overall_severity_label == "high" else "warning" if overall_severity_label == "medium" else "success"
+banner_text = (
+    f"Drift severity: {overall_severity_label.upper()} | "
+    f"Affected features: {len(affected_features)}"
+)
+if affected_features:
+    banner_text += " | Top: " + ", ".join(affected_features[:5])
+render_alert(banner_text, tone=banner_tone)
 
 render_section_title("Retrain Indicator", margin_top_px=10)
 badge_tone = "danger" if retrain_suggested else "success"
@@ -384,6 +418,12 @@ with tab_table:
     if feat_df.empty:
         st.info("No feature results available.")
     else:
+        sev_counts = feat_df["severity_label"].value_counts().to_dict()
+        sev1, sev2, sev3 = st.columns(3)
+        sev1.metric("High Severity Features", int(sev_counts.get("high", 0)))
+        sev2.metric("Medium Severity Features", int(sev_counts.get("medium", 0)))
+        sev3.metric("Low Severity Features", int(sev_counts.get("low", 0)))
+
         rank_metric = st.selectbox(
             "Feature importance metric",
             options=["PSI", "KS Statistic", "Composite Severity"],
@@ -399,7 +439,7 @@ with tab_table:
             ranked = feat_df.sort_values("psi", ascending=False).copy()
 
         render_section_title("Feature Importance Ranking", margin_top_px=12)
-        ranked_view = ranked[["feature", "severity", "psi", "ks_statistic", "p_value", "drift_priority_score"]].copy()
+        ranked_view = ranked[["feature", "severity_label", "psi", "ks_statistic", "p_value", "drift_priority_score"]].copy()
         ranked_view.insert(0, "rank", range(1, len(ranked_view) + 1))
         ranked_view.columns = ["Rank", "Feature", "Severity", "PSI", "KS Statistic", "P Value", "Priority Score"]
         render_summary_table(
@@ -415,8 +455,8 @@ with tab_table:
         max_psi = max(float(ranked["psi"].max()), 0.25)
         bar_rows = []
         for _, r in ranked.head(18).iterrows():
-            sev = str(r.get("severity", "none"))
-            sev_key = "retrain" if sev == "significant" else "monitor" if sev == "moderate" else "stable"
+            sev = str(r.get("severity_label", "low"))
+            sev_key = "retrain" if sev == "high" else "monitor" if sev == "medium" else "stable"
             width_pct = max(2.0, min(100.0, float(r.get("psi", 0.0)) / max_psi * 100.0))
             drift_badge = "drifted" if bool(r.get("drift_detected", False)) else "stable"
             tooltip = (
@@ -441,16 +481,16 @@ with tab_table:
         affected = feat_df[feat_df["drift_detected"]].sort_values("psi", ascending=False)
         if not affected.empty:
             render_section_title("Most Affected Features", margin_top_px=20)
-            preview = affected[["feature", "severity", "psi", "p_value"]].head(10).copy()
+            preview = affected[["feature", "severity_label", "psi", "p_value"]].head(10).copy()
             preview.columns = ["Feature", "Severity", "PSI", "P Value"]
-            preview["Severity Badge"] = preview["Severity"].apply(status_badge_html)
+            preview["Severity"] = preview["Severity"].str.upper()
             st.dataframe(preview[["Feature", "Severity", "PSI", "P Value"]], width="stretch", hide_index=True)
 
         # PSI bar chart
         render_section_title("PSI by Feature", margin_top_px=20)
         psi_sorted = feat_df.sort_values("psi", ascending=False).head(20)
-        bar_colors = psi_sorted["severity"].map(
-            {"significant": "#ef4444", "moderate": "#f59e0b", "none": "#22c55e"}
+        bar_colors = psi_sorted["severity_label"].map(
+            {"high": "#ef4444", "medium": "#f59e0b", "low": "#22c55e"}
         )
         fig = go.Figure(
             go.Bar(
@@ -545,26 +585,26 @@ with tab_psi:
     if not load_drift_charts:
         st.info("Enable 'Load heavy drift visualizations' above to render PSI charts.")
     else:
-                st.markdown('<div class="section-title">PSI Interpretation Guide</div>', unsafe_allow_html=True)
-                st.markdown(
-                        """
-                        <div class='psi-guide-wrap'>
-                            <div class='psi-guide' title='PSI below 0.10 usually indicates healthy stability.'>
-                                <span class='psi-chip stable'>Stable</span>
-                                <div class='psi-desc'><b>PSI &lt; 0.10</b> â€” distribution remains healthy. Continue baseline monitoring.</div>
-                            </div>
-                            <div class='psi-guide' title='PSI between 0.10 and 0.25 requires closer observation and root-cause checks.'>
-                                <span class='psi-chip monitor'>Monitor</span>
-                                <div class='psi-desc'><b>0.10 â‰¤ PSI â‰¤ 0.25</b> â€” moderate shift. Review data quality and feature behavior.</div>
-                            </div>
-                            <div class='psi-guide' title='PSI above 0.25 often suggests meaningful distribution change and retraining need.'>
-                                <span class='psi-chip retrain'>Retrain</span>
-                                <div class='psi-desc'><b>PSI &gt; 0.25</b> â€” significant drift. Plan retraining and upstream data audit.</div>
-                            </div>
-                        </div>
-                        """,
-                        unsafe_allow_html=True,
-                )
+        st.markdown('<div class="section-title">PSI Interpretation Guide</div>', unsafe_allow_html=True)
+        st.markdown(
+            """
+            <div class='psi-guide-wrap'>
+                <div class='psi-guide' title='PSI below 0.10 usually indicates healthy stability.'>
+                    <span class='psi-chip stable'>Stable</span>
+                    <div class='psi-desc'><b>PSI &lt; 0.10</b> â€” distribution remains healthy. Continue baseline monitoring.</div>
+                </div>
+                <div class='psi-guide' title='PSI between 0.10 and 0.25 requires closer observation and root-cause checks.'>
+                    <span class='psi-chip monitor'>Monitor</span>
+                    <div class='psi-desc'><b>0.10 â‰¤ PSI â‰¤ 0.25</b> â€” moderate shift. Review data quality and feature behavior.</div>
+                </div>
+                <div class='psi-guide' title='PSI above 0.25 often suggests meaningful distribution change and retraining need.'>
+                    <span class='psi-chip retrain'>Retrain</span>
+                    <div class='psi-desc'><b>PSI &gt; 0.25</b> â€” significant drift. Plan retraining and upstream data audit.</div>
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
         st.markdown('<div class="section-title" style="margin-top:24px">KS Test p-value Heatmap</div>', unsafe_allow_html=True)
         feat_df_psi = pd.DataFrame(report["feature_results"]).sort_values("psi", ascending=False)

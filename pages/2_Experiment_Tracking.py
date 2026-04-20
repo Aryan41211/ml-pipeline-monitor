@@ -138,6 +138,28 @@ with st.sidebar:
     sel_algo    = st.selectbox("Algorithm", algorithms)
     sel_task    = st.selectbox("Task",      tasks)
 
+    created_series = pd.to_datetime(df["created_at"], errors="coerce") if "created_at" in df.columns else pd.Series(dtype="datetime64[ns]")
+    if not created_series.dropna().empty:
+        min_date = created_series.min().date()
+        max_date = created_series.max().date()
+        date_window = st.date_input(
+            "Created date window",
+            value=(min_date, max_date),
+            min_value=min_date,
+            max_value=max_date,
+        )
+    else:
+        date_window = ()
+
+    min_accuracy = st.slider(
+        "Minimum accuracy",
+        min_value=0.0,
+        max_value=1.0,
+        value=0.0,
+        step=0.01,
+        help="Applied only to runs with an accuracy metric.",
+    )
+
     st.divider()
     if st.button("Clear filters", width="stretch"):
         track_user_action("experiment_tracking", "clear_filters")
@@ -154,6 +176,13 @@ if sel_algo != "All":
     filtered = filtered[filtered["algorithm"] == sel_algo]
 if sel_task != "All":
     filtered = filtered[filtered["task"] == sel_task]
+if date_window and len(date_window) == 2 and "created_at" in filtered.columns:
+    start_dt = pd.Timestamp(date_window[0])
+    end_dt = pd.Timestamp(date_window[1]) + pd.Timedelta(days=1) - pd.Timedelta(seconds=1)
+    created = pd.to_datetime(filtered["created_at"], errors="coerce")
+    filtered = filtered[(created >= start_dt) & (created <= end_dt)]
+if "accuracy" in filtered.columns:
+    filtered = filtered[(filtered["accuracy"].isna()) | (filtered["accuracy"] >= float(min_accuracy))]
 
 # ---------------------------------------------------------------------------
 # KPI strip
@@ -542,96 +571,147 @@ with tab_multi:
     if clf_candidates.empty:
         st.info("No classification experiments available for comparison under current filters.")
     else:
-        labels = [
-            f"{row.run_id} | {row.algorithm} | {row.dataset}"
-            for row in clf_candidates.itertuples(index=False)
+        with st.expander("Comparison filters", expanded=False):
+            cmp_left, cmp_mid, cmp_right = st.columns(3)
+            with cmp_left:
+                cmp_dataset = st.selectbox(
+                    "Dataset filter",
+                    options=["All"] + sorted(clf_candidates["dataset"].dropna().unique().tolist()),
+                    key="cmp_dataset_filter",
+                )
+            with cmp_mid:
+                cmp_algorithm = st.selectbox(
+                    "Algorithm filter",
+                    options=["All"] + sorted(clf_candidates["algorithm"].dropna().unique().tolist()),
+                    key="cmp_algorithm_filter",
+                )
+            with cmp_right:
+                min_f1 = st.slider(
+                    "Min F1",
+                    min_value=0.0,
+                    max_value=1.0,
+                    value=0.0,
+                    step=0.01,
+                    key="cmp_min_f1",
+                )
+
+        if cmp_dataset != "All":
+            clf_candidates = clf_candidates[clf_candidates["dataset"] == cmp_dataset]
+        if cmp_algorithm != "All":
+            clf_candidates = clf_candidates[clf_candidates["algorithm"] == cmp_algorithm]
+        clf_candidates = clf_candidates[
+            (clf_candidates["f1_score"].isna()) | (clf_candidates["f1_score"] >= float(min_f1))
         ]
-        label_to_run = dict(zip(labels, clf_candidates["run_id"].tolist()))
 
-        selected_labels = st.multiselect(
-            "Experiments",
-            options=labels,
-            default=labels[: min(4, len(labels))],
-            help="Choose two or more runs for side-by-side comparison.",
-        )
-
-        selected_ids = [label_to_run[x] for x in selected_labels]
-        chosen = clf_candidates[clf_candidates["run_id"].isin(selected_ids)].copy()
-
-        if chosen.empty:
-            st.info("Select at least one experiment.")
+        if clf_candidates.empty:
+            st.info("No experiments match the comparison filters.")
         else:
-            s1, s2, s3 = st.columns(3)
-            s1.metric("Selected Runs", len(chosen))
-            s2.metric(
-                "Best Accuracy",
-                f"{chosen['accuracy'].max():.4f}" if chosen["accuracy"].notna().any() else "â€”",
+            labels = [
+                f"{row.run_id} | {row.algorithm} | {row.dataset}"
+                for row in clf_candidates.itertuples(index=False)
+            ]
+            label_to_run = dict(zip(labels, clf_candidates["run_id"].tolist()))
+
+            selected_labels = st.multiselect(
+                "Experiments",
+                options=labels,
+                default=labels[: min(4, len(labels))],
+                help="Choose two or more runs for side-by-side comparison.",
             )
-            s3.metric(
-                "Best F1",
-                f"{chosen['f1_score'].max():.4f}" if chosen["f1_score"].notna().any() else "â€”",
-            )
 
-            left, right = st.columns(2, gap="large")
+            selected_ids = [label_to_run[x] for x in selected_labels]
+            chosen = clf_candidates[clf_candidates["run_id"].isin(selected_ids)].copy()
 
-            with left:
-                bar_df = chosen[["run_id", "accuracy", "f1_score"]].copy()
-                melted = bar_df.melt(id_vars=["run_id"], value_vars=["accuracy", "f1_score"]).dropna()
-                if melted.empty:
-                    st.info("Selected runs are missing accuracy/F1 metrics.")
-                else:
-                    fig = px.bar(
-                        melted,
-                        x="run_id",
-                        y="value",
-                        color="variable",
-                        barmode="group",
-                        labels={"value": "Score", "run_id": "Run ID", "variable": "Metric"},
-                        color_discrete_sequence=["#2563eb", "#16a34a"],
-                    )
-                    fig.update_layout(
-                        height=360,
-                        margin=dict(l=0, r=0, t=10, b=0),
-                        plot_bgcolor="white",
-                        paper_bgcolor="white",
-                        yaxis=dict(range=[0, 1.05], showgrid=True, gridcolor="#f1f5f9"),
-                        xaxis=dict(showgrid=False),
-                    )
-                    st.plotly_chart(fig, width="stretch")
+            if chosen.empty:
+                st.info("Select at least one experiment.")
+            elif len(chosen) < 2:
+                st.info("Select at least two experiments for side-by-side comparison.")
+            else:
+                s1, s2, s3 = st.columns(3)
+                s1.metric("Selected Runs", len(chosen))
+                s2.metric(
+                    "Best Accuracy",
+                    f"{chosen['accuracy'].max():.4f}" if chosen["accuracy"].notna().any() else "â€”",
+                )
+                s3.metric(
+                    "Best F1",
+                    f"{chosen['f1_score'].max():.4f}" if chosen["f1_score"].notna().any() else "â€”",
+                )
 
-            with right:
-                roc_rows = chosen.dropna(subset=["roc_curve_fpr", "roc_curve_tpr"]).copy()
-                if roc_rows.empty:
-                    st.info("ROC curve points unavailable for selected runs.")
-                else:
-                    fig_roc = go.Figure()
-                    for row in roc_rows.itertuples(index=False):
+                left, right = st.columns(2, gap="large")
+
+                with left:
+                    bar_df = chosen[["run_id", "accuracy", "f1_score"]].copy()
+                    melted = bar_df.melt(id_vars=["run_id"], value_vars=["accuracy", "f1_score"]).dropna()
+                    if melted.empty:
+                        st.info("Selected runs are missing accuracy/F1 metrics.")
+                    else:
+                        fig = px.bar(
+                            melted,
+                            x="run_id",
+                            y="value",
+                            color="variable",
+                            barmode="group",
+                            labels={"value": "Score", "run_id": "Run ID", "variable": "Metric"},
+                            color_discrete_sequence=["#2563eb", "#16a34a"],
+                        )
+                        fig.update_layout(
+                            height=360,
+                            margin=dict(l=0, r=0, t=10, b=0),
+                            plot_bgcolor="white",
+                            paper_bgcolor="white",
+                            yaxis=dict(range=[0, 1.05], showgrid=True, gridcolor="#f1f5f9"),
+                            xaxis=dict(showgrid=False),
+                        )
+                        st.plotly_chart(fig, width="stretch")
+
+                with right:
+                    roc_rows = chosen.dropna(subset=["roc_curve_fpr", "roc_curve_tpr"]).copy()
+                    if roc_rows.empty:
+                        st.info("ROC curve points unavailable for selected runs.")
+                    else:
+                        fig_roc = go.Figure()
+                        for row in roc_rows.itertuples(index=False):
+                            fig_roc.add_trace(
+                                go.Scatter(
+                                    x=row.roc_curve_fpr,
+                                    y=row.roc_curve_tpr,
+                                    mode="lines",
+                                    name=f"{row.run_id} ({row.algorithm})",
+                                )
+                            )
+
                         fig_roc.add_trace(
                             go.Scatter(
-                                x=row.roc_curve_fpr,
-                                y=row.roc_curve_tpr,
+                                x=[0, 1],
+                                y=[0, 1],
                                 mode="lines",
-                                name=f"{row.run_id} ({row.algorithm})",
+                                name="Random baseline",
+                                line=dict(dash="dash", color="#94a3b8"),
                             )
                         )
-
-                    fig_roc.add_trace(
-                        go.Scatter(
-                            x=[0, 1],
-                            y=[0, 1],
-                            mode="lines",
-                            name="Random baseline",
-                            line=dict(dash="dash", color="#94a3b8"),
+                        fig_roc.update_layout(
+                            height=360,
+                            margin=dict(l=0, r=0, t=10, b=0),
+                            plot_bgcolor="white",
+                            paper_bgcolor="white",
+                            xaxis=dict(title="False Positive Rate", showgrid=True, gridcolor="#f1f5f9"),
+                            yaxis=dict(title="True Positive Rate", showgrid=True, gridcolor="#f1f5f9"),
+                            legend=dict(title=None),
                         )
-                    )
-                    fig_roc.update_layout(
-                        height=360,
-                        margin=dict(l=0, r=0, t=10, b=0),
-                        plot_bgcolor="white",
-                        paper_bgcolor="white",
-                        xaxis=dict(title="False Positive Rate", showgrid=True, gridcolor="#f1f5f9"),
-                        yaxis=dict(title="True Positive Rate", showgrid=True, gridcolor="#f1f5f9"),
-                        legend=dict(title=None),
-                    )
-                    st.plotly_chart(fig_roc, width="stretch")
+                        st.plotly_chart(fig_roc, width="stretch")
+
+                render_section_title("Comparison Matrix", margin_top_px=12)
+                matrix_df = chosen[
+                    ["run_id", "dataset", "algorithm", "accuracy", "f1_score", "roc_auc", "created_at"]
+                ].copy()
+                matrix_df.columns = ["Run ID", "Dataset", "Algorithm", "Accuracy", "F1 Score", "ROC AUC", "Created At"]
+                render_summary_table(
+                    matrix_df,
+                    key_prefix="exp_multi_compare",
+                    columns=matrix_df.columns.tolist(),
+                    sort_by="Created At",
+                    filterable_columns=["Dataset", "Algorithm"],
+                    max_rows=20,
+                )
 

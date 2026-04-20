@@ -117,10 +117,27 @@ def _to_dataframe(payload: Any) -> pd.DataFrame:
     )
 
 
+def _align_features(model: Any, frame: pd.DataFrame) -> pd.DataFrame:
+    """Align request payload columns with model training schema when available."""
+    expected = getattr(model, "feature_names_in_", None)
+    if expected is None:
+        return frame
+
+    expected_cols = [str(col) for col in list(expected)]
+    missing = [col for col in expected_cols if col not in frame.columns]
+    if missing:
+        raise ValueError(
+            "Missing required features for production model: " + ", ".join(missing)
+        )
+
+    aligned = frame.reindex(columns=expected_cols)
+    return aligned
+
+
 def predict_from_payload(payload: Any, dataset: Optional[str] = None) -> Dict[str, Any]:
     """Run prediction against latest production model."""
     model, scaler, model_meta = load_production_artifacts(dataset=dataset)
-    X = _to_dataframe(payload)
+    X = _align_features(model, _to_dataframe(payload))
 
     X_infer = scaler.transform(X) if scaler is not None else X
     preds = model.predict(X_infer)

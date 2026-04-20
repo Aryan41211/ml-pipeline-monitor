@@ -664,51 +664,154 @@ with tab_lineage:
             lambda x: json.loads(x) if isinstance(x, str) and x else {}
         )
 
-        display = lineage_df[
-            ["model_id", "experiment_id", "dataset", "version", "stage", "parent_model_id", "created_at", "params"]
-        ].copy()
-        display.columns = [c.replace("_", " ").title() for c in display.columns]
-        display = render_summary_table(
-            display,
-            key_prefix="registry_lineage",
-            columns=display.columns.tolist(),
-            sort_by="Created At" if "Created At" in display.columns else None,
-            filterable_columns=[c for c in ["Dataset", "Stage"] if c in display.columns],
-            max_rows=25,
-        )
-        render_expandable_rows(
-            display,
-            title_col="Model Id",
-            detail_cols=[
-                c for c in [
-                    "Stage",
-                    "Dataset",
-                    "Version",
-                    "Experiment Id",
-                    "Parent Model Id",
-                    "Created At",
-                ] if c in display.columns
-            ],
-            badge_col="Stage" if "Stage" in display.columns else None,
-            badge_mode="stage",
-        )
+        if "dataset" in lineage_df.columns:
+            st.markdown("**Lineage filters**")
+            lf_left, lf_right = st.columns(2)
+            with lf_left:
+                lineage_stage = st.selectbox(
+                    "Lineage stage",
+                    options=["All"] + sorted(lineage_df["stage"].dropna().unique().tolist()),
+                    key="lineage_stage_filter",
+                )
+            with lf_right:
+                lineage_only_parents = st.toggle(
+                    "Only models with parent links",
+                    value=False,
+                    key="lineage_parent_toggle",
+                )
 
-        if "version" in lineage_df.columns and lineage_df["version"].notna().any():
-            lineage_df_plot = lineage_df.dropna(subset=["version"]).copy()
-            lineage_df_plot["version"] = lineage_df_plot["version"].astype(int)
-            fig = px.line(
-                lineage_df_plot.sort_values("version"),
-                x="version",
-                y="dataset",
-                color="stage",
-                markers=True,
-                hover_data=["model_id", "experiment_id", "parent_model_id"],
-                labels={"version": "Model Version", "dataset": "Dataset"},
+            if lineage_stage != "All":
+                lineage_df = lineage_df[lineage_df["stage"] == lineage_stage]
+            if lineage_only_parents:
+                lineage_df = lineage_df[lineage_df["parent_model_id"].notna()]
+
+        if lineage_df.empty:
+            st.info("No lineage rows match current lineage filters.")
+        else:
+            lineage_df["params_preview"] = lineage_df["params"].apply(
+                lambda p: ", ".join([f"{k}={v}" for k, v in list((p or {}).items())[:4]]) if isinstance(p, dict) else ""
             )
+
+            display = lineage_df[
+                [
+                    "model_id",
+                    "dataset",
+                    "experiment_id",
+                    "params_preview",
+                    "version",
+                    "stage",
+                    "parent_model_id",
+                    "created_at",
+                ]
+            ].copy()
+            display.columns = [c.replace("_", " ").title() for c in display.columns]
+            display = render_summary_table(
+                display,
+                key_prefix="registry_lineage",
+                columns=display.columns.tolist(),
+                sort_by="Created At" if "Created At" in display.columns else None,
+                filterable_columns=[c for c in ["Dataset", "Stage"] if c in display.columns],
+                max_rows=25,
+            )
+            render_expandable_rows(
+                display,
+                title_col="Model Id",
+                detail_cols=[
+                    c for c in [
+                        "Stage",
+                        "Dataset",
+                        "Version",
+                        "Experiment Id",
+                        "Parent Model Id",
+                        "Created At",
+                    ] if c in display.columns
+                ],
+                badge_col="Stage" if "Stage" in display.columns else None,
+                badge_mode="stage",
+            )
+
+            render_section_title("Lineage Graph", margin_top_px=14)
+            graph_df = lineage_df.copy().sort_values(["dataset", "version", "created_at"])
+            graph_df["version"] = pd.to_numeric(graph_df["version"], errors="coerce")
+            graph_df["dataset_idx"] = graph_df["dataset"].astype("category").cat.codes
+
+            node_x = graph_df["version"].fillna(0).tolist()
+            node_y = graph_df["dataset_idx"].astype(float).tolist()
+            node_text = [
+                (
+                    f"Model: {row.model_id}<br>"
+                    f"Dataset: {row.dataset}<br>"
+                    f"Version: {row.version}<br>"
+                    f"Stage: {row.stage}<br>"
+                    f"Experiment: {row.experiment_id}"
+                )
+                for row in graph_df.itertuples(index=False)
+            ]
+
+            fig = go.Figure()
+
+            for row in graph_df.itertuples(index=False):
+                parent = row.parent_model_id
+                if not parent:
+                    continue
+                parent_rows = graph_df[graph_df["model_id"] == parent]
+                if parent_rows.empty:
+                    continue
+                p = parent_rows.iloc[0]
+                fig.add_trace(
+                    go.Scatter(
+                        x=[float(p["version"]) if pd.notna(p["version"]) else 0.0, float(row.version) if pd.notna(row.version) else 0.0],
+                        y=[float(p["dataset_idx"]), float(row.dataset_idx)],
+                        mode="lines",
+                        line=dict(color="#94a3b8", width=1.5),
+                        hoverinfo="skip",
+                        showlegend=False,
+                    )
+                )
+
+            fig.add_trace(
+                go.Scatter(
+                    x=node_x,
+                    y=node_y,
+                    mode="markers",
+                    marker=dict(
+                        size=12,
+                        color=graph_df["stage"].map(
+                            {
+                                "production": "#16a34a",
+                                "staging": "#2563eb",
+                                "development": "#64748b",
+                                "archived": "#c2410c",
+                            }
+                        ).fillna("#64748b"),
+                        line=dict(color="#ffffff", width=1),
+                    ),
+                    text=node_text,
+                    hovertemplate="%{text}<extra></extra>",
+                    name="models",
+                )
+            )
+
+            tickvals = sorted(graph_df["dataset_idx"].dropna().unique().tolist())
+            ticktext = [
+                graph_df[graph_df["dataset_idx"] == idx]["dataset"].iloc[0]
+                for idx in tickvals
+            ]
+
             fig.update_layout(
+                height=360,
+                margin=dict(l=0, r=0, t=10, b=0),
+                paper_bgcolor="white",
+                plot_bgcolor="white",
+                xaxis=dict(title="Model Version", showgrid=True, gridcolor="#f1f5f9"),
+                yaxis=dict(
+                    title="Dataset",
+                    tickmode="array",
+                    tickvals=tickvals,
+                    ticktext=ticktext,
+                    showgrid=False,
+                ),
                 legend=dict(title=None),
             )
-            apply_plotly_layout(fig, height=320, x_title="Model Version", y_title="Dataset")
-            fig.update_yaxes(showgrid=False)
             st.plotly_chart(fig, width="stretch")
 

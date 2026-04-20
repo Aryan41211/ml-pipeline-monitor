@@ -39,6 +39,7 @@ monitoring:
 storage:
   backend: "sqlite"
   db_path: ".pipeline_monitor.db"
+  postgres_dsn: ""
   artifacts_root: "artifacts"
 
 auth:
@@ -49,6 +50,9 @@ logging:
   file: "logs/app.log"
   max_bytes: 5000000
   backup_count: 3
+
+alerting:
+  email_simulation_file: "logs/alerts_email_simulated.log"
 
 mlflow:
   enabled: false

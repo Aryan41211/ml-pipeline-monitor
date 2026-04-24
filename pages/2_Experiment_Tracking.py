@@ -21,9 +21,10 @@ from src.ui_theme import (
     apply_ui_theme,
     render_empty_data_explainer,
     render_expandable_rows,
+    render_kpi_row,
     render_loading_skeleton,
-    render_page_header,
     render_page_header_with_action,
+    render_spacer,
     render_section_title,
     render_sidebar_brand,
     render_sidebar_nav,
@@ -166,7 +167,7 @@ with st.sidebar:
         st.rerun()
 
     st.divider()
-    st.markdown("### Access")
+    st.markdown("### User / Access")
     render_auth_controls()
 
 filtered = df.copy()
@@ -190,22 +191,35 @@ if "accuracy" in filtered.columns:
 clf_rows = filtered[filtered["task"] == "classification"]
 reg_rows = filtered[filtered["task"] == "regression"]
 
-k1, k2, k3, k4 = st.columns(4)
-k1.metric("Runs shown",      len(filtered))
-k2.metric(
-    "Best accuracy",
-    f"{clf_rows['accuracy'].max():.4f}" if not clf_rows.empty and clf_rows["accuracy"].notna().any() else "â€”",
+render_kpi_row(
+    [
+        {
+            "title": "Runs Shown",
+            "value": str(len(filtered)),
+            "subtitle": "After active filters",
+            "tone": "info",
+        },
+        {
+            "title": "Best Accuracy",
+            "value": f"{clf_rows['accuracy'].max():.4f}" if not clf_rows.empty and clf_rows["accuracy"].notna().any() else "—",
+            "subtitle": "Classification",
+            "tone": "success",
+        },
+        {
+            "title": "Best F1",
+            "value": f"{clf_rows['f1_score'].max():.4f}" if not clf_rows.empty and clf_rows["f1_score"].notna().any() else "—",
+            "subtitle": "Classification",
+            "tone": "success",
+        },
+        {
+            "title": "Best R²",
+            "value": f"{reg_rows['r2'].max():.4f}" if not reg_rows.empty and reg_rows["r2"].notna().any() else "—",
+            "subtitle": "Regression",
+            "tone": "neutral",
+        },
+    ]
 )
-k3.metric(
-    "Best F1",
-    f"{clf_rows['f1_score'].max():.4f}" if not clf_rows.empty and clf_rows["f1_score"].notna().any() else "â€”",
-)
-k4.metric(
-    "Best RÂ²",
-    f"{reg_rows['r2'].max():.4f}" if not reg_rows.empty and reg_rows["r2"].notna().any() else "â€”",
-)
-
-st.markdown("<br>", unsafe_allow_html=True)
+render_spacer("sm")
 
 if filtered.empty:
     render_empty_data_explainer(
@@ -334,7 +348,7 @@ if baseline_run_id and comparison_run_id:
                     delta_color="normal",
                 )
 
-st.markdown("<br>", unsafe_allow_html=True)
+render_spacer("sm")
 
 # ---------------------------------------------------------------------------
 # Experiments table
@@ -381,7 +395,7 @@ st.download_button(
     mime="text/csv",
 )
 
-st.markdown("<br>", unsafe_allow_html=True)
+render_spacer("sm")
 
 # ---------------------------------------------------------------------------
 # Charts

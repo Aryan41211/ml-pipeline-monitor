@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from html import escape
 from typing import Iterable, Sequence
 
 import plotly.io as pio
@@ -12,45 +13,45 @@ import streamlit as st
 
 DESIGN_TOKENS = {
     "spacing": {
-        "xs": "4px",
-        "sm": "8px",
-        "md": "12px",
-        "lg": "16px",
-        "xl": "24px",
+        "xs": "8px",
+        "sm": "16px",
+        "md": "24px",
+        "lg": "32px",
+        "xl": "40px",
     },
     "font_sizes": {
-        "h1": "22px",
-        "h2": "16px",
-        "body": "12px",
-        "caption": "10px",
+        "h1": "32px",
+        "h2": "20px",
+        "body": "14px",
+        "caption": "12px",
     },
     "colors": {
-        "background_primary": "#ffffff",
-        "background_secondary": "#f6f6f4",
-        "border_primary": "#e9e7e4",
-        "border_secondary": "#d4d2cf",
-        "text_primary": "#1f1f1e",
-        "text_secondary": "#4d4c48",
-        "text_tertiary": "#888780",
-        "accent": "#185fa5",
-        "accent_soft": "#e6f1fb",
+        "background_primary": "#f6f7fb",
+        "background_secondary": "#ffffff",
+        "border_primary": "#e6e8ef",
+        "border_secondary": "#d8dce7",
+        "text_primary": "#151923",
+        "text_secondary": "#3a4357",
+        "text_tertiary": "#697387",
+        "accent": "#4f46e5",
+        "accent_soft": "#eef0ff",
     },
     "radius": {
-        "sm": "6px",
-        "md": "8px",
-        "lg": "12px",
+        "sm": "10px",
+        "md": "12px",
+        "lg": "16px",
         "pill": "999px",
     },
     "shadows": {
         "none": "none",
-        "sm": "0 1px 2px rgba(15, 23, 42, 0.06)",
+        "sm": "0 1px 2px rgba(17, 24, 39, 0.04)",
     },
     "semantic": {
-        "success": {"bg": "#eaf3de", "fg": "#27500a", "border": "#639922"},
-        "warning": {"bg": "#faeeda", "fg": "#633806", "border": "#ba7517"},
-        "danger": {"bg": "#fcebeb", "fg": "#791f1f", "border": "#e24b4a"},
-        "info": {"bg": "#e6f1fb", "fg": "#0c447c", "border": "#378add"},
-        "neutral": {"bg": "#f1f5f9", "fg": "#475569", "border": "#94a3b8"},
+        "success": {"bg": "#edf8f1", "fg": "#256f45", "border": "#c9e8d2"},
+        "warning": {"bg": "#fff6e8", "fg": "#8a5a12", "border": "#f0ddbc"},
+        "danger": {"bg": "#fff0f1", "fg": "#9b3a46", "border": "#f3cdd3"},
+        "info": {"bg": "#eef2ff", "fg": "#3f46a8", "border": "#d9ddff"},
+        "neutral": {"bg": "#f3f5f9", "fg": "#4d5970", "border": "#dfe4ee"},
     },
 }
 
@@ -80,12 +81,12 @@ STATUS_TO_TONE = {
 }
 
 PLOTLY_COLORWAY = [
-    "#378add",
-    "#1d9e75",
-    "#ba7517",
-    "#e24b4a",
-    "#888780",
-    "#185fa5",
+    "#4f46e5",
+    "#0ea5a4",
+    "#64748b",
+    "#22c55e",
+    "#f59e0b",
+    "#ef4444",
 ]
 
 
@@ -103,8 +104,23 @@ def apply_plotly_defaults() -> None:
                 "paper_bgcolor": "#ffffff",
                 "legend": {"title": None, "orientation": "h", "yanchor": "bottom", "y": 1.0, "x": 0},
                 "margin": {"l": 0, "r": 0, "t": 12, "b": 0},
-                "xaxis": {"showgrid": False, "title": None, "linecolor": "#e9e7e4"},
-                "yaxis": {"showgrid": True, "gridcolor": "#f1f5f9", "title": None, "linecolor": "#e9e7e4"},
+                "hoverlabel": {"bgcolor": "#ffffff", "bordercolor": "#d8dce7", "font": {"color": "#151923", "size": 12}},
+                "xaxis": {
+                    "showgrid": False,
+                    "zeroline": False,
+                    "title": None,
+                    "linecolor": "#e6e8ef",
+                    "tickfont": {"color": "#697387", "size": 11},
+                },
+                "yaxis": {
+                    "showgrid": True,
+                    "gridcolor": "#f1f3f8",
+                    "gridwidth": 1,
+                    "zeroline": False,
+                    "title": None,
+                    "linecolor": "#e6e8ef",
+                    "tickfont": {"color": "#697387", "size": 11},
+                },
             }
         )
         pio.templates["mlmonitor"] = go.layout.Template(layout=layout_config)
@@ -113,7 +129,11 @@ def apply_plotly_defaults() -> None:
 
 def apply_plotly_layout(fig, *, height: int = 340, x_title: str | None = None, y_title: str | None = None):
     """Apply shared layout polish to a Plotly figure."""
-    fig.update_layout(height=height)
+    fig.update_layout(
+        height=height,
+        transition={"duration": 350, "easing": "cubic-in-out"},
+        hovermode="x unified",
+    )
     if x_title is not None:
         fig.update_xaxes(title=x_title)
     if y_title is not None:
@@ -127,57 +147,57 @@ def apply_ui_theme() -> None:
         """
         <style>
             :root {
-                --space-xs: 4px;
-                --space-sm: 8px;
-                --space-md: 12px;
-                --space-lg: 16px;
-                --space-xl: 24px;
+                --space-xs: 8px;
+                --space-sm: 16px;
+                --space-md: 24px;
+                --space-lg: 32px;
+                --space-xl: 40px;
 
-                --font-h1: 22px;
-                --font-h2: 16px;
-                --font-body: 12px;
-                --font-caption: 10px;
+                --font-h1: 32px;
+                --font-h2: 20px;
+                --font-body: 14px;
+                --font-caption: 12px;
 
-                --color-background-primary: #ffffff;
-                --color-background-secondary: #f6f6f4;
-                --color-border-tertiary: #e9e7e4;
-                --color-border-secondary: #d4d2cf;
-                --color-text-primary: #1f1f1e;
-                --color-text-secondary: #4d4c48;
-                --color-text-tertiary: #888780;
-                --color-accent: #185fa5;
-                --color-accent-soft: #e6f1fb;
+                --color-background-primary: #f6f7fb;
+                --color-background-secondary: #ffffff;
+                --color-border-tertiary: #e6e8ef;
+                --color-border-secondary: #d8dce7;
+                --color-text-primary: #151923;
+                --color-text-secondary: #3a4357;
+                --color-text-tertiary: #697387;
+                --color-accent: #4f46e5;
+                --color-accent-soft: #eef0ff;
 
-                --radius-sm: 6px;
-                --radius-md: 8px;
-                --radius-lg: 12px;
+                --radius-sm: 10px;
+                --radius-md: 12px;
+                --radius-lg: 16px;
                 --radius-pill: 999px;
 
-                --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.06);
+                --shadow-sm: 0 1px 2px rgba(17, 24, 39, 0.04);
 
-                --semantic-success-bg: #eaf3de;
-                --semantic-success-fg: #27500a;
-                --semantic-success-border: #639922;
+                --semantic-success-bg: #edf8f1;
+                --semantic-success-fg: #256f45;
+                --semantic-success-border: #c9e8d2;
 
-                --semantic-warning-bg: #faeeda;
-                --semantic-warning-fg: #633806;
-                --semantic-warning-border: #ba7517;
+                --semantic-warning-bg: #fff6e8;
+                --semantic-warning-fg: #8a5a12;
+                --semantic-warning-border: #f0ddbc;
 
-                --semantic-danger-bg: #fcebeb;
-                --semantic-danger-fg: #791f1f;
-                --semantic-danger-border: #e24b4a;
+                --semantic-danger-bg: #fff0f1;
+                --semantic-danger-fg: #9b3a46;
+                --semantic-danger-border: #f3cdd3;
 
-                --semantic-info-bg: #e6f1fb;
-                --semantic-info-fg: #0c447c;
-                --semantic-info-border: #378add;
+                --semantic-info-bg: #eef2ff;
+                --semantic-info-fg: #3f46a8;
+                --semantic-info-border: #d9ddff;
 
-                --semantic-neutral-bg: #f1f5f9;
-                --semantic-neutral-fg: #475569;
-                --semantic-neutral-border: #94a3b8;
+                --semantic-neutral-bg: #f3f5f9;
+                --semantic-neutral-fg: #4d5970;
+                --semantic-neutral-border: #dfe4ee;
             }
 
             html, body, [class*="css"] {
-                font-family: "Inter", "Segoe UI", sans-serif;
+                font-family: "Inter", "Manrope", "Segoe UI", sans-serif;
                 color: var(--color-text-primary);
             }
 
@@ -186,16 +206,16 @@ def apply_ui_theme() -> None:
             }
 
             .block-container {
-                padding-top: 1.25rem;
-                padding-bottom: 1.1rem;
+                padding-top: 1.5rem;
+                padding-bottom: 1.25rem;
                 max-width: none;
             }
 
             [data-testid="stSidebar"] {
-                background: var(--color-background-primary);
-                border-right: 0.5px solid var(--color-border-tertiary);
-                min-width: 180px;
-                width: 180px;
+                background: var(--color-background-secondary);
+                border-right: 1px solid var(--color-border-tertiary);
+                min-width: 220px;
+                width: 220px;
             }
 
             [data-testid="stSidebar"] .block-container {
@@ -251,10 +271,10 @@ def apply_ui_theme() -> None:
 
             [data-testid="metric-container"] {
                 background: var(--color-background-secondary);
-                border: none;
+                border: 1px solid var(--color-border-tertiary);
                 border-radius: var(--radius-md);
-                padding: 12px;
-                box-shadow: none;
+                padding: 14px;
+                box-shadow: var(--shadow-sm);
             }
 
             [data-testid="stMetricLabel"] {
@@ -281,28 +301,29 @@ def apply_ui_theme() -> None:
             }
 
             .page-header {
-                margin-bottom: 16px;
+                margin-bottom: 20px;
             }
 
             .page-title {
-                font-size: 16px;
-                font-weight: 500;
+                font-size: var(--font-h1);
+                font-weight: 650;
+                line-height: 1.1;
                 color: var(--color-text-primary);
             }
 
             .page-sub {
-                font-size: 12px;
+                font-size: var(--font-body);
                 color: var(--color-text-tertiary);
-                margin-top: 3px;
+                margin-top: 8px;
             }
 
             .section-title {
-                font-size: 12px;
-                font-weight: 500;
+                font-size: var(--font-h2);
+                font-weight: 600;
                 color: var(--color-text-secondary);
-                margin-bottom: 10px;
-                text-transform: uppercase;
-                letter-spacing: 0.05em;
+                margin-bottom: 12px;
+                text-transform: none;
+                letter-spacing: 0;
             }
 
             .sidebar-brand {
@@ -412,13 +433,13 @@ def apply_ui_theme() -> None:
                 display: inline-flex;
                 align-items: center;
                 gap: 4px;
-                font-size: 10px;
-                font-weight: 600;
+                font-size: 11px;
+                font-weight: 500;
                 line-height: 1;
-                padding: 4px 8px;
+                padding: 5px 10px;
                 border-radius: var(--radius-pill);
                 border: 1px solid transparent;
-                text-transform: lowercase;
+                text-transform: capitalize;
                 letter-spacing: 0.01em;
             }
 
@@ -453,58 +474,62 @@ def apply_ui_theme() -> None:
             }
 
             .ui-alert {
-                padding: 12px 16px;
+                padding: 12px 14px;
                 border-radius: var(--radius-md);
                 margin-bottom: 16px;
-                font-size: 12px;
-                border-left: 4px solid transparent;
+                font-size: 13px;
+                border: 1px solid transparent;
             }
 
             .ui-alert.success {
                 background: var(--semantic-success-bg);
                 color: var(--semantic-success-fg);
-                border-left-color: var(--semantic-success-border);
+                border-color: var(--semantic-success-border);
             }
 
             .ui-alert.warning {
                 background: var(--semantic-warning-bg);
                 color: var(--semantic-warning-fg);
-                border-left-color: var(--semantic-warning-border);
+                border-color: var(--semantic-warning-border);
             }
 
             .ui-alert.danger {
                 background: var(--semantic-danger-bg);
                 color: var(--semantic-danger-fg);
-                border-left-color: var(--semantic-danger-border);
+                border-color: var(--semantic-danger-border);
             }
 
             .ui-alert.info {
                 background: var(--semantic-info-bg);
                 color: var(--semantic-info-fg);
-                border-left-color: var(--semantic-info-border);
+                border-color: var(--semantic-info-border);
             }
 
             .ui-alert.neutral {
                 background: var(--semantic-neutral-bg);
                 color: var(--semantic-neutral-fg);
-                border-left-color: var(--semantic-neutral-border);
+                border-color: var(--semantic-neutral-border);
             }
 
             .ui-card {
                 border: 1px solid var(--color-border-tertiary);
-                border-radius: var(--radius-md);
-                background: var(--color-background-primary);
-                box-shadow: var(--shadow-sm);
-                padding: 12px;
+                border-radius: var(--radius-lg);
+                background: var(--color-background-secondary);
+                box-shadow: none;
+                padding: 16px;
+                transition: border-color .18s ease, transform .18s ease;
             }
+            .ui-card:hover { border-color: var(--color-border-secondary); transform: translateY(-1px); }
 
             .ui-kpi-card {
                 border: 1px solid var(--color-border-tertiary);
-                border-radius: var(--radius-md);
-                background: var(--color-background-primary);
-                box-shadow: var(--shadow-sm);
-                padding: 12px;
+                border-radius: var(--radius-lg);
+                background: var(--color-background-secondary);
+                box-shadow: none;
+                padding: 16px;
+                transition: border-color .18s ease, transform .18s ease;
             }
+            .ui-kpi-card:hover { border-color: var(--color-border-secondary); transform: translateY(-1px); }
 
             .ui-kpi-head {
                 display: flex;
@@ -526,7 +551,7 @@ def apply_ui_theme() -> None:
             }
 
             .ui-kpi-value {
-                font-size: 22px;
+                font-size: 24px;
                 font-weight: 600;
                 color: var(--color-text-primary);
                 line-height: 1.1;
@@ -538,11 +563,53 @@ def apply_ui_theme() -> None:
                 color: var(--color-text-tertiary);
             }
 
-            .ui-kpi-card.success { border-color: var(--semantic-success-border); }
-            .ui-kpi-card.warning { border-color: var(--semantic-warning-border); }
-            .ui-kpi-card.danger { border-color: var(--semantic-danger-border); }
-            .ui-kpi-card.info { border-color: var(--semantic-info-border); }
-            .ui-kpi-card.neutral { border-color: var(--semantic-neutral-border); }
+            .ui-kpi-card.success { border-top: 2px solid var(--semantic-success-border); }
+            .ui-kpi-card.warning { border-top: 2px solid var(--semantic-warning-border); }
+            .ui-kpi-card.danger { border-top: 2px solid var(--semantic-danger-border); }
+            .ui-kpi-card.info { border-top: 2px solid var(--semantic-info-border); }
+            .ui-kpi-card.neutral { border-top: 2px solid var(--semantic-neutral-border); }
+
+            .ui-table-wrap {
+                border: 1px solid var(--color-border-tertiary);
+                border-radius: var(--radius-md);
+                overflow: hidden;
+                background: var(--color-background-secondary);
+            }
+            table.ui-table {
+                width: 100%;
+                border-collapse: collapse;
+                font-size: 12px;
+            }
+            table.ui-table thead tr {
+                background: #f8f9fc;
+                border-bottom: 1px solid var(--color-border-tertiary);
+            }
+            table.ui-table th {
+                text-align: left;
+                color: var(--color-text-tertiary);
+                font-weight: 600;
+                padding: 10px 12px;
+                letter-spacing: 0.01em;
+            }
+            table.ui-table td {
+                padding: 9px 12px;
+                color: var(--color-text-secondary);
+                border-bottom: 1px solid #f2f4f8;
+                vertical-align: middle;
+            }
+            table.ui-table tbody tr:hover {
+                background: #f8faff;
+            }
+            table.ui-table tbody tr:last-child td {
+                border-bottom: none;
+            }
+            .ui-fade-in {
+                animation: uiFadeIn .22s ease-out;
+            }
+            @keyframes uiFadeIn {
+                from { opacity: 0; transform: translateY(2px); }
+                to { opacity: 1; transform: translateY(0); }
+            }
         </style>
         """,
         unsafe_allow_html=True,
@@ -592,6 +659,12 @@ def status_badge_html(status: str) -> str:
     return badge_html(status_key or "unknown", tone=_resolve_tone(status_key))
 
 
+def drift_severity_badge_html(severity: str) -> str:
+    sev = str(severity or "").strip().lower()
+    tone_map = {"high": "danger", "significant": "danger", "medium": "warning", "moderate": "warning", "low": "success", "stable": "success"}
+    return badge_html(sev or "unknown", tone=tone_map.get(sev, "neutral"))
+
+
 def render_status_badge(label: str, status: str | None = None) -> None:
     """Render an inline semantic badge."""
     if status is None:
@@ -625,6 +698,23 @@ def render_kpi_card(
         """,
         unsafe_allow_html=True,
     )
+
+
+def render_kpi_row(items: Sequence[dict]) -> None:
+    """Render a consistent KPI row from simple config dictionaries."""
+    if not items:
+        return
+
+    cols = st.columns(len(items))
+    for col, item in zip(cols, items):
+        with col:
+            render_kpi_card(
+                title=str(item.get("title", "")),
+                value=str(item.get("value", "—")),
+                subtitle=str(item.get("subtitle", "")),
+                tone=str(item.get("tone", "neutral")),
+                icon=item.get("icon"),
+            )
 
 
 
@@ -802,7 +892,44 @@ def render_summary_table(
     end = start + page_size
     shown = data.iloc[start:end][show_cols].copy()
     st.caption(f"Showing rows {start + 1}-{min(end, total_rows)} of {total_rows}")
-    st.dataframe(shown, width="stretch", hide_index=True)
+
+    badge_cols_status = {"status", "drift detected"}
+    badge_cols_stage = {"stage"}
+    badge_cols_severity = {"severity"}
+
+    header_html = "".join(f"<th>{escape(str(col))}</th>" for col in shown.columns)
+    body_rows = []
+    for _, row in shown.iterrows():
+        cell_html = []
+        for col in shown.columns:
+            col_key = str(col).strip().lower()
+            raw_val = row[col]
+            if col_key in badge_cols_stage:
+                rendered = stage_badge_html(str(raw_val))
+            elif col_key in badge_cols_severity:
+                rendered = drift_severity_badge_html(str(raw_val))
+            elif col_key in badge_cols_status:
+                rendered = status_badge_html(str(raw_val))
+            else:
+                rendered = escape(str(raw_val))
+            cell_html.append(f"<td>{rendered}</td>")
+        body_rows.append("<tr>" + "".join(cell_html) + "</tr>")
+
+    st.markdown(
+        """
+        <div class="ui-table-wrap ui-fade-in">
+          <table class="ui-table">
+            <thead><tr>"""
+        + header_html
+        + """</tr></thead>
+            <tbody>"""
+        + "".join(body_rows)
+        + """</tbody>
+          </table>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
     return data
 
 

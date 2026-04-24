@@ -20,9 +20,13 @@ from src.auth import can_run_pipeline, current_role, is_auth_enabled, render_aut
 from src.ui_theme import (
     apply_ui_theme,
     render_empty_data_explainer,
+    render_loading_skeleton,
+    render_kpi_row,
+    render_page_header_with_action,
     render_section_title,
     render_sidebar_brand,
     render_sidebar_nav,
+    render_spacer,
 )
 
 # ---------------------------------------------------------------------------
@@ -64,7 +68,7 @@ with st.sidebar:
     )
     st.divider()
 
-    st.markdown("### Access")
+    st.markdown("### User / Access")
     auth_ok = render_auth_controls()
     if auth_ok:
         st.caption(f"Role: {current_role()}")
@@ -77,12 +81,19 @@ def _load_dashboard(limit: int) -> dict:
     return get_dashboard_snapshot(limit=limit)
 
 
+loading = st.empty()
+with loading.container():
+    render_loading_skeleton(lines=4, key="overview_load")
+
+
 try:
     snapshot = _load_dashboard(int(st.session_state["overview_limit"]))
     experiments = snapshot.get("experiments", [])
     models = snapshot.get("models", [])
     sys_snapshot = snapshot.get("system", {})
+    loading.empty()
 except Exception as exc:
+    loading.empty()
     st.error("Dashboard data could not be loaded right now.")
     st.caption(f"Details: {exc}")
     if st.button("Retry", type="primary", key="overview_retry"):
@@ -256,22 +267,15 @@ def _render_recent_runs_table(source_df: pd.DataFrame, limit: int = 12) -> str:
 # ---------------------------------------------------------------------------
 # Header + KPI summary
 # ---------------------------------------------------------------------------
-head_left, head_right = st.columns([6, 1])
-with head_left:
-    st.markdown(
-        """
-        <div class='ov-hero'>
-          <div class='ov-title'>Overview Analytics Command Center</div>
-          <div class='ov-sub'>Production telemetry across experiments, model inventory, and system posture.</div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-with head_right:
-    st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
-    if st.button("Refresh", key="overview_refresh", type="primary", width="stretch"):
-        track_user_action("overview", "refresh_dashboard")
-        st.rerun()
+refresh_clicked = render_page_header_with_action(
+    "Overview",
+    "Monitor experiments, model inventory, and system health at a glance.",
+    "Refresh",
+    action_key="overview_refresh",
+)
+if refresh_clicked:
+    track_user_action("overview", "refresh_dashboard")
+    st.rerun()
 
 total_runs = len(exp_df)
 registered_models = len(mdl_df)
@@ -301,35 +305,39 @@ if not exp_df.empty:
         today = datetime.utcnow().date()
         runs_today = int((created_series.dt.date == today).sum())
 
-k1, k2, k3, k4 = st.columns(4)
-k1.markdown(
-    _render_kpi_card("&#128202;", "Total Experiments", f"{total_runs:,}", f"+{runs_today} today"),
-    unsafe_allow_html=True,
+render_kpi_row(
+    [
+        {
+            "title": "Total Experiments",
+            "value": f"{total_runs:,}",
+            "subtitle": f"+{runs_today} today",
+            "tone": "info",
+            "icon": "&#128202;",
+        },
+        {
+            "title": "Best Accuracy",
+            "value": f"{best_accuracy:.3f}" if best_accuracy is not None else "--",
+            "subtitle": best_accuracy_model,
+            "tone": "success",
+            "icon": "&#127942;",
+        },
+        {
+            "title": "Pipeline Speed",
+            "value": f"{avg_duration:.2f}s" if avg_duration is not None else "--",
+            "subtitle": f"fastest: {fastest_duration:.2f}s" if fastest_duration is not None else "no timings yet",
+            "tone": "neutral",
+            "icon": "&#9201;",
+        },
+        {
+            "title": "Model Inventory",
+            "value": f"{registered_models:,}",
+            "subtitle": f"production: {production_models}",
+            "tone": "neutral",
+            "icon": "&#129504;",
+        },
+    ]
 )
-k2.markdown(
-    _render_kpi_card(
-        "&#127942;",
-        "Best Accuracy",
-        f"{best_accuracy:.3f}" if best_accuracy is not None else "--",
-        best_accuracy_model,
-    ),
-    unsafe_allow_html=True,
-)
-k3.markdown(
-    _render_kpi_card(
-        "&#9201;",
-        "Pipeline Speed",
-        f"{avg_duration:.2f}s" if avg_duration is not None else "--",
-        f"fastest: {fastest_duration:.2f}s" if fastest_duration is not None else "no timings yet",
-    ),
-    unsafe_allow_html=True,
-)
-k4.markdown(
-    _render_kpi_card("&#129504;", "Model Inventory", f"{registered_models:,}", f"production: {production_models}"),
-    unsafe_allow_html=True,
-)
-
-st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
+render_spacer("sm")
 
 # ---------------------------------------------------------------------------
 # Main content layout
@@ -337,48 +345,11 @@ st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
 if exp_df.empty:
     render_section_title("First Run")
     render_empty_data_explainer(
-        "This workspace has no persisted runs yet, so analytics sections are waiting for the first execution.",
-        "Run your first pipeline from Pipeline Runner or generate a sample run.",
-        "After one run, this overview will auto-populate KPI cards, run history, and trend charts.",
+        "No experiments yet.",
+        "Run your first pipeline to unlock dashboard analytics.",
+        "After the first run, KPI cards, charts, and tables will populate automatically.",
     )
-
-    cta1, cta2, cta3 = st.columns(3)
-    with cta1:
-        st.page_link("pages/1_Pipeline_Runner.py", label="Run first pipeline")
-    with cta2:
-        if st.button(
-            "Generate sample run",
-            type="primary",
-            width="stretch",
-            disabled=not can_run_pipeline(),
-        ):
-            if not can_run_pipeline():
-                st.error("Operator or admin role required to generate sample runs.")
-                st.stop()
-            default_label = (
-                "Breast Cancer Wisconsin"
-                if "Breast Cancer Wisconsin" in DATASET_OPTIONS
-                else list(DATASET_OPTIONS.keys())[0]
-            )
-            default_key = DATASET_OPTIONS[default_label]
-            with st.spinner("Generating sample run..."):
-                track_user_action("overview", "generate_sample_run", {"model": "Random Forest"})
-                run_pipeline_and_persist(
-                    dataset_label=default_label,
-                    dataset_key=default_key,
-                    model_type="Random Forest",
-                    task="classification",
-                    params={"n_estimators": 100, "max_depth": None, "min_samples_split": 2},
-                    test_size=0.20,
-                    cv_folds=5,
-                    random_state=42,
-                )
-            st.success("Sample run generated. Refreshing dashboard...")
-            st.rerun()
-        if is_auth_enabled() and not can_run_pipeline():
-            st.caption("Viewer role is read-only.")
-    with cta3:
-        st.page_link("pages/3_Model_Registry.py", label="Open model registry")
+    st.page_link("pages/1_Pipeline_Runner.py", label="Run First Pipeline")
 else:
     top_left, top_right = st.columns([1.6, 1], gap="large")
 

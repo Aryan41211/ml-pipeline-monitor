@@ -28,7 +28,7 @@ from src.ui_theme import (
     apply_ui_theme,
     render_empty_data_explainer,
     render_expandable_rows,
-    render_kpi_card,
+    render_kpi_row,
     render_loading_skeleton,
     render_page_header,
     render_page_header_with_action,
@@ -148,7 +148,7 @@ with st.sidebar:
     sel_ds    = st.selectbox("Dataset", ds_opts)
 
     st.divider()
-    st.markdown("### Access")
+    st.markdown("### User / Access")
     render_auth_controls()
 
 filtered = df.copy()
@@ -165,33 +165,38 @@ if sel_ds != "All":
 clf_f = filtered[filtered["task"] == "classification"]
 reg_f = filtered[filtered["task"] == "regression"]
 
-k1, k2, k3, k4 = st.columns(4)
-with k1:
-    render_kpi_card("Total Models", str(len(filtered)), subtitle="models in current filter", tone="info", icon="&#128421;")
-with k2:
-    render_kpi_card(
-        "In Production",
-        str(int((filtered["stage"] == "production").sum())),
-        subtitle="active stage",
-        tone="success",
-        icon="&#128994;",
-    )
-with k3:
-    render_kpi_card(
-        "Best Accuracy",
-        f"{clf_f['accuracy'].max():.4f}" if not clf_f.empty and clf_f["accuracy"].notna().any() else "â€”",
-        subtitle="classification",
-        tone="neutral",
-        icon="&#127942;",
-    )
-with k4:
-    render_kpi_card(
-        "Best RÂ²",
-        f"{reg_f['r2'].max():.4f}" if not reg_f.empty and reg_f["r2"].notna().any() else "â€”",
-        subtitle="regression",
-        tone="neutral",
-        icon="&#128200;",
-    )
+render_kpi_row(
+    [
+        {
+            "title": "Total Models",
+            "value": str(len(filtered)),
+            "subtitle": "Models in current filter",
+            "tone": "info",
+            "icon": "&#128421;",
+        },
+        {
+            "title": "In Production",
+            "value": str(int((filtered["stage"] == "production").sum())),
+            "subtitle": "Active stage",
+            "tone": "success",
+            "icon": "&#128994;",
+        },
+        {
+            "title": "Best Accuracy",
+            "value": f"{clf_f['accuracy'].max():.4f}" if not clf_f.empty and clf_f["accuracy"].notna().any() else "—",
+            "subtitle": "Classification",
+            "tone": "neutral",
+            "icon": "&#127942;",
+        },
+        {
+            "title": "Best R²",
+            "value": f"{reg_f['r2'].max():.4f}" if not reg_f.empty and reg_f["r2"].notna().any() else "—",
+            "subtitle": "Regression",
+            "tone": "neutral",
+            "icon": "&#128200;",
+        },
+    ]
+)
 
 render_spacer("lg")
 

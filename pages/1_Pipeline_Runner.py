@@ -23,11 +23,16 @@ from services.pipeline_service import (
 from services.telemetry_service import track_user_action
 from src import auth
 from src.ui_theme import (
+    apply_plotly_layout,
     apply_ui_theme,
+    render_kpi_row,
+    render_loading_skeleton,
     render_page_header_with_action,
+    render_spacer,
     render_section_title,
     render_sidebar_brand,
     render_sidebar_nav,
+    render_summary_table,
     status_badge_html,
 )
 
@@ -183,11 +188,6 @@ with st.sidebar:
     render_sidebar_brand()
     st.markdown("### Navigation")
     render_sidebar_nav()
-    st.markdown("#### Quick links")
-    st.page_link("app.py", label="Overview")
-    st.page_link("pages/2_Experiment_Tracking.py", label="Experiments")
-    st.page_link("pages/3_Model_Registry.py", label="Registry")
-    st.page_link("pages/4_Data_Drift.py", label="Drift")
     st.divider()
 
     st.markdown("### Configuration")
@@ -222,7 +222,7 @@ with st.sidebar:
         params = _reg_param_widgets(model_type)
 
     st.divider()
-    st.markdown("### Access")
+    st.markdown("### User / Access")
     auth_ok = auth.render_auth_controls()
     can_execute = auth.can_run_pipeline()
     if auth_ok and not can_execute:
@@ -252,19 +252,42 @@ if run_btn_top:
         {"dataset": dataset_label, "model": model_type},
     )
 
-k1, k2, k3, k4 = st.columns(4)
-k1.metric("Dataset", dataset_label)
-k2.metric("Model", model_type)
-k3.metric("Task", task.title())
 if not auth.is_auth_enabled():
     access_text = "Auth disabled (admin)"
 elif auth_ok:
     access_text = f"Signed in ({auth.current_role()})"
 else:
     access_text = "Login required"
-k4.metric("Access", access_text)
 
-st.markdown("<br>", unsafe_allow_html=True)
+render_kpi_row(
+    [
+        {
+            "title": "Dataset",
+            "value": dataset_label,
+            "subtitle": "Active training data",
+            "tone": "info",
+        },
+        {
+            "title": "Model",
+            "value": model_type,
+            "subtitle": "Selected algorithm",
+            "tone": "neutral",
+        },
+        {
+            "title": "Task",
+            "value": task.title(),
+            "subtitle": "Learning mode",
+            "tone": "neutral",
+        },
+        {
+            "title": "Access",
+            "value": access_text,
+            "subtitle": "Current session role",
+            "tone": "success" if auth_ok else "warning",
+        },
+    ]
+)
+render_spacer("sm")
 
 
 # ---------------------------------------------------------------------------
@@ -279,12 +302,18 @@ with tab_data:
     def _cached_preview(ds_key: str, split: float, seed: int):
         return get_dataset_preview(ds_key, test_size=split, random_state=seed)
 
+    sk = st.empty()
+    with sk.container():
+        render_loading_skeleton(lines=3, key="pipeline_preview_load")
+
     with st.spinner("Loading dataset..."):
         try:
             preview_payload = _cached_preview(dataset_key, float(test_size), int(random_state))
             ds = preview_payload["dataset"]
             feat_stats = preview_payload["feature_stats"]
+            sk.empty()
         except Exception as exc:
+            sk.empty()
             st.error("Failed to load dataset preview.")
             st.caption(f"Details: {exc}")
             if st.button("Retry", key="pipeline_preview_retry", type="primary"):
@@ -308,9 +337,19 @@ with tab_data:
             f"Target std: {ds['stats']['target_std']:.4f}"
         )
 
-    st.markdown("---")
+    render_spacer("sm")
     render_section_title("Feature Statistics")
-    st.dataframe(feat_stats.style.format("{:.4f}", na_rep="â€”"), width="stretch")
+    stats_df = feat_stats.reset_index().rename(columns={"index": "Feature"})
+    for col in stats_df.columns[1:]:
+        stats_df[col] = pd.to_numeric(stats_df[col], errors="coerce").round(4)
+    render_summary_table(
+        stats_df,
+        key_prefix="pipeline_feature_stats",
+        columns=stats_df.columns.tolist(),
+        sort_by="Feature",
+        filterable_columns=[],
+        max_rows=25,
+    )
 
     render_section_title("Feature Distributions (first 9)", margin_top_px=20)
     sample_feats = ds["X_train"].columns[:9].tolist()
@@ -327,16 +366,14 @@ with tab_data:
                     color_discrete_sequence=["#2563eb"],
                     labels={feat: feat},
                 )
+                apply_plotly_layout(fig, height=180)
                 fig.update_layout(
-                    height=180,
                     margin=dict(l=0, r=0, t=24, b=0),
                     showlegend=False,
-                    plot_bgcolor="white",
-                    paper_bgcolor="white",
                     title=dict(text=feat, font=dict(size=11)),
-                    xaxis=dict(showgrid=False, title=None),
-                    yaxis=dict(showgrid=False, title=None, showticklabels=False),
                 )
+                fig.update_xaxes(showgrid=False, title=None)
+                fig.update_yaxes(showgrid=False, title=None, showticklabels=False)
                 st.plotly_chart(fig, width="stretch")
 
 
@@ -453,7 +490,7 @@ with tab_run:
         cv_std  = metrics.get("cv_std", 0)
         st.caption(f"Cross-validation: {cv_mean:.4f} Â± {cv_std:.4f}  ({result.cv_scores.shape[0]}-fold)")
 
-        st.markdown("<br>", unsafe_allow_html=True)
+        render_spacer("sm")
 
         # Stage summary
         render_section_title("Stage Summary")
@@ -479,7 +516,7 @@ with tab_run:
                     unsafe_allow_html=True,
                 )
 
-        st.markdown("<br>", unsafe_allow_html=True)
+        render_spacer("sm")
 
         # Charts
         chart_left, chart_right = st.columns(2, gap="large")
@@ -591,7 +628,7 @@ with tab_auto:
     c3.metric("Next Run", next_run_label)
     c4.metric("Stored Auto Runs", str(len(auto.get("history", []))))
 
-    st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
+    render_spacer("sm")
 
     enabled = st.toggle("Enable automation", value=bool(auto.get("enabled", False)))
     interval = st.slider(
@@ -637,7 +674,16 @@ with tab_auto:
     history = auto.get("history", [])
     if history:
         st.markdown('<div class="section-title" style="margin-top:18px">Recent Automated Runs</div>', unsafe_allow_html=True)
-        st.dataframe(pd.DataFrame(history), width="stretch", hide_index=True)
+        hist_df = pd.DataFrame(history)
+        hist_df.columns = [c.replace("_", " ").title() for c in hist_df.columns]
+        render_summary_table(
+            hist_df,
+            key_prefix="pipeline_auto_history",
+            columns=hist_df.columns.tolist(),
+            sort_by="At" if "At" in hist_df.columns else None,
+            filterable_columns=[c for c in ["Dataset", "Model"] if c in hist_df.columns],
+            max_rows=10,
+        )
     else:
         st.info("No automated runs yet.")
 

@@ -26,8 +26,10 @@ from src.ui_theme import (
     apply_ui_theme,
     render_alert,
     render_expandable_rows,
+    render_kpi_row,
     render_loading_skeleton,
     render_page_header_with_action,
+    render_spacer,
     render_section_title,
     render_sidebar_brand,
     render_sidebar_nav,
@@ -94,7 +96,7 @@ with st.sidebar:
         st.caption("Read-only role: operator or admin is required to run drift analysis.")
 
     st.divider()
-    st.markdown("### Access")
+    st.markdown("### User / Access")
     render_auth_controls()
 
 run_btn_top = render_page_header_with_action(
@@ -136,13 +138,35 @@ current = ds["X_test"].copy()
 # ---------------------------------------------------------------------------
 # Split preview
 # ---------------------------------------------------------------------------
-c1, c2, c3, c4 = st.columns(4)
-c1.metric("Reference samples", f"{len(reference):,}")
-c2.metric("Current samples",   f"{len(current):,}")
-c3.metric("Features",          reference.shape[1])
-c4.metric("Significance level", f"{alpha}")
-
-st.markdown("<br>", unsafe_allow_html=True)
+render_kpi_row(
+    [
+        {
+            "title": "Reference Samples",
+            "value": f"{len(reference):,}",
+            "subtitle": "Baseline window",
+            "tone": "neutral",
+        },
+        {
+            "title": "Current Samples",
+            "value": f"{len(current):,}",
+            "subtitle": "Monitored window",
+            "tone": "neutral",
+        },
+        {
+            "title": "Features",
+            "value": str(reference.shape[1]),
+            "subtitle": "Numeric columns analyzed",
+            "tone": "info",
+        },
+        {
+            "title": "Alpha",
+            "value": f"{alpha}",
+            "subtitle": "Significance level",
+            "tone": "info",
+        },
+    ]
+)
+render_spacer("sm")
 
 # ---------------------------------------------------------------------------
 # Run analysis on button press or show cached result
@@ -396,7 +420,7 @@ st.markdown(
         unsafe_allow_html=True,
 )
 
-st.markdown("<br>", unsafe_allow_html=True)
+render_spacer("sm")
 
 # ---------------------------------------------------------------------------
 # Per-feature results
@@ -647,9 +671,16 @@ with tab_history:
              "drift_detected", "features_drifted", "drift_score", "created_at"]
         ]
         hist_df["drift_detected"] = hist_df["drift_detected"].map({1: "Yes", 0: "No"})
-        hist_df["drift_score"]    = hist_df["drift_score"].apply(
-            lambda x: f"{x:.4f}" if x is not None else "â€”"
+        hist_df["drift_score"] = hist_df["drift_score"].apply(
+            lambda x: f"{x:.4f}" if x is not None else "—"
         )
         hist_df.columns = [c.replace("_", " ").title() for c in hist_df.columns]
-        st.dataframe(hist_df, width="stretch", hide_index=True)
+        render_summary_table(
+            hist_df,
+            key_prefix="drift_history",
+            columns=hist_df.columns.tolist(),
+            sort_by="Created At",
+            filterable_columns=["Dataset", "Drift Detected"],
+            max_rows=25,
+        )
 

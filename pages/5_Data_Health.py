@@ -23,7 +23,10 @@ from src.auth import can_run_pipeline, render_auth_controls
 from src.ui_theme import (
     apply_plotly_layout,
     apply_ui_theme,
+    render_loading_skeleton,
+    render_kpi_row,
     render_page_header_with_action,
+    render_spacer,
     render_section_title,
     render_sidebar_brand,
     render_sidebar_nav,
@@ -58,7 +61,7 @@ with st.sidebar:
     z_threshold = st.slider("Z-score threshold", 2.0, 5.0, 3.0, 0.1)
 
     st.divider()
-    st.markdown("### Access")
+    st.markdown("### User / Access")
     render_auth_controls()
 
 run_scan = render_page_header_with_action(
@@ -77,9 +80,14 @@ def _cached_input(ds_key: str, split: float, seed: int):
 
 
 try:
+    sk = st.empty()
+    with sk.container():
+        render_loading_skeleton(lines=3, key="data_health_load")
     with st.spinner("Loading dataset for health checks..."):
         payload = _cached_input(dataset_key, float(test_size), int(random_seed))
+    sk.empty()
 except Exception as exc:
+    sk.empty()
     st.error("Failed to load dataset for health analysis.")
     st.caption(f"Details: {exc}")
     if st.button("Retry", type="primary", key="data_health_retry_load"):
@@ -100,13 +108,35 @@ baseline = load_schema_baseline(dataset_key)
 schema_cmp = compare_schema(list(feature_df.columns), baseline)
 
 # KPI strip
-k1, k2, k3, k4 = st.columns(4)
-k1.metric("Features", feature_df.shape[1])
-k2.metric("Rows", feature_df.shape[0])
-k3.metric("Total Missing %", f"{missing['total_missing_pct']:.2f}%")
-k4.metric("Outlier Features", int((outliers["outlier_count"] > 0).sum()) if not outliers.empty else 0)
-
-st.markdown("<br>", unsafe_allow_html=True)
+render_kpi_row(
+    [
+        {
+            "title": "Features",
+            "value": str(feature_df.shape[1]),
+            "subtitle": "Columns evaluated",
+            "tone": "info",
+        },
+        {
+            "title": "Rows",
+            "value": str(feature_df.shape[0]),
+            "subtitle": "Sample count",
+            "tone": "neutral",
+        },
+        {
+            "title": "Total Missing %",
+            "value": f"{missing['total_missing_pct']:.2f}%",
+            "subtitle": "Across all values",
+            "tone": "warning" if missing["total_missing_pct"] > 0 else "success",
+        },
+        {
+            "title": "Outlier Features",
+            "value": str(int((outliers["outlier_count"] > 0).sum()) if not outliers.empty else 0),
+            "subtitle": "Detected columns",
+            "tone": "warning",
+        },
+    ]
+)
+render_spacer("sm")
 
 # Schema drift
 render_section_title("Schema Drift (Baseline Comparison)")
@@ -155,7 +185,7 @@ else:
     if not can_run_pipeline():
         st.caption("Read-only role: operator or admin is required to update baselines.")
 
-st.markdown("<br>", unsafe_allow_html=True)
+render_spacer("sm")
 
 # Missing values
 render_section_title("Missing Values")
@@ -182,7 +212,7 @@ if not missing_df.empty:
     apply_plotly_layout(fig_missing, height=280, x_title="Feature", y_title="Missing %")
     st.plotly_chart(fig_missing, width="stretch")
 
-st.markdown("<br>", unsafe_allow_html=True)
+render_spacer("sm")
 
 # Class imbalance
 render_section_title("Class Imbalance")
@@ -212,7 +242,7 @@ else:
     apply_plotly_layout(fig_cls, height=280)
     st.plotly_chart(fig_cls, width="stretch")
 
-st.markdown("<br>", unsafe_allow_html=True)
+render_spacer("sm")
 
 # Basic statistics
 render_section_title("Basic Statistics")

@@ -110,12 +110,6 @@ def initialize_db() -> None:
             CREATE INDEX IF NOT EXISTS idx_models_created_at
                 ON models(created_at DESC);
 
-            CREATE INDEX IF NOT EXISTS idx_stage_events_model_changed
-                ON model_stage_events(model_id, changed_at DESC);
-
-            CREATE INDEX IF NOT EXISTS idx_stage_events_dataset_changed
-                ON model_stage_events(dataset, changed_at DESC);
-
             CREATE INDEX IF NOT EXISTS idx_drift_reports_dataset_created
                 ON drift_reports(dataset, created_at DESC);
     """
@@ -195,12 +189,6 @@ def initialize_db() -> None:
             CREATE INDEX IF NOT EXISTS idx_models_created_at
                 ON models(created_at DESC);
 
-            CREATE INDEX IF NOT EXISTS idx_stage_events_model_changed
-                ON model_stage_events(model_id, changed_at DESC);
-
-            CREATE INDEX IF NOT EXISTS idx_stage_events_dataset_changed
-                ON model_stage_events(dataset, changed_at DESC);
-
             CREATE INDEX IF NOT EXISTS idx_drift_reports_dataset_created
                 ON drift_reports(dataset, created_at DESC);
     """
@@ -208,37 +196,37 @@ def initialize_db() -> None:
     with get_connection() as conn:
         conn.executescript(postgres_schema if backend == "postgres" else sqlite_schema)
 
-        if backend == "postgres":
-            model_columns = {
-                row["column_name"]
-                for row in conn.execute(
-                    """
-                    SELECT column_name
-                    FROM information_schema.columns
-                    WHERE table_schema = 'public' AND table_name = ?
-                    """,
-                    ("models",),
-                ).fetchall()
-            }
-        else:
-            model_columns = {
-                row["name"] for row in conn.execute("PRAGMA table_info(models)").fetchall()
-            }
+        def ensure_column_exists(table: str, column: str, definition: str) -> None:
+            if backend == "postgres":
+                existing_columns = {
+                    row["column_name"]
+                    for row in conn.execute(
+                        """
+                        SELECT column_name
+                        FROM information_schema.columns
+                        WHERE table_schema = 'public' AND table_name = ?
+                        """,
+                        (table,),
+                    ).fetchall()
+                }
+            else:
+                existing_columns = {
+                    row["name"]
+                    for row in conn.execute(f"PRAGMA table_info({table})").fetchall()
+                }
 
-        if "dataset_name" not in model_columns:
-            conn.execute("ALTER TABLE models ADD COLUMN dataset_name TEXT")
+            if column not in existing_columns:
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
 
-        if "created_at" not in model_columns:
-            conn.execute("ALTER TABLE models ADD COLUMN created_at TEXT DEFAULT CURRENT_TIMESTAMP")
+        ensure_column_exists("models", "dataset_name", "TEXT")
+        ensure_column_exists("models", "created_at", "TEXT DEFAULT CURRENT_TIMESTAMP")
+        ensure_column_exists("models", "params", "TEXT")
+        ensure_column_exists("models", "experiment_id", "TEXT")
+        ensure_column_exists("models", "parent_model_id", "TEXT")
 
-        if "params" not in model_columns:
-            conn.execute("ALTER TABLE models ADD COLUMN params TEXT")
-
-        if "experiment_id" not in model_columns:
-            conn.execute("ALTER TABLE models ADD COLUMN experiment_id TEXT")
-
-        if "parent_model_id" not in model_columns:
-            conn.execute("ALTER TABLE models ADD COLUMN parent_model_id TEXT")
+        ensure_column_exists("model_stage_events", "dataset", "TEXT")
+        ensure_column_exists("model_stage_events", "changed_at", "TIMESTAMP")
+        ensure_column_exists("model_stage_events", "note", "TEXT")
 
         conn.execute(
             "UPDATE models SET dataset_name = COALESCE(dataset_name, dataset)"
@@ -248,6 +236,18 @@ def initialize_db() -> None:
         )
         conn.execute(
             "UPDATE models SET experiment_id = COALESCE(experiment_id, run_id)"
+        )
+        conn.execute(
+            "UPDATE model_stage_events SET dataset = COALESCE(dataset, '')"
+        )
+        conn.execute(
+            "UPDATE model_stage_events SET changed_at = COALESCE(changed_at, CURRENT_TIMESTAMP)"
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_stage_events_model_changed ON model_stage_events(model_id, changed_at DESC)"
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_stage_events_dataset_changed ON model_stage_events(dataset, changed_at DESC)"
         )
 
 

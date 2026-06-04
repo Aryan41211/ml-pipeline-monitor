@@ -1,13 +1,9 @@
-﻿"""
-Data Drift Detection page.
-
-Compares a reference dataset split against a perturbed (simulated current)
-distribution using the Kolmogorov-Smirnov test and Population Stability Index.
-Operators can control the perturbation intensity to explore drift thresholds.
 """
-from html import escape
-
+Data Drift Observability
+Redesigned with reusable enterprise components.
+"""
 import pandas as pd
+import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 
@@ -19,668 +15,107 @@ from services.drift_service import (
     list_drift_reports,
     run_drift_and_persist,
 )
-from services.telemetry_service import track_user_action
-from src.auth import can_run_pipeline, render_auth_controls
+from src.auth import can_run_pipeline, render_auth_controls, current_role
 from src.ui_theme import (
-    apply_plotly_layout,
     apply_ui_theme,
-    render_alert,
-    render_expandable_rows,
-    render_kpi_row,
+    component_alert_card,
+    component_health_score,
+    component_insight_panel,
+    component_kpi_card,
     render_loading_skeleton,
-    render_page_header_with_action,
-    render_spacer,
-    render_section_title,
-    render_sidebar_brand,
     render_sidebar_nav,
+    render_top_navbar,
+    render_section_title,
+    render_spacer,
     render_summary_table,
 )
 
+# ---------------------------------------------------------------------------
+# Shell setup
+# ---------------------------------------------------------------------------
 st.set_page_config(page_title="Data Drift | ML Monitor", layout="wide")
 initialize_application()
 apply_ui_theme()
-MONITORING_CFG = get_monitoring_defaults()
-DATASET_OPTIONS = get_dataset_options()
 
-# ---------------------------------------------------------------------------
-# Sidebar â€” configuration
-# ---------------------------------------------------------------------------
+render_top_navbar(user_role=current_role())
+
 with st.sidebar:
-    render_sidebar_brand()
-    st.markdown("### Navigation")
     render_sidebar_nav()
     st.divider()
-
-    st.markdown("### Configuration")
-    st.divider()
-
-    dataset_label = st.selectbox("Dataset", list(DATASET_OPTIONS.keys()))
-    dataset_key   = DATASET_OPTIONS[dataset_label]
-
-    st.markdown("**Perturbation settings**")
-    st.caption(
-        "Simulates real-world distribution shift by adding noise and/or "
-        "applying a mean offset to the current split."
-    )
-    noise_level = st.slider(
-        "Noise level (std)",
-        min_value=0.0,
-        max_value=3.0,
-        value=0.5,
-        step=0.1,
-        help="Gaussian noise added to features in the current window.",
-    )
-    mean_shift = st.slider(
-        "Mean shift",
-        min_value=0.0,
-        max_value=2.0,
-        value=0.0,
-        step=0.1,
-        help="Constant offset added to all features in the current window.",
-    )
-    alpha = st.select_slider(
-        "Significance level (alpha)",
-        options=[0.01, 0.05, 0.10],
-        value=float(MONITORING_CFG.get("drift_significance_level", 0.05)),
-    )
-
-    st.divider()
-    can_execute_drift = can_run_pipeline()
-    run_btn = st.button(
-        "Run Drift Analysis",
-        type="primary",
-        width="stretch",
-        disabled=not can_execute_drift,
-    )
-    if not can_execute_drift:
-        st.caption("Read-only role: operator or admin is required to run drift analysis.")
-
-    st.divider()
-    st.markdown("### User / Access")
     render_auth_controls()
 
-run_btn_top = render_page_header_with_action(
-    "Data drift detection",
-    "Compare reference and current data distributions using KS test and PSI.",
-    "Run Drift Analysis",
-    action_key="drift_run_top",
-    disabled=not can_execute_drift,
-)
-run_btn = bool(run_btn or run_btn_top)
-if run_btn_top:
-    track_user_action("data_drift", "run_drift_clicked_top", {"dataset": dataset_label})
-
 # ---------------------------------------------------------------------------
-# Load baseline preview dataset
+# Logic & Execution
 # ---------------------------------------------------------------------------
-@st.cache_data(show_spinner=False)
-def _load_preview(key: str):
-    return get_drift_preview_dataset(key)
+DATASET_OPTIONS = get_dataset_options()
 
+col_title, col_actions = st.columns([4, 1])
+with col_title:
+    st.markdown('<div class="ui-fade-in"><h1 style="margin:0; font-family:\'Poppins\', sans-serif;">Data Observability</h1><p style="color:var(--color-text-tertiary);">Distribution shift analysis using Kolmogorov-Smirnov and PSI.</p></div>', unsafe_allow_html=True)
+with col_actions:
+    st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
+    dataset_label = st.selectbox("Target Dataset", list(DATASET_OPTIONS.keys()))
+    dataset_key = DATASET_OPTIONS[dataset_label]
 
-sk = st.empty()
-with sk.container():
-    render_loading_skeleton(lines=3, key="drift_load")
-with st.spinner("Loading reference dataset..."):
-    try:
-        ds = _load_preview(dataset_key)
-    except Exception as exc:
-        st.error("Failed to load dataset preview.")
-        st.caption(f"Details: {exc}")
-        if st.button("Retry", type="primary", key="drift_preview_retry"):
+c1, c2 = st.columns([1, 2], gap="large")
+
+with c1:
+    render_section_title("Perturbation Settings")
+    st.markdown('<div class="ui-card">', unsafe_allow_html=True)
+    noise = st.slider("Signal Noise", 0.0, 2.0, 0.5)
+    shift = st.slider("Mean Offset", 0.0, 1.0, 0.0)
+    alpha = st.select_slider("Confidence (α)", [0.01, 0.05, 0.10], 0.05)
+    
+    if st.button("Run Drift Scan", type="primary", use_container_width=True, disabled=not can_run_pipeline()):
+        with st.spinner("Analyzing distributions..."):
+            payload = run_drift_and_persist(dataset_label, dataset_key, noise, shift, alpha)
+            st.session_state["active_drift"] = payload["report"]
             st.rerun()
-        st.stop()
-sk.empty()
+    st.markdown('</div>', unsafe_allow_html=True)
 
-reference = ds["X_train"].copy()
-current = ds["X_test"].copy()
-
-# ---------------------------------------------------------------------------
-# Split preview
-# ---------------------------------------------------------------------------
-render_kpi_row(
-    [
-        {
-            "title": "Reference Samples",
-            "value": f"{len(reference):,}",
-            "subtitle": "Baseline window",
-            "tone": "neutral",
-        },
-        {
-            "title": "Current Samples",
-            "value": f"{len(current):,}",
-            "subtitle": "Monitored window",
-            "tone": "neutral",
-        },
-        {
-            "title": "Features",
-            "value": str(reference.shape[1]),
-            "subtitle": "Numeric columns analyzed",
-            "tone": "info",
-        },
-        {
-            "title": "Alpha",
-            "value": f"{alpha}",
-            "subtitle": "Significance level",
-            "tone": "info",
-        },
-    ]
-)
-render_spacer("sm")
-
-# ---------------------------------------------------------------------------
-# Run analysis on button press or show cached result
-# ---------------------------------------------------------------------------
-if "drift_result" not in st.session_state or run_btn:
-    if run_btn or "drift_result" not in st.session_state:
-        if not can_run_pipeline():
-            st.error("Permission denied: operator or admin role required.")
-            st.stop()
-        track_user_action("data_drift", "run_drift_execute", {"dataset": dataset_label})
-        prog = st.progress(0.0)
-        with st.spinner("Running statistical tests..."):
-            try:
-                prog.progress(0.25)
-                payload = run_drift_and_persist(
-                    dataset_label=dataset_label,
-                    dataset_key=dataset_key,
-                    noise_level=float(noise_level),
-                    mean_shift=float(mean_shift),
-                    alpha=float(alpha),
-                )
-                prog.progress(1.0)
-            except Exception as exc:
-                prog.empty()
-                st.error("Drift analysis failed. Please retry.")
-                st.caption(f"Details: {exc}")
-                if st.button("Retry drift analysis", type="primary", key="drift_retry_run"):
-                    st.rerun()
-                st.stop()
-        prog.empty()
-
-        report = payload["report"]
-        st.session_state["drift_result"]   = report
-        st.session_state["drift_reference"] = payload["reference"].copy()
-        st.session_state["drift_current"]   = payload["current"].copy()
-        st.session_state["drift_features"]  = payload["feature_names"]
-        st.success("Drift analysis completed successfully.")
-
-report     = st.session_state.get("drift_result")
-ref_arr    = st.session_state.get("drift_reference", reference)
-cur_arr    = st.session_state.get("drift_current",   current)
-feat_names = st.session_state.get("drift_features",  ds["feature_names"])
-
-if report is None:
-    st.info("Click **Run Drift Analysis** to start.")
-    st.stop()
-
-
-def _feature_severity_label(raw: str) -> str:
-    mapping = {"none": "low", "moderate": "medium", "significant": "high"}
-    return mapping.get(str(raw or "none"), "low")
-
-
-def _overall_severity_label(raw: str) -> str:
-    mapping = {"stable": "low", "warning": "medium", "critical": "high"}
-    return mapping.get(str(raw or "stable"), "low")
-
-st.markdown(
-        """
-        <style>
-            .drift-kpi-row { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-top: 8px; }
-            .drift-kpi {
-                border-radius: 12px;
-                padding: 12px;
-                border: 1px solid #e7eaf0;
-                background: #ffffff;
-                box-shadow: 0 3px 10px rgba(15, 23, 42, 0.04);
-                transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
-            }
-            .drift-kpi:hover { transform: translateY(-1px); box-shadow: 0 10px 18px rgba(15, 23, 42, 0.10); }
-            .drift-kpi-label { font-size: .74rem; color: #64748b; text-transform: uppercase; letter-spacing: .03em; }
-            .drift-kpi-value { margin-top: 6px; font-size: 1.25rem; font-weight: 800; line-height: 1.1; color: #0f172a; }
-            .drift-kpi-sub { margin-top: 4px; font-size: .75rem; color: #64748b; }
-
-            .drift-kpi.stable { border-color: #86efac; background: linear-gradient(180deg, #ffffff 0%, #f0fdf4 100%); }
-            .drift-kpi.warning { border-color: #fdba74; background: linear-gradient(180deg, #ffffff 0%, #fff7ed 100%); }
-            .drift-kpi.critical { border-color: #fca5a5; background: linear-gradient(180deg, #ffffff 0%, #fef2f2 100%); }
-
-            .feat-stack { display: grid; gap: 10px; margin-top: 8px; }
-            .feat-item {
-                border: 1px solid #e8ecf2;
-                border-radius: 11px;
-                padding: 10px;
-                background: #fff;
-                transition: transform .18s ease, box-shadow .18s ease;
-            }
-            .feat-item:hover { transform: translateY(-1px); box-shadow: 0 8px 16px rgba(15,23,42,.08); }
-            .feat-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 7px; }
-            .feat-name { font-size: .84rem; font-weight: 700; color: #0f172a; }
-            .feat-metas { font-size: .75rem; color: #64748b; text-align: right; }
-            .feat-bar-wrap { height: 10px; border-radius: 999px; background: #f1f5f9; overflow: hidden; }
-            .feat-bar { height: 100%; border-radius: 999px; transition: width .35s ease; }
-            .feat-bar.stable { background: linear-gradient(90deg, #34d399 0%, #22c55e 100%); }
-            .feat-bar.monitor { background: linear-gradient(90deg, #fbbf24 0%, #f59e0b 100%); }
-            .feat-bar.retrain { background: linear-gradient(90deg, #fb7185 0%, #ef4444 100%); }
-            .feat-badge {
-                display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 999px;
-                font-size: .72rem; font-weight: 700;
-            }
-            .feat-badge.stable { background: #e8fbe9; color: #166534; }
-            .feat-badge.monitor { background: #fff3e0; color: #9a3412; }
-            .feat-badge.retrain { background: #fee2e2; color: #991b1b; }
-
-            .psi-guide-wrap { display: grid; gap: 10px; margin-top: 6px; }
-            .psi-guide {
-                border: 1px solid #e7ebf3; border-radius: 11px; padding: 10px;
-                background: #fff; transition: box-shadow .18s ease, transform .18s ease;
-            }
-            .psi-guide:hover { transform: translateY(-1px); box-shadow: 0 8px 16px rgba(15,23,42,.08); }
-            .psi-chip {
-                display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: .72rem; font-weight: 800;
-                text-transform: uppercase; letter-spacing: .03em;
-            }
-            .psi-chip.stable { background: #e8fbe9; color: #166534; }
-            .psi-chip.monitor { background: #fff3e0; color: #9a3412; }
-            .psi-chip.retrain { background: #fee2e2; color: #991b1b; }
-            .psi-desc { margin-top: 6px; font-size: .8rem; color: #475569; }
-        </style>
-        """,
-        unsafe_allow_html=True,
-)
-
-feat_df_all = pd.DataFrame(report.get("feature_results", []))
-if not feat_df_all.empty:
-    severity_weight = feat_df_all["severity"].map({"none": 0.0, "moderate": 0.5, "significant": 1.0}).fillna(0.0)
-    psi_norm = (feat_df_all["psi"] / 0.25).clip(0, 2)
-    ks_norm = (feat_df_all["ks_statistic"] / 0.20).clip(0, 2)
-    feat_df_all["drift_priority_score"] = (0.45 * psi_norm + 0.35 * ks_norm + 0.20 * severity_weight).round(4)
-else:
-    feat_df_all = pd.DataFrame(
-        columns=["feature", "severity", "drift_detected", "psi", "p_value", "ks_statistic", "drift_priority_score"]
-    )
-
-if not feat_df_all.empty:
-    feat_df_all["severity_label"] = feat_df_all["severity"].apply(_feature_severity_label)
-else:
-    feat_df_all["severity_label"] = pd.Series(dtype=str)
-
-critical_count = int((feat_df_all["severity"] == "significant").sum()) if not feat_df_all.empty else 0
-moderate_count = int((feat_df_all["severity"] == "moderate").sum()) if not feat_df_all.empty else 0
-critical_ratio = (critical_count / report["features_analyzed"]) if report.get("features_analyzed") else 0.0
-retrain_score = min(
-    1.0,
-    0.45 * float(report.get("drift_ratio", 0.0))
-    + 0.35 * min(float(report.get("average_psi", 0.0)) / 0.25, 1.0)
-    + 0.20 * critical_ratio,
-)
-retrain_suggested = (
-    report.get("overall_severity") == "critical"
-    or critical_count > 0
-    or retrain_score >= 0.60
-)
-confidence_pct = retrain_score * 100.0
-confidence_label = "High" if retrain_score >= 0.75 else "Medium" if retrain_score >= 0.50 else "Low"
-
-recommended_actions = []
-if retrain_suggested:
-    recommended_actions.append("Retrain model with fresh data window and validate against baseline metrics.")
-if critical_count > 0:
-    recommended_actions.append("Review top significant-drift features for upstream data pipeline and feature engineering changes.")
-if moderate_count > 0:
-    recommended_actions.append("Increase monitoring cadence for moderate-drift features and set alert thresholds.")
-if not recommended_actions:
-    recommended_actions.append("No immediate intervention required; continue routine monitoring.")
-
-# ---------------------------------------------------------------------------
-# Summary alert
-# ---------------------------------------------------------------------------
-overall_severity = report.get("overall_severity", "stable")
-overall_severity_label = _overall_severity_label(overall_severity)
-
-if overall_severity == "critical":
-    severity_msg = (
-        f"Critical drift detected â€” {report['features_drifted']} of "
-        f"{report['features_analyzed']} features shifted (avg PSI = {report['average_psi']:.4f})."
-    )
-    render_alert(severity_msg, tone="danger")
-elif overall_severity == "warning":
-    severity_msg = (
-        f"Warning: moderate drift observed â€” drift ratio {report['drift_ratio']:.1%} "
-        f"(avg PSI = {report['average_psi']:.4f})."
-    )
-    render_alert(severity_msg, tone="warning")
-else:
-    render_alert(
-        f'No significant drift detected. Avg PSI = {report["average_psi"]:.4f}.',
-        tone="success",
-    )
-
-affected_features = (
-    feat_df_all[feat_df_all["drift_detected"]]
-    .sort_values("psi", ascending=False)["feature"]
-    .astype(str)
-    .tolist()
-    if not feat_df_all.empty
-    else []
-)
-
-banner_tone = "danger" if overall_severity_label == "high" else "warning" if overall_severity_label == "medium" else "success"
-banner_text = (
-    f"Drift severity: {overall_severity_label.upper()} | "
-    f"Affected features: {len(affected_features)}"
-)
-if affected_features:
-    banner_text += " | Top: " + ", ".join(affected_features[:5])
-render_alert(banner_text, tone=banner_tone)
-
-render_section_title("Retrain Indicator", margin_top_px=10)
-badge_tone = "danger" if retrain_suggested else "success"
-badge_text = "Retrain Suggested" if retrain_suggested else "Retrain Not Required"
-st.markdown(f"<span class='ui-badge {badge_tone}'>{badge_text}</span>", unsafe_allow_html=True)
-
-r_left, r_mid, r_right = st.columns([1, 1, 2])
-r_left.metric("Confidence", f"{confidence_pct:.1f}%")
-r_mid.metric("Confidence Level", confidence_label)
-with r_right:
-    st.markdown("**Recommended actions**")
-    for action in recommended_actions:
-        st.markdown(f"- {action}")
-
-# ---------------------------------------------------------------------------
-# KPI row
-# ---------------------------------------------------------------------------
-verdict_class = "critical" if overall_severity == "critical" else "warning" if overall_severity == "warning" else "stable"
-verdict_text = "High Drift" if overall_severity == "critical" else "Moderate Drift" if overall_severity == "warning" else "Stable"
-st.markdown(
-        f"""
-        <div class="drift-kpi-row">
-            <div class="drift-kpi {verdict_class}" title="Total numeric features evaluated for drift.">
-                <div class="drift-kpi-label">Features Analyzed</div>
-                <div class="drift-kpi-value">{report['features_analyzed']}</div>
-                <div class="drift-kpi-sub">reference vs current</div>
-            </div>
-            <div class="drift-kpi {verdict_class}" title="Number of features flagged by KS or PSI thresholds.">
-                <div class="drift-kpi-label">Features Drifted</div>
-                <div class="drift-kpi-value">{report['features_drifted']}</div>
-                <div class="drift-kpi-sub">ratio: {report['drift_ratio']:.1%}</div>
-            </div>
-            <div class="drift-kpi {verdict_class}" title="Average PSI across all analyzed features.">
-                <div class="drift-kpi-label">Avg PSI</div>
-                <div class="drift-kpi-value">{report['average_psi']:.4f}</div>
-                <div class="drift-kpi-sub">stable < 0.10, retrain > 0.25</div>
-            </div>
-            <div class="drift-kpi {verdict_class}" title="Overall drift verdict from feature ratio and PSI severity.">
-                <div class="drift-kpi-label">Drift Verdict</div>
-                <div class="drift-kpi-value">{verdict_text}</div>
-                <div class="drift-kpi-sub">confidence {confidence_pct:.1f}%</div>
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-)
-
-render_spacer("sm")
-
-# ---------------------------------------------------------------------------
-# Per-feature results
-# ---------------------------------------------------------------------------
-load_drift_charts = st.toggle(
-    "Load heavy drift visualizations",
-    value=False,
-    help="Enable advanced distribution and PSI charts when needed.",
-)
-
-tab_table, tab_dist, tab_psi, tab_history = st.tabs(
-    ["Feature Results", "Distribution Comparison", "PSI Breakdown", "Report History"]
-)
-
-with tab_table:
-    render_section_title("Feature-Level Drift Results")
-
-    feat_df = feat_df_all.copy()
-    if feat_df.empty:
-        st.info("No feature results available.")
+with c2:
+    report = st.session_state.get("active_drift")
+    if report:
+        render_section_title("Overall Distribution Health")
+        score = int(100 - (min(report["average_psi"] * 2, 1) * 100))
+        component_health_score(score, label="STABLE" if score > 75 else "DRIFTED")
     else:
-        sev_counts = feat_df["severity_label"].value_counts().to_dict()
-        sev1, sev2, sev3 = st.columns(3)
-        sev1.metric("High Severity Features", int(sev_counts.get("high", 0)))
-        sev2.metric("Medium Severity Features", int(sev_counts.get("medium", 0)))
-        sev3.metric("Low Severity Features", int(sev_counts.get("low", 0)))
+        component_alert_card("No active report. Configure and run a drift scan to begin monitoring.", tone="info")
 
-        rank_metric = st.selectbox(
-            "Feature importance metric",
-            options=["PSI", "KS Statistic", "Composite Severity"],
-            index=0,
-            help="Ranks feature drift severity using PSI, KS statistic, or a blended score.",
-        )
+# ---------------------------------------------------------------------------
+# Statistical Deep Dive
+# ---------------------------------------------------------------------------
+if report:
+    render_spacer("md")
+    # KPI Row
+    k1, k2, k3, k4 = st.columns(4)
+    with k1: component_kpi_card("Analyzed", str(report["features_analyzed"]), "Dimensions", icon="🔢")
+    with k2: component_kpi_card("Drifted", str(report["features_drifted"]), "Flagged", icon="⚠️", tone="danger" if report["features_drifted"] > 0 else "success")
+    with k3: component_kpi_card("Avg PSI", f"{report['average_psi']:.4f}", "Stability Index", icon="📊", tone="warning" if report["average_psi"] > 0.1 else "success")
+    with k4: component_kpi_card("Severity", report["overall_severity"].upper(), "Platform Risk", icon="⚖️", tone="danger" if report["overall_severity"]=="critical" else "success")
+    
+    render_spacer("md")
+    t_feat, t_hist = st.tabs(["🧬 Feature Stability", "📜 Analysis History"])
+    
+    with t_feat:
+        col_list, col_insights = st.columns([2, 1], gap="medium")
+        with col_list:
+            feat_df = pd.DataFrame(report["feature_results"])
+            feat_df.columns = [c.replace('_',' ').title() for c in feat_df.columns]
+            render_summary_table(feat_df, columns=["Feature", "Severity", "Psi", "P Value"], sort_by="Psi")
+        with col_insights:
+            component_insight_panel([
+                f"PSI > 0.25 detected in {len(feat_df[feat_df['Severity']=='significant'])} features.",
+                "Retraining is recommended to align with distribution shift.",
+                "KS-tests confirm shape-level divergence."
+            ])
 
-        if rank_metric == "KS Statistic":
-            ranked = feat_df.sort_values("ks_statistic", ascending=False).copy()
-        elif rank_metric == "Composite Severity":
-            ranked = feat_df.sort_values("drift_priority_score", ascending=False).copy()
-        else:
-            ranked = feat_df.sort_values("psi", ascending=False).copy()
+    with t_hist:
+        history = list_drift_reports(limit=15)
+        if history:
+            h_df = pd.DataFrame(history)
+            h_df.columns = [c.replace('_',' ').title() for c in h_df.columns]
+            render_summary_table(h_df, columns=["Dataset", "Features Drifted", "Drift Score", "Created At"])
 
-        render_section_title("Feature Importance Ranking", margin_top_px=12)
-        ranked_view = ranked[["feature", "severity_label", "psi", "ks_statistic", "p_value", "drift_priority_score"]].copy()
-        ranked_view.insert(0, "rank", range(1, len(ranked_view) + 1))
-        ranked_view.columns = ["Rank", "Feature", "Severity", "PSI", "KS Statistic", "P Value", "Priority Score"]
-        render_summary_table(
-            ranked_view,
-            key_prefix="drift_feature_rank",
-            columns=ranked_view.columns.tolist(),
-            sort_by="Rank",
-            filterable_columns=["Severity"],
-            max_rows=25,
-        )
-
-        render_section_title("Feature Drift Health Bars", margin_top_px=12)
-        max_psi = max(float(ranked["psi"].max()), 0.25)
-        bar_rows = []
-        for _, r in ranked.head(18).iterrows():
-            sev = str(r.get("severity_label", "low"))
-            sev_key = "retrain" if sev == "high" else "monitor" if sev == "medium" else "stable"
-            width_pct = max(2.0, min(100.0, float(r.get("psi", 0.0)) / max_psi * 100.0))
-            drift_badge = "drifted" if bool(r.get("drift_detected", False)) else "stable"
-            tooltip = (
-                f"Feature: {r.get('feature')} | PSI: {float(r.get('psi', 0.0)):.4f} | "
-                f"KS: {float(r.get('ks_statistic', 0.0)):.4f} | p-value: {float(r.get('p_value', 0.0)):.4f}"
-            )
-            bar_rows.append(
-                "<div class='feat-item' title='" + escape(tooltip) + "'>"
-                "<div class='feat-top'>"
-                "<div class='feat-name'>" + escape(str(r.get("feature", ""))) + "</div>"
-                "<div class='feat-metas'>"
-                f"PSI {float(r.get('psi', 0.0)):.4f} | KS {float(r.get('ks_statistic', 0.0)):.4f} | "
-                f"<span class='feat-badge {sev_key}'>{drift_badge}</span>"
-                "</div></div>"
-                "<div class='feat-bar-wrap'>"
-                f"<div class='feat-bar {sev_key}' style='width:{width_pct:.1f}%'></div>"
-                "</div></div>"
-            )
-
-        st.markdown("<div class='feat-stack'>" + "".join(bar_rows) + "</div>", unsafe_allow_html=True)
-
-        affected = feat_df[feat_df["drift_detected"]].sort_values("psi", ascending=False)
-        if not affected.empty:
-            render_section_title("Most Affected Features", margin_top_px=20)
-            preview = affected[["feature", "severity_label", "psi", "p_value"]].head(10).copy()
-            preview.columns = ["Feature", "Severity", "PSI", "P Value"]
-            preview["Severity"] = preview["Severity"].str.upper()
-            st.dataframe(preview[["Feature", "Severity", "PSI", "P Value"]], width="stretch", hide_index=True)
-
-        # PSI bar chart
-        render_section_title("PSI by Feature", margin_top_px=20)
-        psi_sorted = feat_df.sort_values("psi", ascending=False).head(20)
-        bar_colors = psi_sorted["severity_label"].map(
-            {"high": "#ef4444", "medium": "#f59e0b", "low": "#22c55e"}
-        )
-        fig = go.Figure(
-            go.Bar(
-                x=psi_sorted["psi"],
-                y=psi_sorted["feature"],
-                orientation="h",
-                marker_color=bar_colors.tolist(),
-                marker_line_width=0,
-            )
-        )
-        fig.add_vline(x=0.10, line_dash="dot", line_color="#f59e0b",
-                      annotation_text="Moderate (0.10)", annotation_position="top right")
-        fig.add_vline(x=0.25, line_dash="dot", line_color="#ef4444",
-                      annotation_text="Significant (0.25)", annotation_position="top right")
-        fig.update_layout(
-            margin=dict(r=80),
-        )
-        apply_plotly_layout(fig, height=max(300, len(psi_sorted) * 22), x_title="PSI")
-        fig.update_yaxes(showgrid=False, tickfont=dict(size=11))
-        st.plotly_chart(fig, width="stretch")
-
-
-with tab_dist:
-    if not load_drift_charts:
-        st.info("Enable 'Load heavy drift visualizations' above to render distribution overlays.")
-    else:
-        render_section_title("Distribution Overlay - Reference vs Current")
-        st.caption("Select features to compare their reference (blue) and current (orange) distributions.")
-
-        ref_df = pd.DataFrame(ref_arr, columns=feat_names)
-        cur_df = pd.DataFrame(cur_arr, columns=feat_names)
-
-        selected = st.multiselect(
-            "Features",
-            options=feat_names,
-            default=feat_names[:4],
-            max_selections=9,
-        )
-
-        if not selected:
-            st.info("Select at least one feature.")
-        else:
-            n_cols = min(3, len(selected))
-            rows_list = [selected[i:i + n_cols] for i in range(0, len(selected), n_cols)]
-
-            for row_feats in rows_list:
-                cols = st.columns(n_cols)
-                for col_widget, feat in zip(cols, row_feats):
-                    with col_widget:
-                        fig = go.Figure()
-                        fig.add_trace(
-                            go.Histogram(
-                                x=ref_df[feat],
-                                name="Reference",
-                                opacity=0.65,
-                                nbinsx=30,
-                                marker_color="#2563eb",
-                            )
-                        )
-                        fig.add_trace(
-                            go.Histogram(
-                                x=cur_df[feat],
-                                name="Current",
-                                opacity=0.65,
-                                nbinsx=30,
-                                marker_color="#f97316",
-                            )
-                        )
-                        fig.update_layout(
-                            barmode="overlay",
-                            height=220,
-                            margin=dict(l=0, r=0, t=28, b=0),
-                            paper_bgcolor="white",
-                            plot_bgcolor="white",
-                            title=dict(text=feat, font=dict(size=11)),
-                            xaxis=dict(showgrid=False, title=None),
-                            yaxis=dict(showgrid=False, title=None, showticklabels=False),
-                            legend=dict(
-                                orientation="h",
-                                yanchor="bottom",
-                                y=1.0,
-                                xanchor="right",
-                                x=1,
-                                font=dict(size=9),
-                            ),
-                            showlegend=(feat == selected[0]),
-                        )
-                        st.plotly_chart(fig, width="stretch")
-
-
-with tab_psi:
-    if not load_drift_charts:
-        st.info("Enable 'Load heavy drift visualizations' above to render PSI charts.")
-    else:
-        st.markdown('<div class="section-title">PSI Interpretation Guide</div>', unsafe_allow_html=True)
-        st.markdown(
-            """
-            <div class='psi-guide-wrap'>
-                <div class='psi-guide' title='PSI below 0.10 usually indicates healthy stability.'>
-                    <span class='psi-chip stable'>Stable</span>
-                    <div class='psi-desc'><b>PSI &lt; 0.10</b> â€” distribution remains healthy. Continue baseline monitoring.</div>
-                </div>
-                <div class='psi-guide' title='PSI between 0.10 and 0.25 requires closer observation and root-cause checks.'>
-                    <span class='psi-chip monitor'>Monitor</span>
-                    <div class='psi-desc'><b>0.10 â‰¤ PSI â‰¤ 0.25</b> â€” moderate shift. Review data quality and feature behavior.</div>
-                </div>
-                <div class='psi-guide' title='PSI above 0.25 often suggests meaningful distribution change and retraining need.'>
-                    <span class='psi-chip retrain'>Retrain</span>
-                    <div class='psi-desc'><b>PSI &gt; 0.25</b> â€” significant drift. Plan retraining and upstream data audit.</div>
-                </div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-
-        st.markdown('<div class="section-title" style="margin-top:24px">KS Test p-value Heatmap</div>', unsafe_allow_html=True)
-        feat_df_psi = pd.DataFrame(report["feature_results"]).sort_values("psi", ascending=False)
-        if not feat_df_psi.empty:
-            top20 = feat_df_psi.head(20)
-            fig = go.Figure(
-                go.Bar(
-                    x=top20["feature"],
-                    y=top20["p_value"],
-                    marker_color=[
-                        "#ef4444" if p < alpha else "#22c55e" for p in top20["p_value"]
-                    ],
-                    text=[f"{p:.4f}" for p in top20["p_value"]],
-                    textposition="outside",
-                )
-            )
-            fig.add_hline(y=alpha, line_dash="dot", line_color="#374151",
-                          annotation_text=f"alpha = {alpha}")
-            fig.update_layout(
-                height=340,
-                margin=dict(l=0, r=0, t=10, b=60),
-                plot_bgcolor="white",
-                paper_bgcolor="white",
-                xaxis=dict(showgrid=False, tickangle=-30, title=None),
-                yaxis=dict(showgrid=True, gridcolor="#f1f5f9", title="p-value"),
-                showlegend=False,
-            )
-            st.plotly_chart(fig, width="stretch")
-
-
-with tab_history:
-    st.markdown('<div class="section-title">Past Drift Reports</div>', unsafe_allow_html=True)
-
-    history = list_drift_reports(limit=30)
-    if not history:
-        st.info("No historical drift reports found.")
-    else:
-        hist_df = pd.DataFrame(history)[
-            ["report_id", "dataset", "reference_size", "current_size",
-             "drift_detected", "features_drifted", "drift_score", "created_at"]
-        ]
-        hist_df["drift_detected"] = hist_df["drift_detected"].map({1: "Yes", 0: "No"})
-        hist_df["drift_score"] = hist_df["drift_score"].apply(
-            lambda x: f"{x:.4f}" if x is not None else "—"
-        )
-        hist_df.columns = [c.replace("_", " ").title() for c in hist_df.columns]
-        render_summary_table(
-            hist_df,
-            key_prefix="drift_history",
-            columns=hist_df.columns.tolist(),
-            sort_by="Created At",
-            filterable_columns=["Dataset", "Drift Detected"],
-            max_rows=25,
-        )
-
+st.divider()
+st.caption("📈 Statistical Observability Core v2.0-Componentized")

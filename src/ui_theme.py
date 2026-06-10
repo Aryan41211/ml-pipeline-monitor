@@ -682,7 +682,7 @@ def render_sidebar_nav() -> None:
     
     obs_items = [
         ("📈", "Data Drift", "pages/4_Data_Drift.py"),
-        ("🖥️", "System Health", "pages/5_System_Health.py"),
+        ("🖥️", "System Health", "pages/5_Data_Health.py"),
         ("⚖️", "Governance", "pages/6_Governance.py"),
     ]
     
@@ -750,3 +750,21 @@ def render_expandable_rows(df: pd.DataFrame, *, title_col: str, detail_cols: Seq
         badge = hp_status_badge(str(row[badge_col])) if badge_col else ""
         with st.expander(f"{row[title_col]} {badge}"):
             for c in detail_cols: st.markdown(f"**{c}:** {row[c]}")
+
+
+def render_error_boundary(error: Exception, page_name: str = "page") -> None:
+    """Render a user-friendly error boundary for page-level exceptions."""
+    import traceback
+    st.error(f"An error occurred in {page_name}")
+    with st.expander("Error Details (for debugging)"):
+        st.code("".join(traceback.format_exception(type(error), error, error.__traceback__)))
+    st.info("Please refresh the page or contact support if the issue persists.")
+
+
+def safe_render(page_name: str, render_fn, *args, **kwargs):
+    """Safely render a page component with error boundary."""
+    try:
+        return render_fn(*args, **kwargs)
+    except Exception as e:
+        render_error_boundary(e, page_name)
+        st.stop()

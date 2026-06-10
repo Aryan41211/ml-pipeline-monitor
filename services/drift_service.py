@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from typing import Any, Dict
+from typing import Any, Dict, List, Optional
 
 import numpy as np
 import pandas as pd
@@ -11,7 +11,7 @@ import pandas as pd
 from src.alerts import emit_console_alert, emit_email_alert
 from src.config_loader import load_config
 from src.data_loader import DATASET_OPTIONS, load_dataset
-from src.database import get_drift_reports, save_drift_report
+from src.database import get_drift_reports, get_drift_reference, save_drift_reference, save_drift_report
 from src.drift_detector import run_drift_analysis
 from src.logger import get_app_logger
 
@@ -70,18 +70,22 @@ def run_drift_and_persist(
     mean_shift: float,
     alpha: float,
 ) -> Dict[str, Any]:
-    """Run drift analysis and persist report in one service call."""
+    """Run drift analysis and persist report in one service call.
+    
+    Compares current production data against stored reference distribution
+    (from training data at model promotion time).
+    """
     cfg = load_config()
     pipeline_cfg = cfg.get("pipeline", {})
     monitoring_cfg = cfg.get("monitoring", {})
 
+    # Load current production data (simulated with test split + noise/shift for demo)
     ds = load_dataset(
         dataset_key,
-        test_size=float(pipeline_cfg.get("test_size", 0.40)),
+        test_size=float(pipeline_cfg.get("test_size", 0.20)),
         random_state=int(pipeline_cfg.get("random_seed", 42)),
     )
 
-    reference = ds["X_train"].copy()
     current = ds["X_test"].copy()
 
     rng = np.random.default_rng(seed=7)
@@ -89,6 +93,16 @@ def run_drift_and_persist(
         current = current + rng.normal(0, noise_level, size=current.shape)
     if mean_shift > 0:
         current = current + mean_shift
+
+    # Get stored reference distribution
+    ref_record = get_drift_reference(dataset_label)
+    if ref_record is None:
+        # No reference stored yet - use training data as reference and store it
+        reference = ds["X_train"].copy()
+        save_drift_reference(dataset_label, ds["feature_names"], reference.values)
+        LOGGER.info("Stored initial reference distribution for dataset=%s", dataset_label)
+    else:
+        reference = pd.DataFrame(ref_record["reference_data"], columns=ref_record["feature_names"])
 
     report = run_drift_analysis(
         pd.DataFrame(reference, columns=ds["feature_names"]),

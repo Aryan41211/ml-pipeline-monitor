@@ -15,6 +15,21 @@ def _is_enabled() -> bool:
     return bool(load_config().get("mlflow", {}).get("enabled", False))
 
 
+def _log_model_to_mlflow(model: Any, artifact_path: str = "model") -> None:
+    """Log model using appropriate MLflow flavor based on model type."""
+    model_class_name = model.__class__.__name__
+    
+    if "XGB" in model_class_name or "XGBoost" in model_class_name:
+        import mlflow.xgboost
+        mlflow.xgboost.log_model(model, artifact_path=artifact_path)
+    elif "LGBM" in model_class_name:
+        import mlflow.lightgbm
+        mlflow.lightgbm.log_model(model, artifact_path=artifact_path)
+    else:
+        import mlflow.sklearn
+        mlflow.sklearn.log_model(model, artifact_path=artifact_path)
+
+
 def log_pipeline_run(
     *,
     run_name: str,
@@ -29,7 +44,6 @@ def log_pipeline_run(
 
     try:
         import mlflow
-        import mlflow.sklearn
 
         cfg = load_config().get("mlflow", {})
         tracking_uri = str(cfg.get("tracking_uri", f"file:{(ROOT_DIR / 'mlruns').as_posix()}"))
@@ -45,6 +59,6 @@ def log_pipeline_run(
                 art = Path(artifact_path)
                 if art.exists():
                     mlflow.log_artifact(str(art), artifact_path="artifacts")
-            mlflow.sklearn.log_model(model, artifact_path="model")
+            _log_model_to_mlflow(model, artifact_path="model")
     except Exception as exc:
         LOGGER.warning("MLflow logging skipped: %s", exc)

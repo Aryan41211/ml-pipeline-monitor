@@ -98,6 +98,15 @@ def initialize_db() -> None:
                 created_at       TEXT    DEFAULT CURRENT_TIMESTAMP
             );
 
+            CREATE TABLE IF NOT EXISTS drift_references (
+                id               INTEGER PRIMARY KEY AUTOINCREMENT,
+                dataset          TEXT    NOT NULL,
+                feature_names    TEXT    NOT NULL,
+                reference_data   TEXT    NOT NULL,
+                created_at       TEXT    DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(dataset)
+            );
+
             CREATE INDEX IF NOT EXISTS idx_experiments_dataset_created
                 ON experiments(dataset, created_at DESC);
 
@@ -174,6 +183,14 @@ def initialize_db() -> None:
                 drift_score      DOUBLE PRECISION,
                 features_drifted INTEGER DEFAULT 0,
                 feature_results  TEXT,
+                created_at       TEXT    DEFAULT CURRENT_TIMESTAMP::text
+            );
+
+            CREATE TABLE IF NOT EXISTS drift_references (
+                id               BIGSERIAL PRIMARY KEY,
+                dataset          TEXT    NOT NULL UNIQUE,
+                feature_names    TEXT    NOT NULL,
+                reference_data   TEXT    NOT NULL,
                 created_at       TEXT    DEFAULT CURRENT_TIMESTAMP::text
             );
 
@@ -593,6 +610,33 @@ def update_model_stage(model_id: str, stage: str) -> None:
                     ),
                 )
 
+            # Store reference distribution from training data for drift detection
+            try:
+                from src.data_loader import load_dataset
+                from src.config_loader import load_config
+                pipeline_cfg = load_config().get("pipeline", {})
+                ds = load_dataset(
+                    dataset,
+                    test_size=float(pipeline_cfg.get("test_size", 0.20)),
+                    random_state=int(pipeline_cfg.get("random_seed", 42)),
+                )
+                import json
+                import numpy as np
+                conn.execute(
+                    """
+                    INSERT INTO drift_references (dataset, feature_names, reference_data)
+                    VALUES (?, ?, ?)
+                    ON CONFLICT(dataset) DO UPDATE SET
+                        feature_names=excluded.feature_names,
+                        reference_data=excluded.reference_data
+                    """,
+                    (dataset, json.dumps(ds["feature_names"]), json.dumps(ds["X_train"].values.tolist())),
+                )
+            except Exception as exc:
+                # Log but don't fail promotion if reference storage fails
+                import logging
+                logging.getLogger(__name__).warning("Failed to store drift reference for %s: %s", dataset, exc)
+
         conn.execute(
             "UPDATE models SET stage = ? WHERE model_id = ?",
             (stage, model_id),
@@ -656,3 +700,36 @@ def get_drift_reports(limit: int = 50) -> List[Dict[str, Any]]:
             (limit,),
         ).fetchall()
     return [dict(r) for r in rows]
+
+
+def save_drift_reference(dataset: str, feature_names: List[str], reference_data: np.ndarray) -> None:
+    """Store reference distribution for a dataset."""
+    import json
+    import numpy as np
+    with get_connection() as conn:
+        conn.execute(
+            """
+            INSERT INTO drift_references (dataset, feature_names, reference_data)
+            VALUES (?, ?, ?)
+            ON CONFLICT(dataset) DO UPDATE SET
+                feature_names=excluded.feature_names,
+                reference_data=excluded.reference_data
+            """,
+            (dataset, json.dumps(feature_names), json.dumps(reference_data.tolist())),
+        )
+
+
+def get_drift_reference(dataset: str) -> Optional[Dict[str, Any]]:
+    """Retrieve stored reference distribution for a dataset."""
+    import json
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT * FROM drift_references WHERE dataset = ?",
+            (dataset,),
+        ).fetchone()
+    if row:
+        d = dict(row)
+        d["feature_names"] = json.loads(d["feature_names"])
+        d["reference_data"] = np.array(json.loads(d["reference_data"]))
+        return d
+    return None

@@ -81,6 +81,8 @@ def test_run_drift_and_persist_success(monkeypatch):
 
     monkeypatch.setattr(drift_service, "save_drift_report", _fake_save)
     monkeypatch.setattr(drift_service, "emit_console_alert", lambda *args, **kwargs: None)
+    monkeypatch.setattr(drift_service, "get_drift_reference", lambda dataset: None)
+    monkeypatch.setattr(drift_service, "save_drift_reference", lambda *args, **kwargs: None)
 
     out = drift_service.run_drift_and_persist(
         dataset_label="Iris",

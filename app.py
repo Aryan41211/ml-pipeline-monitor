@@ -9,7 +9,7 @@ import streamlit as st
 
 from services.app_service import get_dashboard_snapshot, initialize_application
 from services.telemetry_service import track_user_action
-from src.auth import current_role, render_auth_controls
+from src.auth import current_role, render_auth_controls, is_authenticated, is_auth_enabled
 from src.ui_theme import (
     apply_ui_theme,
     component_health_score,
@@ -36,6 +36,10 @@ with st.sidebar:
     render_sidebar_nav()
     st.divider()
     render_auth_controls()
+
+if not is_authenticated():
+    st.warning("Please log in to access the dashboard.")
+    st.stop()
 
 # ---------------------------------------------------------------------------
 # Data Logic

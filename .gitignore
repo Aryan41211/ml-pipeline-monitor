@@ -35,3 +35,11 @@ Thumbs.db
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Coverage & logs
+.coverage
+htmlcov/
+.coverage.*
+logs/
+playwright-report/
+*.log

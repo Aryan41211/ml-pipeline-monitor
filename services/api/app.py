@@ -3,17 +3,22 @@
 from __future__ import annotations
 
 import os
+import time
 from contextlib import asynccontextmanager
 from typing import Any, Dict, List, Optional, Union
 
-from fastapi import Depends, FastAPI, HTTPException, Security
+from fastapi import Depends, FastAPI, HTTPException, Request, Security
+from fastapi.responses import JSONResponse
 from fastapi.security import APIKeyHeader
 from pydantic import BaseModel, Field
 
 from services.model_service import predict_from_payload
+from services.telemetry_service import track_user_action
 from src.database import initialize_db
+from src.logger import get_app_logger
 
 
+LOGGER = get_app_logger("api")
 API_KEY_HEADER = APIKeyHeader(name="X-API-Key", auto_error=False)
 
 
@@ -55,15 +60,60 @@ app = FastAPI(
 )
 
 
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    """Log all requests with timing."""
+    start = time.time()
+    response = await call_next(request)
+    duration = time.time() - start
+    LOGGER.info(
+        "api_request",
+        extra={
+            "method": request.method,
+            "path": request.url.path,
+            "status_code": response.status_code,
+            "duration_ms": round(duration * 1000, 2),
+        },
+    )
+    return response
+
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    """Global exception handler for unhandled errors."""
+    LOGGER.exception("Unhandled exception: %s", exc)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal server error"},
+    )
+
+
 @app.get("/health")
 def health() -> Dict[str, str]:
     """Basic health endpoint."""
     return {"status": "ok"}
 
 
+@app.get("/health/detailed")
+def detailed_health() -> Dict[str, Any]:
+    """Detailed health endpoint with system metrics."""
+    from src.system_monitor import get_system_metrics, get_process_metrics
+    
+    sys_metrics = get_system_metrics()
+    proc_metrics = get_process_metrics()
+    
+    return {
+        "status": "ok",
+        "system": sys_metrics,
+        "process": proc_metrics,
+    }
+
+
 @app.post("/predict")
 def predict(request: PredictRequest, api_key: str = Depends(verify_api_key)) -> Dict[str, Any]:
     """Predict using latest production model artifact from registry."""
+    start = time.time()
+    
     try:
         # Backward compatibility: allow legacy monkeypatches on services.api.main.
         try:
@@ -73,10 +123,16 @@ def predict(request: PredictRequest, api_key: str = Depends(verify_api_key)) -> 
         except Exception:
             predict_fn = predict_from_payload
 
-        return predict_fn(payload=request.features, dataset=request.dataset)
+        result = predict_fn(payload=request.features, dataset=request.dataset)
+        
+        duration = time.time() - start
+        track_user_action(page="api", action="prediction", metadata={"duration_ms": round(duration * 1000, 2)})
+        
+        return result
     except FileNotFoundError as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
+        LOGGER.exception("Prediction failed")
         raise HTTPException(status_code=500, detail=f"Prediction failed: {exc}") from exc

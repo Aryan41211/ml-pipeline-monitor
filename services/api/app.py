@@ -15,9 +15,13 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 
+import signal
+import sys
+
 from services.model_service import predict_from_payload
 from services.telemetry_service import track_user_action
 from src.database import initialize_db
+from src.db_engine import get_backend
 from src.logger import get_app_logger, get_correlation_id, set_correlation_id
 
 
@@ -55,9 +59,54 @@ class PredictRequest(BaseModel):
 
 @asynccontextmanager
 async def _lifespan(_: FastAPI):
-    """Initialize persistence before serving requests."""
+    """Initialize persistence before serving requests, with graceful shutdown."""
     initialize_db()
-    yield
+    
+    # Setup signal handlers for graceful shutdown
+    shutdown_event = asyncio.Event()
+    
+    def _signal_handler(signum: int, frame: Any) -> None:
+        LOGGER.info("Received signal %s, initiating graceful shutdown", signum)
+        shutdown_event.set()
+    
+    # Register handlers (SIGTERM for container shutdown, SIGINT for Ctrl+C)
+    for sig in (signal.SIGTERM, signal.SIGINT):
+        try:
+            signal.signal(sig, _signal_handler)
+        except (OSError, ValueError):
+            # Not available on all platforms (e.g., Windows)
+            pass
+    
+    # Run shutdown watcher in background
+    async def _shutdown_watcher():
+        await shutdown_event.wait()
+        LOGGER.info("Shutdown signal received, closing database connections")
+        try:
+            backend = get_backend()
+            if hasattr(backend, "close_all"):
+                backend.close_all()
+        except Exception as e:
+            LOGGER.warning("Error during shutdown cleanup: %s", e)
+        sys.exit(0)
+    
+    import asyncio
+    watcher_task = asyncio.create_task(_shutdown_watcher())
+    
+    try:
+        yield
+    finally:
+        watcher_task.cancel()
+        try:
+            await watcher_task
+        except asyncio.CancelledError:
+            pass
+        # Final cleanup
+        try:
+            backend = get_backend()
+            if hasattr(backend, "close_all"):
+                backend.close_all()
+        except Exception as e:
+            LOGGER.warning("Error during final cleanup: %s", e)
 
 
 app = FastAPI(

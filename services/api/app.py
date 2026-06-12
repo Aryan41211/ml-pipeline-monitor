@@ -11,6 +11,9 @@ from fastapi import Depends, FastAPI, HTTPException, Request, Security
 from fastapi.responses import JSONResponse
 from fastapi.security import APIKeyHeader
 from pydantic import BaseModel, Field
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
 
 from services.model_service import predict_from_payload
 from services.telemetry_service import track_user_action
@@ -20,6 +23,10 @@ from src.logger import get_app_logger
 
 LOGGER = get_app_logger("api")
 API_KEY_HEADER = APIKeyHeader(name="X-API-Key", auto_error=False)
+
+# Rate limiter: 60 requests per minute per IP by default
+RATE_LIMIT = os.getenv("MLMONITOR_RATE_LIMIT", "60/minute")
+limiter = Limiter(key_func=get_remote_address, default_limits=[RATE_LIMIT])
 
 
 async def verify_api_key(api_key: str = Security(API_KEY_HEADER)) -> str:
@@ -58,6 +65,9 @@ app = FastAPI(
     version="1.0.0",
     lifespan=_lifespan,
 )
+
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 
 @app.middleware("http")
@@ -110,7 +120,8 @@ def detailed_health() -> Dict[str, Any]:
 
 
 @app.post("/predict")
-def predict(request: PredictRequest, api_key: str = Depends(verify_api_key)) -> Dict[str, Any]:
+@limiter.limit(RATE_LIMIT)
+def predict(request: Request, request_body: PredictRequest, api_key: str = Depends(verify_api_key)) -> Dict[str, Any]:
     """Predict using latest production model artifact from registry."""
     start = time.time()
     
@@ -123,7 +134,7 @@ def predict(request: PredictRequest, api_key: str = Depends(verify_api_key)) -> 
         except Exception:
             predict_fn = predict_from_payload
 
-        result = predict_fn(payload=request.features, dataset=request.dataset)
+        result = predict_fn(payload=request_body.features, dataset=request_body.dataset)
         
         duration = time.time() - start
         track_user_action(page="api", action="prediction", metadata={"duration_ms": round(duration * 1000, 2)})

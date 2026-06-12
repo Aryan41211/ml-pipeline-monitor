@@ -99,23 +99,51 @@ async def global_exception_handler(request: Request, exc: Exception):
 
 
 @app.get("/health")
-def health() -> Dict[str, str]:
-    """Basic health endpoint."""
-    return {"status": "ok"}
+def health() -> Dict[str, Any]:
+    """Basic health endpoint with database connectivity check."""
+    from src.db_engine import get_backend
+    
+    db_status = "ok"
+    try:
+        backend = get_backend()
+        conn = backend.connect()
+        conn.execute("SELECT 1")
+        conn.close()
+    except Exception as e:
+        db_status = f"error: {e}"
+    
+    return {
+        "status": "ok" if db_status == "ok" else "degraded",
+        "database": db_status,
+    }
 
 
 @app.get("/health/detailed")
 def detailed_health() -> Dict[str, Any]:
-    """Detailed health endpoint with system metrics."""
+    """Detailed health endpoint with system metrics and database check."""
     from src.system_monitor import get_system_metrics, get_process_metrics
+    from src.db_engine import get_backend
     
     sys_metrics = get_system_metrics()
     proc_metrics = get_process_metrics()
     
+    db_status = "ok"
+    db_info = {}
+    try:
+        backend = get_backend()
+        conn = backend.connect()
+        conn.execute("SELECT 1")
+        conn.close()
+        db_info = {"backend": backend.name, "connected": True}
+    except Exception as e:
+        db_status = f"error: {e}"
+        db_info = {"connected": False, "error": str(e)}
+    
     return {
-        "status": "ok",
+        "status": "ok" if db_status == "ok" else "degraded",
         "system": sys_metrics,
         "process": proc_metrics,
+        "database": db_info,
     }
 
 

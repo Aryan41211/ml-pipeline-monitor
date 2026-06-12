@@ -62,6 +62,26 @@ def _severity_from_report(report: Dict[str, Any]) -> str:
     return "stable"
 
 
+def _validate_drift_inputs(
+    dataset_label: str,
+    dataset_key: str,
+    noise_level: float,
+    mean_shift: float,
+    alpha: float,
+) -> None:
+    """Validate drift analysis input parameters."""
+    if not dataset_label or not dataset_label.strip():
+        raise ValueError("dataset_label is required")
+    if not dataset_key or dataset_key not in DATASET_OPTIONS.values():
+        raise ValueError(f"Invalid dataset_key: {dataset_key}")
+    if noise_level < 0 or noise_level > 10:
+        raise ValueError("noise_level must be between 0 and 10")
+    if mean_shift < 0 or mean_shift > 10:
+        raise ValueError("mean_shift must be between 0 and 10")
+    if alpha not in {0.01, 0.05, 0.10}:
+        raise ValueError("alpha must be one of: 0.01, 0.05, 0.10")
+
+
 def run_drift_and_persist(
     *,
     dataset_label: str,
@@ -75,6 +95,8 @@ def run_drift_and_persist(
     Compares current production data against stored reference distribution
     (from training data at model promotion time).
     """
+    _validate_drift_inputs(dataset_label, dataset_key, noise_level, mean_shift, alpha)
+
     cfg = load_config()
     pipeline_cfg = cfg.get("pipeline", {})
     monitoring_cfg = cfg.get("monitoring", {})

@@ -12,6 +12,7 @@ from services.telemetry_service import track_user_action
 from src.auth import current_role, render_auth_controls, is_authenticated, is_auth_enabled
 from src.ui_theme import (
     apply_ui_theme,
+    component_alert_card,
     component_health_score,
     component_insight_panel,
     component_kpi_card,
@@ -41,6 +42,9 @@ if not is_authenticated():
     st.warning("Please log in to access the dashboard.")
     st.stop()
 
+# Track page view
+track_user_action("page_view", page="dashboard")
+
 # ---------------------------------------------------------------------------
 # Data Logic
 # ---------------------------------------------------------------------------
@@ -49,7 +53,8 @@ def _load_dashboard():
     return get_dashboard_snapshot(limit=100)
 
 loading = st.empty()
-with loading.container(): render_loading_skeleton(lines=5)
+with loading.container(): 
+    render_loading_skeleton(lines=5)
 
 try:
     snapshot = _load_dashboard()
@@ -57,8 +62,10 @@ try:
     mdl_df = pd.DataFrame(snapshot.get("models", []))
     sys_snapshot = snapshot.get("system", {})
     loading.empty()
-except Exception:
-    loading.empty(); st.error("Telemetry link severed."); st.stop()
+except Exception as e:
+    loading.empty()
+    component_alert_card(f"Failed to load dashboard data: {e}", tone="danger")
+    st.stop()
 
 # ---------------------------------------------------------------------------
 # KPI & Health Scoring
@@ -81,7 +88,9 @@ with col_head:
     st.markdown('<div class="ui-fade-in"><h1 style="margin:0; font-family:\'Poppins\', sans-serif;">Command Center</h1><p style="color:var(--color-text-tertiary);">Real-time MLOps orchestration and fleet observability.</p></div>', unsafe_allow_html=True)
 with col_action:
     st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
-    if st.button("Sync Platform", type="primary", use_container_width=True): st.rerun()
+    if st.button("Sync Platform", type="primary", use_container_width=True): 
+        track_user_action("sync_platform", page="dashboard")
+        st.rerun()
 
 # KPI Row
 c1, c2, c3, c4 = st.columns(4)
@@ -91,6 +100,10 @@ with c3: component_kpi_card("Serving", str(len(mdl_df[mdl_df["stage"]=="producti
 with c4: component_kpi_card("Accuracy", f"{best_acc:.3f}", "Best Result", icon="🏆", tone="success")
 
 render_spacer("md")
+
+# Empty state handling
+if exp_df.empty:
+    component_alert_card("No experiments recorded yet. Run a pipeline to populate the dashboard.", tone="info")
 
 # Executive Section
 m_left, m_mid, m_right = st.columns([2, 1, 1], gap="medium")
@@ -102,6 +115,8 @@ with m_left:
         fig = px.area(exp_df.sort_values("ts"), x="ts", y="duration_seconds", color_discrete_sequence=["#6366F1"])
         fig.update_layout(height=280, margin=dict(l=0,r=0,t=0,b=0))
         st.plotly_chart(fig, use_container_width=True)
+    else:
+        component_alert_card("No experiment data available for throughput chart.", tone="info")
 
 with m_mid:
     render_section_title("Platform Score")
@@ -109,11 +124,14 @@ with m_mid:
 
 with m_right:
     render_section_title("AI Context")
-    component_insight_panel([
-        f"Success rate stable at {success_rate:.1f}%.",
-        "XGBoost yields 12% higher F1 than Linear models.",
-        "System latency is within P99 bounds."
-    ])
+    insights = []
+    if not exp_df.empty:
+        insights.append(f"Success rate stable at {success_rate:.1f}%.")
+        insights.append("XGBoost yields 12% higher F1 than Linear models.")
+    else:
+        insights.append("Run experiments to generate insights.")
+    insights.append("System latency is within P99 bounds.")
+    component_insight_panel(insights)
 
 render_spacer("md")
 
@@ -122,14 +140,17 @@ b_left, b_right = st.columns([1.5, 1], gap="medium")
 
 with b_left:
     render_section_title("Recent Activity Feed")
-    events = []
-    for _, r in exp_df.head(6).iterrows():
-        events.append({
-            "time": str(r["created_at"])[11:16],
-            "label": f"{r['model_type']} on {r['dataset']}",
-            "status": r["status"]
-        })
-    component_timeline(events)
+    if not exp_df.empty:
+        events = []
+        for _, r in exp_df.head(6).iterrows():
+            events.append({
+                "time": str(r["created_at"])[11:16],
+                "label": f"{r['model_type']} on {r['dataset']}",
+                "status": r["status"]
+            })
+        component_timeline(events)
+    else:
+        component_alert_card("No recent activity.", tone="info")
 
 with b_right:
     render_section_title("Registry Fleet")
@@ -137,6 +158,8 @@ with b_right:
         fig_pie = px.pie(mdl_df, names="stage", hole=0.7, color_discrete_sequence=px.colors.qualitative.Set2)
         fig_pie.update_layout(height=240, margin=dict(l=0,r=0,t=0,b=0), showlegend=False)
         st.plotly_chart(fig_pie, use_container_width=True)
+    else:
+        component_alert_card("No models in registry.", tone="info")
 
 st.divider()
 st.caption("⚡ ML Pipeline Monitor v2.0-Componentized")

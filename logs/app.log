@@ -1,0 +1,117 @@
+{"time": "2026-04-19T22:58:09", "level": "ERROR", "logger": "alerts", "message": "ALERT: Data drift detected for dataset=Breast Cancer Wisconsin; ratio=0.97"}
+{"time": "2026-04-19T22:58:09", "level": "WARNING", "logger": "drift_service", "message": "Drift detected dataset=Breast Cancer Wisconsin severity=critical features_drifted=29"}
+{"time": "2026-04-19T23:05:11", "level": "INFO", "logger": "pipeline_service", "message": "Feature store miss: cached new splits for key=426d045574a1db53"}
+{"time": "2026-04-19T23:05:20", "level": "INFO", "logger": "pipeline_service", "message": "Pipeline run completed run_id=24C39744 dataset=Breast Cancer Wisconsin model=Logistic Regression version=1"}
+{"time": "2026-04-19T23:05:39", "level": "INFO", "logger": "pipeline_service", "message": "Feature store hit: reused splits for key=426d045574a1db53"}
+{"time": "2026-04-19T23:05:51", "level": "INFO", "logger": "pipeline_service", "message": "Pipeline run completed run_id=2794CC8C dataset=Breast Cancer Wisconsin model=Random Forest version=2"}
+{"time": "2026-04-19T23:06:15", "level": "INFO", "logger": "pipeline_service", "message": "Feature store hit: reused splits for key=426d045574a1db53"}
+{"time": "2026-04-19T23:06:28", "level": "INFO", "logger": "pipeline_service", "message": "Pipeline run completed run_id=344442E4 dataset=Breast Cancer Wisconsin model=Random Forest version=3"}
+{"time": "2026-04-20T00:31:43", "level": "INFO", "logger": "user_actions", "message": "{\"event\": \"user_action\", \"action\": \"refresh_dashboard\", \"page\": \"overview\", \"metadata\": {}}"}
+{"time": "2026-04-20T01:32:17", "level": "WARNING", "logger": "drift_service", "message": "Drift detected dataset=Iris severity=critical features_drifted=1"}
+{"time": "2026-04-20T01:32:32", "level": "WARNING", "logger": "drift_service", "message": "Drift detected dataset=Iris severity=critical features_drifted=1"}
+{"time": "2026-04-20T01:35:26", "level": "WARNING", "logger": "drift_service", "message": "Drift detected dataset=Iris severity=critical features_drifted=1"}
+{"time": "2026-04-20T01:39:48", "level": "WARNING", "logger": "drift_service", "message": "Drift detected dataset=Iris severity=critical features_drifted=1"}
+{"time": "2026-04-20T01:41:18", "level": "WARNING", "logger": "drift_service", "message": "Drift detected dataset=Iris severity=critical features_drifted=1"}
+{"time": "2026-04-20T01:45:48", "level": "WARNING", "logger": "drift_service", "message": "Drift detected dataset=Iris severity=critical features_drifted=1"}
+{"time": "2026-04-20T01:48:13", "level": "WARNING", "logger": "drift_service", "message": "Drift detected dataset=Iris severity=critical features_drifted=1"}
+{"time": "2026-06-08T03:05:04", "level": "INFO", "logger": "alerts", "message": "SIMULATED_EMAIL_ALERT: {'time': '2026-06-07T21:35:04+00:00', 'severity': 'warning', 'subject': 'Drift Warning', 'message': 'Drift ratio exceeded threshold', 'metadata': {'dataset': 'Iris', 'drift_ratio': 0.31}}"}
+{"time": "2026-06-08T03:05:05", "level": "INFO", "logger": "alerts", "message": "SIMULATED_EMAIL_ALERT: {'time': '2026-06-07T21:35:05+00:00', 'severity': 'critical', 'subject': 'Data drift alert', 'message': 'Drift detected for dataset=Iris', 'metadata': {'dataset': 'Iris', 'drift_ratio': 1.0, 'average_psi': 0.5, 'features_drifted': 1}}"}
+{"time": "2026-06-08T03:05:05", "level": "WARNING", "logger": "drift_service", "message": "Drift detected dataset=Iris severity=critical features_drifted=1"}
+{"time": "2026-06-11T04:25:23", "level": "INFO", "logger": "alerts", "message": "SIMULATED_EMAIL_ALERT: {'time': '2026-06-10T22:55:23+00:00', 'severity': 'warning', 'subject': 'Drift Warning', 'message': 'Drift ratio exceeded threshold', 'metadata': {'dataset': 'Iris', 'drift_ratio': 0.31}}"}
+{"time": "2026-06-11T04:32:42", "level": "INFO", "logger": "drift_service", "message": "Stored initial reference distribution for dataset=Iris"}
+{"time": "2026-06-11T04:32:42", "level": "INFO", "logger": "alerts", "message": "SIMULATED_EMAIL_ALERT: {'time': '2026-06-10T23:02:42+00:00', 'severity': 'critical', 'subject': 'Data drift alert', 'message': 'Drift detected for dataset=Iris', 'metadata': {'dataset': 'Iris', 'drift_ratio': 1.0, 'average_psi': 0.5, 'features_drifted': 1}}"}
+{"time": "2026-06-11T04:32:42", "level": "WARNING", "logger": "drift_service", "message": "Drift detected dataset=Iris severity=critical features_drifted=1"}
+{"time": "2026-06-11T04:36:58", "level": "INFO", "logger": "alerts", "message": "SIMULATED_EMAIL_ALERT: {'time': '2026-06-10T23:06:58+00:00', 'severity': 'warning', 'subject': 'Drift Warning', 'message': 'Drift ratio exceeded threshold', 'metadata': {'dataset': 'Iris', 'drift_ratio': 0.31}}"}
+{"time": "2026-06-11T04:36:58", "level": "INFO", "logger": "drift_service", "message": "Stored initial reference distribution for dataset=Iris"}
+{"time": "2026-06-11T04:36:58", "level": "INFO", "logger": "alerts", "message": "SIMULATED_EMAIL_ALERT: {'time': '2026-06-10T23:06:58+00:00', 'severity': 'critical', 'subject': 'Data drift alert', 'message': 'Drift detected for dataset=Iris', 'metadata': {'dataset': 'Iris', 'drift_ratio': 1.0, 'average_psi': 0.5, 'features_drifted': 1}}"}
+{"time": "2026-06-11T04:36:58", "level": "WARNING", "logger": "drift_service", "message": "Drift detected dataset=Iris severity=critical features_drifted=1"}
+{"time": "2026-06-12T00:39:47", "level": "INFO", "logger": "alerts", "message": "SIMULATED_EMAIL_ALERT: {'time': '2026-06-11T19:09:47+00:00', 'severity': 'warning', 'subject': 'Drift Warning', 'message': 'Drift ratio exceeded threshold', 'metadata': {'dataset': 'Iris', 'drift_ratio': 0.31}}"}
+{"time": "2026-06-12T00:39:48", "level": "INFO", "logger": "drift_service", "message": "Stored initial reference distribution for dataset=Iris"}
+{"time": "2026-06-12T00:39:48", "level": "INFO", "logger": "alerts", "message": "SIMULATED_EMAIL_ALERT: {'time': '2026-06-11T19:09:48+00:00', 'severity': 'critical', 'subject': 'Data drift alert', 'message': 'Drift detected for dataset=Iris', 'metadata': {'dataset': 'Iris', 'drift_ratio': 1.0, 'average_psi': 0.5, 'features_drifted': 1}}"}
+{"time": "2026-06-12T00:39:48", "level": "WARNING", "logger": "drift_service", "message": "Drift detected dataset=Iris severity=critical features_drifted=1"}
+{"time": "2026-06-12T00:45:45", "level": "INFO", "logger": "alerts", "message": "SIMULATED_EMAIL_ALERT: {'time': '2026-06-11T19:15:45+00:00', 'severity': 'warning', 'subject': 'Drift Warning', 'message': 'Drift ratio exceeded threshold', 'metadata': {'dataset': 'Iris', 'drift_ratio': 0.31}}"}
+{"time": "2026-06-12T00:45:46", "level": "INFO", "logger": "drift_service", "message": "Stored initial reference distribution for dataset=Iris"}
+{"time": "2026-06-12T00:45:46", "level": "INFO", "logger": "alerts", "message": "SIMULATED_EMAIL_ALERT: {'time': '2026-06-11T19:15:46+00:00', 'severity': 'critical', 'subject': 'Data drift alert', 'message': 'Drift detected for dataset=Iris', 'metadata': {'dataset': 'Iris', 'drift_ratio': 1.0, 'average_psi': 0.5, 'features_drifted': 1}}"}
+{"time": "2026-06-12T00:45:46", "level": "WARNING", "logger": "drift_service", "message": "Drift detected dataset=Iris severity=critical features_drifted=1"}
+{"time": "2026-06-12T00:52:49", "level": "INFO", "logger": "alerts", "message": "SIMULATED_EMAIL_ALERT: {'time': '2026-06-11T19:22:49+00:00', 'severity': 'warning', 'subject': 'Drift Warning', 'message': 'Drift ratio exceeded threshold', 'metadata': {'dataset': 'Iris', 'drift_ratio': 0.31}}"}
+{"time": "2026-06-12T00:52:49", "level": "INFO", "logger": "drift_service", "message": "Stored initial reference distribution for dataset=Iris"}
+{"time": "2026-06-12T00:52:49", "level": "INFO", "logger": "alerts", "message": "SIMULATED_EMAIL_ALERT: {'time': '2026-06-11T19:22:49+00:00', 'severity': 'critical', 'subject': 'Data drift alert', 'message': 'Drift detected for dataset=Iris', 'metadata': {'dataset': 'Iris', 'drift_ratio': 1.0, 'average_psi': 0.5, 'features_drifted': 1}}"}
+{"time": "2026-06-12T00:52:49", "level": "WARNING", "logger": "drift_service", "message": "Drift detected dataset=Iris severity=critical features_drifted=1"}
+{"time": "2026-06-12T00:59:01", "level": "INFO", "logger": "alerts", "message": "SIMULATED_EMAIL_ALERT: {'time': '2026-06-11T19:29:01+00:00', 'severity': 'warning', 'subject': 'Drift Warning', 'message': 'Drift ratio exceeded threshold', 'metadata': {'dataset': 'Iris', 'drift_ratio': 0.31}}"}
+{"time": "2026-06-12T00:59:02", "level": "INFO", "logger": "drift_service", "message": "Stored initial reference distribution for dataset=Iris"}
+{"time": "2026-06-12T00:59:02", "level": "INFO", "logger": "alerts", "message": "SIMULATED_EMAIL_ALERT: {'time': '2026-06-11T19:29:02+00:00', 'severity': 'critical', 'subject': 'Data drift alert', 'message': 'Drift detected for dataset=Iris', 'metadata': {'dataset': 'Iris', 'drift_ratio': 1.0, 'average_psi': 0.5, 'features_drifted': 1}}"}
+{"time": "2026-06-12T00:59:02", "level": "WARNING", "logger": "drift_service", "message": "Drift detected dataset=Iris severity=critical features_drifted=1"}
+{"time": "2026-06-12T01:08:06", "level": "INFO", "logger": "alerts", "message": "SIMULATED_EMAIL_ALERT: {'time': '2026-06-11T19:38:06+00:00', 'severity': 'warning', 'subject': 'Drift Warning', 'message': 'Drift ratio exceeded threshold', 'metadata': {'dataset': 'Iris', 'drift_ratio': 0.31}}"}
+{"time": "2026-06-12T01:08:06", "level": "INFO", "logger": "drift_service", "message": "Stored initial reference distribution for dataset=Iris"}
+{"time": "2026-06-12T01:08:06", "level": "INFO", "logger": "alerts", "message": "SIMULATED_EMAIL_ALERT: {'time': '2026-06-11T19:38:06+00:00', 'severity': 'critical', 'subject': 'Data drift alert', 'message': 'Drift detected for dataset=Iris', 'metadata': {'dataset': 'Iris', 'drift_ratio': 1.0, 'average_psi': 0.5, 'features_drifted': 1}}"}
+{"time": "2026-06-12T01:08:06", "level": "WARNING", "logger": "drift_service", "message": "Drift detected dataset=Iris severity=critical features_drifted=1"}
+{"time": "2026-06-12T01:26:42", "level": "INFO", "logger": "alerts", "message": "SIMULATED_EMAIL_ALERT: {'time': '2026-06-11T19:56:42+00:00', 'severity': 'warning', 'subject': 'Drift Warning', 'message': 'Drift ratio exceeded threshold', 'metadata': {'dataset': 'Iris', 'drift_ratio': 0.31}}"}
+{"time": "2026-06-12T01:26:42", "level": "INFO", "logger": "drift_service", "message": "Stored initial reference distribution for dataset=Iris"}
+{"time": "2026-06-12T01:26:42", "level": "INFO", "logger": "alerts", "message": "SIMULATED_EMAIL_ALERT: {'time': '2026-06-11T19:56:42+00:00', 'severity': 'critical', 'subject': 'Data drift alert', 'message': 'Drift detected for dataset=Iris', 'metadata': {'dataset': 'Iris', 'drift_ratio': 1.0, 'average_psi': 0.5, 'features_drifted': 1}}"}
+{"time": "2026-06-12T01:26:42", "level": "WARNING", "logger": "drift_service", "message": "Drift detected dataset=Iris severity=critical features_drifted=1"}
+{"time": "2026-06-13T00:32:59", "level": "INFO", "logger": "alerts", "message": "SIMULATED_EMAIL_ALERT: {'time': '2026-06-12T19:02:59+00:00', 'severity': 'warning', 'subject': 'Drift Warning', 'message': 'Drift ratio exceeded threshold', 'metadata': {'dataset': 'Iris', 'drift_ratio': 0.31}}"}
+{"time": "2026-06-13T00:32:59", "level": "INFO", "logger": "api", "message": "api_request"}
+{"time": "2026-06-13T00:32:59", "level": "ERROR", "logger": "api", "message": "Prediction failed", "exception": "Traceback (most recent call last):\n  File \"C:\\projects\\ML-pipeline-monitor\\services\\api\\app.py\", line 129, in predict\n    track_user_action(\"prediction\", page=\"api\", metadata={\"duration_ms\": round(duration * 1000, 2)})\n    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nTypeError: track_user_action() got multiple values for argument 'page'"}
+{"time": "2026-06-13T00:32:59", "level": "INFO", "logger": "api", "message": "api_request"}
+{"time": "2026-06-13T00:32:59", "level": "INFO", "logger": "api", "message": "api_request"}
+{"time": "2026-06-13T00:32:59", "level": "INFO", "logger": "drift_service", "message": "Stored initial reference distribution for dataset=Iris"}
+{"time": "2026-06-13T00:32:59", "level": "INFO", "logger": "alerts", "message": "SIMULATED_EMAIL_ALERT: {'time': '2026-06-12T19:02:59+00:00', 'severity': 'critical', 'subject': 'Data drift alert', 'message': 'Drift detected for dataset=Iris', 'metadata': {'dataset': 'Iris', 'drift_ratio': 1.0, 'average_psi': 0.5, 'features_drifted': 1}}"}
+{"time": "2026-06-13T00:32:59", "level": "WARNING", "logger": "drift_service", "message": "Drift detected dataset=Iris severity=critical features_drifted=1"}
+{"time": "2026-06-13T00:35:44", "level": "INFO", "logger": "user_actions", "message": "{\"event\": \"user_action\", \"action\": \"prediction\", \"page\": \"api\", \"metadata\": {\"duration_ms\": 0.01}}"}
+{"time": "2026-06-13T00:35:44", "level": "INFO", "logger": "api", "message": "api_request"}
+{"time": "2026-06-13T00:36:03", "level": "INFO", "logger": "alerts", "message": "SIMULATED_EMAIL_ALERT: {'time': '2026-06-12T19:06:03+00:00', 'severity': 'warning', 'subject': 'Drift Warning', 'message': 'Drift ratio exceeded threshold', 'metadata': {'dataset': 'Iris', 'drift_ratio': 0.31}}"}
+{"time": "2026-06-13T00:36:04", "level": "INFO", "logger": "api", "message": "api_request"}
+{"time": "2026-06-13T00:36:04", "level": "INFO", "logger": "user_actions", "message": "{\"event\": \"user_action\", \"action\": \"prediction\", \"page\": \"api\", \"metadata\": {\"duration_ms\": 0.01}}"}
+{"time": "2026-06-13T00:36:04", "level": "INFO", "logger": "api", "message": "api_request"}
+{"time": "2026-06-13T00:36:04", "level": "INFO", "logger": "api", "message": "api_request"}
+{"time": "2026-06-13T00:36:04", "level": "INFO", "logger": "drift_service", "message": "Stored initial reference distribution for dataset=Iris"}
+{"time": "2026-06-13T00:36:04", "level": "INFO", "logger": "alerts", "message": "SIMULATED_EMAIL_ALERT: {'time': '2026-06-12T19:06:04+00:00', 'severity': 'critical', 'subject': 'Data drift alert', 'message': 'Drift detected for dataset=Iris', 'metadata': {'dataset': 'Iris', 'drift_ratio': 1.0, 'average_psi': 0.5, 'features_drifted': 1}}"}
+{"time": "2026-06-13T00:36:04", "level": "WARNING", "logger": "drift_service", "message": "Drift detected dataset=Iris severity=critical features_drifted=1"}
+{"time": "2026-06-13T00:40:22", "level": "INFO", "logger": "alerts", "message": "SIMULATED_EMAIL_ALERT: {'time': '2026-06-12T19:10:22+00:00', 'severity': 'warning', 'subject': 'Drift Warning', 'message': 'Drift ratio exceeded threshold', 'metadata': {'dataset': 'Iris', 'drift_ratio': 0.31}}"}
+{"time": "2026-06-13T00:40:22", "level": "INFO", "logger": "api", "message": "api_request"}
+{"time": "2026-06-13T00:40:22", "level": "INFO", "logger": "user_actions", "message": "{\"event\": \"user_action\", \"action\": \"prediction\", \"page\": \"api\", \"metadata\": {\"duration_ms\": 0.02}}"}
+{"time": "2026-06-13T00:40:22", "level": "INFO", "logger": "api", "message": "api_request"}
+{"time": "2026-06-13T00:40:22", "level": "INFO", "logger": "api", "message": "api_request"}
+{"time": "2026-06-13T00:40:22", "level": "INFO", "logger": "drift_service", "message": "Stored initial reference distribution for dataset=Iris"}
+{"time": "2026-06-13T00:40:22", "level": "INFO", "logger": "alerts", "message": "SIMULATED_EMAIL_ALERT: {'time': '2026-06-12T19:10:22+00:00', 'severity': 'critical', 'subject': 'Data drift alert', 'message': 'Drift detected for dataset=Iris', 'metadata': {'dataset': 'Iris', 'drift_ratio': 1.0, 'average_psi': 0.5, 'features_drifted': 1}}"}
+{"time": "2026-06-13T00:40:22", "level": "WARNING", "logger": "drift_service", "message": "Drift detected dataset=Iris severity=critical features_drifted=1"}
+{"time": "2026-06-13T00:49:07", "level": "INFO", "logger": "alerts", "message": "SIMULATED_EMAIL_ALERT: {'time': '2026-06-12T19:19:07+00:00', 'severity': 'warning', 'subject': 'Drift Warning', 'message': 'Drift ratio exceeded threshold', 'metadata': {'dataset': 'Iris', 'drift_ratio': 0.31}}"}
+{"time": "2026-06-13T00:49:07", "level": "INFO", "logger": "api", "message": "api_request"}
+{"time": "2026-06-13T00:49:07", "level": "INFO", "logger": "user_actions", "message": "{\"event\": \"user_action\", \"action\": \"prediction\", \"page\": \"api\", \"metadata\": {\"duration_ms\": 0.01}}"}
+{"time": "2026-06-13T00:49:07", "level": "INFO", "logger": "api", "message": "api_request"}
+{"time": "2026-06-13T00:49:07", "level": "INFO", "logger": "api", "message": "api_request"}
+{"time": "2026-06-13T00:49:07", "level": "INFO", "logger": "drift_service", "message": "Stored initial reference distribution for dataset=Iris"}
+{"time": "2026-06-13T00:49:07", "level": "INFO", "logger": "alerts", "message": "SIMULATED_EMAIL_ALERT: {'time': '2026-06-12T19:19:07+00:00', 'severity': 'critical', 'subject': 'Data drift alert', 'message': 'Drift detected for dataset=Iris', 'metadata': {'dataset': 'Iris', 'drift_ratio': 1.0, 'average_psi': 0.5, 'features_drifted': 1}}"}
+{"time": "2026-06-13T00:49:07", "level": "WARNING", "logger": "drift_service", "message": "Drift detected dataset=Iris severity=critical features_drifted=1"}
+{"time": "2026-06-13T00:52:24", "level": "INFO", "logger": "alerts", "message": "SIMULATED_EMAIL_ALERT: {'time': '2026-06-12T19:22:24+00:00', 'severity': 'warning', 'subject': 'Drift Warning', 'message': 'Drift ratio exceeded threshold', 'metadata': {'dataset': 'Iris', 'drift_ratio': 0.31}}"}
+{"time": "2026-06-13T00:52:24", "level": "INFO", "logger": "api", "message": "api_request"}
+{"time": "2026-06-13T00:52:24", "level": "INFO", "logger": "user_actions", "message": "{\"event\": \"user_action\", \"action\": \"prediction\", \"page\": \"api\", \"metadata\": {\"duration_ms\": 0.01}}"}
+{"time": "2026-06-13T00:52:24", "level": "INFO", "logger": "api", "message": "api_request"}
+{"time": "2026-06-13T00:52:24", "level": "INFO", "logger": "api", "message": "api_request"}
+{"time": "2026-06-13T00:52:24", "level": "INFO", "logger": "drift_service", "message": "Stored initial reference distribution for dataset=Iris"}
+{"time": "2026-06-13T00:52:24", "level": "INFO", "logger": "alerts", "message": "SIMULATED_EMAIL_ALERT: {'time': '2026-06-12T19:22:24+00:00', 'severity': 'critical', 'subject': 'Data drift alert', 'message': 'Drift detected for dataset=Iris', 'metadata': {'dataset': 'Iris', 'drift_ratio': 1.0, 'average_psi': 0.5, 'features_drifted': 1}}"}
+{"time": "2026-06-13T00:52:24", "level": "WARNING", "logger": "drift_service", "message": "Drift detected dataset=Iris severity=critical features_drifted=1"}
+{"time": "2026-06-13T00:58:49", "level": "INFO", "logger": "alerts", "message": "SIMULATED_EMAIL_ALERT: {'time': '2026-06-12T19:28:49+00:00', 'severity': 'warning', 'subject': 'Drift Warning', 'message': 'Drift ratio exceeded threshold', 'metadata': {'dataset': 'Iris', 'drift_ratio': 0.31}}"}
+{"time": "2026-06-13T00:58:49", "level": "INFO", "logger": "api", "message": "api_request"}
+{"time": "2026-06-13T00:58:49", "level": "INFO", "logger": "user_actions", "message": "{\"event\": \"user_action\", \"action\": \"prediction\", \"page\": \"api\", \"metadata\": {\"duration_ms\": 0.01}}"}
+{"time": "2026-06-13T00:58:49", "level": "INFO", "logger": "api", "message": "api_request"}
+{"time": "2026-06-13T00:58:49", "level": "INFO", "logger": "api", "message": "api_request"}
+{"time": "2026-06-13T00:58:50", "level": "INFO", "logger": "drift_service", "message": "Stored initial reference distribution for dataset=Iris"}
+{"time": "2026-06-13T00:58:50", "level": "INFO", "logger": "alerts", "message": "SIMULATED_EMAIL_ALERT: {'time': '2026-06-12T19:28:50+00:00', 'severity': 'critical', 'subject': 'Data drift alert', 'message': 'Drift detected for dataset=Iris', 'metadata': {'dataset': 'Iris', 'drift_ratio': 1.0, 'average_psi': 0.5, 'features_drifted': 1}}"}
+{"time": "2026-06-13T00:58:50", "level": "WARNING", "logger": "drift_service", "message": "Drift detected dataset=Iris severity=critical features_drifted=1"}
+{"time": "2026-06-13T01:04:39", "level": "INFO", "logger": "alerts", "message": "SIMULATED_EMAIL_ALERT: {'time': '2026-06-12T19:34:39+00:00', 'severity': 'warning', 'subject': 'Drift Warning', 'message': 'Drift ratio exceeded threshold', 'metadata': {'dataset': 'Iris', 'drift_ratio': 0.31}}"}
+{"time": "2026-06-13T01:04:39", "level": "INFO", "logger": "api", "message": "api_request"}
+{"time": "2026-06-13T01:04:39", "level": "INFO", "logger": "user_actions", "message": "{\"event\": \"user_action\", \"action\": \"prediction\", \"page\": \"api\", \"metadata\": {\"duration_ms\": 0.01}}"}
+{"time": "2026-06-13T01:04:39", "level": "INFO", "logger": "api", "message": "api_request"}
+{"time": "2026-06-13T01:04:39", "level": "INFO", "logger": "api", "message": "api_request"}
+{"time": "2026-06-13T01:04:40", "level": "INFO", "logger": "drift_service", "message": "Stored initial reference distribution for dataset=Iris"}
+{"time": "2026-06-13T01:04:40", "level": "INFO", "logger": "alerts", "message": "SIMULATED_EMAIL_ALERT: {'time': '2026-06-12T19:34:40+00:00', 'severity': 'critical', 'subject': 'Data drift alert', 'message': 'Drift detected for dataset=Iris', 'metadata': {'dataset': 'Iris', 'drift_ratio': 1.0, 'average_psi': 0.5, 'features_drifted': 1}}"}
+{"time": "2026-06-13T01:04:40", "level": "WARNING", "logger": "drift_service", "message": "Drift detected dataset=Iris severity=critical features_drifted=1"}
+{"time": "2026-06-13T01:06:33", "level": "INFO", "logger": "alerts", "message": "SIMULATED_EMAIL_ALERT: {'time': '2026-06-12T19:36:33+00:00', 'severity': 'warning', 'subject': 'Drift Warning', 'message': 'Drift ratio exceeded threshold', 'metadata': {'dataset': 'Iris', 'drift_ratio': 0.31}}"}
+{"time": "2026-06-13T01:06:33", "level": "INFO", "logger": "api", "message": "api_request"}
+{"time": "2026-06-13T01:06:33", "level": "INFO", "logger": "user_actions", "message": "{\"event\": \"user_action\", \"action\": \"prediction\", \"page\": \"api\", \"metadata\": {\"duration_ms\": 0.01}}"}
+{"time": "2026-06-13T01:06:33", "level": "INFO", "logger": "api", "message": "api_request"}
+{"time": "2026-06-13T01:06:33", "level": "INFO", "logger": "api", "message": "api_request"}
+{"time": "2026-06-13T01:06:33", "level": "INFO", "logger": "drift_service", "message": "Stored initial reference distribution for dataset=Iris"}
+{"time": "2026-06-13T01:06:33", "level": "INFO", "logger": "alerts", "message": "SIMULATED_EMAIL_ALERT: {'time': '2026-06-12T19:36:33+00:00', 'severity': 'critical', 'subject': 'Data drift alert', 'message': 'Drift detected for dataset=Iris', 'metadata': {'dataset': 'Iris', 'drift_ratio': 1.0, 'average_psi': 0.5, 'features_drifted': 1}}"}
+{"time": "2026-06-13T01:06:33", "level": "WARNING", "logger": "drift_service", "message": "Drift detected dataset=Iris severity=critical features_drifted=1"}

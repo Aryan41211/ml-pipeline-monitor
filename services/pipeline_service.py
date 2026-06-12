@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, UTC
 from typing import Any, Callable, Dict, Optional
 
 import joblib
@@ -80,6 +80,32 @@ def _persist_artifacts(run_id: str, model: object, scaler: object) -> Dict[str, 
     }
 
 
+def _validate_pipeline_inputs(
+    dataset_label: str,
+    dataset_key: str,
+    model_type: str,
+    task: str,
+    test_size: float,
+    cv_folds: int,
+    random_state: int,
+) -> None:
+    """Validate pipeline input parameters."""
+    if not dataset_label or not dataset_label.strip():
+        raise ValueError("dataset_label is required")
+    if not dataset_key or dataset_key not in DATASET_OPTIONS.values():
+        raise ValueError(f"Invalid dataset_key: {dataset_key}")
+    if not model_type or model_type not in {**CLF_REGISTRY, **REG_REGISTRY}:
+        raise ValueError(f"Unsupported model_type: {model_type}")
+    if task not in {"classification", "regression"}:
+        raise ValueError(f"Invalid task: {task}. Must be 'classification' or 'regression'")
+    if not 0.05 <= test_size <= 0.5:
+        raise ValueError("test_size must be between 0.05 and 0.5")
+    if not 2 <= cv_folds <= 10:
+        raise ValueError("cv_folds must be between 2 and 10")
+    if random_state < 0:
+        raise ValueError("random_state must be non-negative")
+
+
 def run_pipeline_and_persist(
     *,
     dataset_label: str,
@@ -93,6 +119,8 @@ def run_pipeline_and_persist(
     progress_callback: Optional[ProgressCallback] = None,
 ) -> Dict[str, Any]:
     """Execute pipeline run end-to-end and persist experiment/model artifacts."""
+    _validate_pipeline_inputs(dataset_label, dataset_key, model_type, task, test_size, cv_folds, random_state)
+
     app_cfg = load_config()
     pipeline_cfg = app_cfg.get("pipeline", {})
     feature_key = make_feature_key(dataset_key, test_size, random_state)
@@ -189,7 +217,7 @@ def run_pipeline_and_persist(
 
 def compute_next_run_ts(interval_minutes: int) -> datetime:
     """Return next scheduled run timestamp from now."""
-    return datetime.utcnow() + timedelta(minutes=max(1, int(interval_minutes)))
+    return datetime.now(UTC) + timedelta(minutes=max(1, int(interval_minutes)))
 
 
 def should_trigger_scheduled_run(
@@ -201,5 +229,5 @@ def should_trigger_scheduled_run(
     if not enabled or next_run_at is None:
         return False
 
-    now = now or datetime.utcnow()
+    now = now or datetime.now(UTC)
     return now >= next_run_at

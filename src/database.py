@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from contextlib import contextmanager
-from datetime import datetime
+from datetime import datetime, UTC
 from typing import Any, Dict, Iterator, List, Optional
 
 from src.db_engine import get_backend
@@ -283,7 +283,7 @@ def save_experiment(
     duration: float,
     tags: Optional[Dict[str, Any]] = None,
 ) -> None:
-    now = datetime.utcnow().isoformat(timespec="seconds")
+    now = datetime.now(UTC).isoformat(timespec="seconds")
     with get_connection() as conn:
         conn.execute(
             """
@@ -355,7 +355,7 @@ def save_model(
     parent_model_id: Optional[str] = None,
     version: Optional[int] = None,
 ) -> Dict[str, Any]:
-    now = datetime.utcnow().isoformat(timespec="seconds")
+    now = datetime.now(UTC).isoformat(timespec="seconds")
     with get_connection() as conn:
         prev_model = conn.execute(
             """
@@ -560,7 +560,7 @@ def update_model_stage(model_id: str, stage: str) -> None:
     if stage not in valid:
         raise ValueError(f"Stage must be one of {valid}")
 
-    now = datetime.utcnow().isoformat(timespec="seconds")
+    now = datetime.now(UTC).isoformat(timespec="seconds")
     with get_connection() as conn:
         row = conn.execute(
             "SELECT model_id, dataset, stage FROM models WHERE model_id = ?",

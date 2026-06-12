@@ -2,13 +2,37 @@
 
 from __future__ import annotations
 
+import contextvars
 import json
 import logging
+import uuid
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from src.config_loader import ROOT_DIR, load_config
+
+# Context variable for correlation ID propagation across async boundaries
+correlation_id_var: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar("correlation_id", default=None)
+
+
+def get_correlation_id() -> str:
+    """Get current correlation ID or generate a new one."""
+    cid = correlation_id_var.get()
+    if cid is None:
+        cid = str(uuid.uuid4())[:8]
+        correlation_id_var.set(cid)
+    return cid
+
+
+def set_correlation_id(cid: str) -> None:
+    """Set correlation ID for current context."""
+    correlation_id_var.set(cid)
+
+
+def clear_correlation_id() -> None:
+    """Clear correlation ID from current context."""
+    correlation_id_var.set(None)
 
 
 class JsonFormatter(logging.Formatter):
@@ -20,9 +44,14 @@ class JsonFormatter(logging.Formatter):
             "level": record.levelname,
             "logger": record.name,
             "message": record.getMessage(),
+            "correlation_id": getattr(record, "correlation_id", None) or get_correlation_id(),
         }
         if record.exc_info:
             payload["exception"] = self.formatException(record.exc_info)
+        # Include any extra fields from the log record
+        for key, value in record.__dict__.items():
+            if key not in {"name", "msg", "args", "created", "filename", "funcName", "levelname", "levelno", "lineno", "module", "msecs", "message", "name", "pathname", "process", "processName", "relativeCreated", "thread", "threadName", "exc_info", "exc_text", "stack_info", "correlation_id"}:
+                payload[key] = value
         return json.dumps(payload, ensure_ascii=True)
 
 

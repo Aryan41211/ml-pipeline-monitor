@@ -18,7 +18,7 @@ from slowapi.util import get_remote_address
 from services.model_service import predict_from_payload
 from services.telemetry_service import track_user_action
 from src.database import initialize_db
-from src.logger import get_app_logger
+from src.logger import get_app_logger, get_correlation_id, set_correlation_id
 
 
 LOGGER = get_app_logger("api")
@@ -72,10 +72,18 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
-    """Log all requests with timing."""
+    """Log all requests with timing and correlation ID."""
+    # Get or generate correlation ID
+    correlation_id = request.headers.get("X-Correlation-ID") or get_correlation_id()
+    set_correlation_id(correlation_id)
+    
     start = time.time()
     response = await call_next(request)
     duration = time.time() - start
+    
+    # Add correlation ID to response headers
+    response.headers["X-Correlation-ID"] = correlation_id
+    
     LOGGER.info(
         "api_request",
         extra={
@@ -83,6 +91,7 @@ async def log_requests(request: Request, call_next):
             "path": request.url.path,
             "status_code": response.status_code,
             "duration_ms": round(duration * 1000, 2),
+            "correlation_id": correlation_id,
         },
     )
     return response

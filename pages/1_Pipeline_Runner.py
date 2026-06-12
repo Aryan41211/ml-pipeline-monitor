@@ -80,6 +80,7 @@ def _render_page():
             st.markdown('<div class="ui-card">', unsafe_allow_html=True)
             test_size = st.slider("Validation Split", 0.1, 0.4, 0.2)
             cv_folds = st.slider("Cross-Validation Folds", 2, 10, 5)
+            random_state = st.number_input("Random Seed", 0, 10000, 42, 1, help="Reproducibility seed for data splits and model training")
             st.markdown('</div>', unsafe_allow_html=True)
             
             component_insight_panel([
@@ -147,7 +148,7 @@ def _render_page():
             try:
                 payload = run_pipeline_and_persist(
                     dataset_label=ds_label, dataset_key=ds_key, model_type=model, task=task,
-                    params=params, test_size=test_size, cv_folds=cv_folds, random_state=42,
+                    params=params, test_size=test_size, cv_folds=cv_folds, random_state=random_state,
                     progress_callback=_cb
                 )
                 res = payload["result"]

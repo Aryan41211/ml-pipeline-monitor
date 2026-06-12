@@ -8,6 +8,8 @@ from typing import Any, Dict
 
 import yaml
 
+from src.secrets import get_secrets_manager
+
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
 CONFIG_PATH = ROOT_DIR / "config.yaml"
@@ -63,7 +65,7 @@ def _deep_merge(base: Dict[str, Any], override: Dict[str, Any]) -> Dict[str, Any
 
 @lru_cache(maxsize=1)
 def load_config() -> Dict[str, Any]:
-    """Load and cache YAML config with sane defaults."""
+    """Load and cache YAML config with sane defaults and secrets injection."""
     if not CONFIG_PATH.exists():
         return DEFAULT_CONFIG
 
@@ -73,7 +75,42 @@ def load_config() -> Dict[str, Any]:
     if not isinstance(raw, dict):
         return DEFAULT_CONFIG
 
-    return _deep_merge(DEFAULT_CONFIG, raw)
+    config = _deep_merge(DEFAULT_CONFIG, raw)
+    
+    # Inject secrets for sensitive configuration values
+    secrets = get_secrets_manager()
+    
+    # Database secrets
+    if "storage" in config:
+        storage = config["storage"]
+        if storage.get("backend") == "postgres":
+            # Override postgres DSN from secrets if available
+            dsn = secrets.get("postgres_dsn") or secrets.get("database_url")
+            if dsn:
+                storage["postgres_dsn"] = dsn
+            # Individual components
+            for key in ["db_host", "db_port", "db_name", "db_user", "db_password"]:
+                val = secrets.get(key)
+                if val:
+                    storage[key] = val
+    
+    # API keys
+    if "mlflow" in config:
+        mlflow = config["mlflow"]
+        tracking_uri = secrets.get("mlflow_tracking_uri")
+        if tracking_uri:
+            mlflow["tracking_uri"] = tracking_uri
+    
+    # Auth secrets (already handled via env in auth.py, but can be centralized)
+    # Alerting secrets
+    if "alerting" in config:
+        alerting = config["alerting"]
+        for key in ["smtp_host", "smtp_port", "smtp_user", "smtp_password", "slack_webhook"]:
+            val = secrets.get(key)
+            if val:
+                alerting[key] = val
+    
+    return config
 
 
 def get_artifact_dirs() -> Dict[str, Path]:

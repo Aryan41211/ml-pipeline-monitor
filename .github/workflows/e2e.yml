@@ -32,7 +32,6 @@ jobs:
       
       - name: Run E2E tests
         run: |
-          cd C:/projects/ML-pipeline-monitor
           npx playwright test --reporter=line
       
       - name: Upload Playwright report

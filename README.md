@@ -283,18 +283,25 @@ PIPELINE_DB_DSN=postgresql://user:pass@localhost:5432/ml_monitor
 
 Authentication is environment-only (no default credentials in `config.yaml`).
 
+**Passwords must be bcrypt-hashed** for security. Generate hashes using the CLI:
+
+```bash
+mlmonitor hash-password "your_secure_password"
+# Output: $2b$12$...
+```
+
 Set either a single-user credential pair:
 
 ```bash
 AUTH_USERNAME=admin
-AUTH_PASSWORD=secure_pass
+AUTH_PASSWORD=$2b$12$...  # bcrypt hash from hash-password command
 AUTH_ROLE=admin   # optional: viewer | operator | admin
 ```
 
-Or set a JSON user map for multi-user access:
+Or set a JSON user map for multi-user access (all passwords must be bcrypt hashes):
 
 ```bash
-AUTH_USERS_JSON='{"viewer":{"password":"view_pass","role":"viewer"},"operator":{"password":"op_pass","role":"operator"},"admin":{"password":"admin_pass","role":"admin"}}'
+AUTH_USERS_JSON='{"viewer":{"password":"$2b$12$...","role":"viewer"},"operator":{"password":"$2b$12$...","role":"operator"},"admin":{"password":"$2b$12$...","role":"admin"}}'
 ```
 
 Optional auth toggle:
@@ -302,6 +309,8 @@ Optional auth toggle:
 ```bash
 MLMONITOR_AUTH_ENABLED=true
 ```
+
+**Backward compatibility**: Plaintext passwords still work but are deprecated. Migration to bcrypt is strongly recommended.
 
 ### Alerting
 

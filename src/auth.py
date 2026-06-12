@@ -4,14 +4,47 @@ from __future__ import annotations
 
 import json
 import os
+import time
 from typing import Dict, Tuple
 
+import bcrypt
 import streamlit as st
 
 from src.config_loader import load_config
+from src.logger import get_app_logger
 
 
 ROLE_ORDER = {"viewer": 0, "operator": 1, "admin": 2}
+LOGGER = get_app_logger("auth")
+
+# Session timeout in seconds (default 8 hours)
+DEFAULT_SESSION_TIMEOUT = 8 * 60 * 60
+
+# Max failed login attempts before temporary lockout
+MAX_LOGIN_ATTEMPTS = 5
+LOGIN_LOCKOUT_SECONDS = 300  # 5 minutes
+
+# Bcrypt cost factor for password hashing
+BCRYPT_ROUNDS = 12
+
+
+def hash_password(password: str) -> str:
+    """Hash a password using bcrypt."""
+    salt = bcrypt.gensalt(rounds=BCRYPT_ROUNDS)
+    return bcrypt.hashpw(password.encode("utf-8"), salt).decode("utf-8")
+
+
+def verify_password(password: str, hashed: str) -> bool:
+    """Verify a password against a bcrypt hash."""
+    try:
+        return bcrypt.checkpw(password.encode("utf-8"), hashed.encode("utf-8"))
+    except Exception:
+        return False
+
+
+def _is_bcrypt_hash(value: str) -> bool:
+    """Check if a string appears to be a bcrypt hash."""
+    return value.startswith("$2b$") or value.startswith("$2a$") or value.startswith("$2y$")
 
 
 def _auth_cfg() -> Dict[str, object]:
@@ -24,6 +57,11 @@ def _env_value(*keys: str) -> str:
         if val is not None and str(val).strip() != "":
             return str(val)
     return ""
+
+
+def _get_session_timeout() -> int:
+    """Get session timeout from config or use default."""
+    return int(_auth_cfg().get("session_timeout_seconds", DEFAULT_SESSION_TIMEOUT))
 
 
 def is_auth_enabled() -> bool:
@@ -104,21 +142,52 @@ def _auth_env_help() -> str:
     )
 
 
+def _check_session_timeout() -> bool:
+    """Check if the current session has expired."""
+    if not is_auth_enabled():
+        return True
+    if not st.session_state.get("authenticated", False):
+        return False
+    login_time = st.session_state.get("auth_login_time", 0)
+    if login_time == 0:
+        return False
+    timeout = _get_session_timeout()
+    if time.time() - login_time > timeout:
+        _logout_user("Session expired. Please log in again.")
+        return False
+    return True
+
+
+def _logout_user(message: str = "Logged out successfully.") -> None:
+    """Clear authentication session state."""
+    st.session_state["authenticated"] = False
+    st.session_state["auth_user"] = ""
+    st.session_state["auth_role"] = "viewer"
+    st.session_state["auth_login_time"] = 0
+    st.session_state["login_attempts"] = 0
+    st.session_state["last_failed_login"] = 0
+    LOGGER.info(message)
+
+
 def is_authenticated() -> bool:
     if not is_auth_enabled():
         return True
-    return bool(st.session_state.get("authenticated", False))
+    return _check_session_timeout()
 
 
 def current_user() -> str:
     if not is_auth_enabled():
         return "system"
+    if not _check_session_timeout():
+        return ""
     return str(st.session_state.get("auth_user", ""))
 
 
 def current_role() -> str:
     if not is_auth_enabled():
         return "admin"
+    if not _check_session_timeout():
+        return "viewer"
     role = str(st.session_state.get("auth_role", "viewer")).lower().strip()
     return role if role in ROLE_ORDER else "viewer"
 
@@ -150,21 +219,71 @@ def require_role(role: str, action_name: str) -> bool:
     return True
 
 
+def _check_login_attempts(username: str) -> Tuple[bool, str]:
+    """Check if login attempts exceed limit and return lockout status."""
+    attempts = st.session_state.get("login_attempts", 0)
+    last_failed = st.session_state.get("last_failed_login", 0)
+    
+    if attempts >= MAX_LOGIN_ATTEMPTS:
+        if time.time() - last_failed < LOGIN_LOCKOUT_SECONDS:
+            remaining = int(LOGIN_LOCKOUT_SECONDS - (time.time() - last_failed))
+            return False, f"Too many failed attempts. Try again in {remaining} seconds."
+        else:
+            # Reset attempts after lockout period
+            st.session_state["login_attempts"] = 0
+            st.session_state["last_failed_login"] = 0
+    
+    return True, ""
+
+
+def _record_failed_login() -> None:
+    """Record a failed login attempt."""
+    attempts = st.session_state.get("login_attempts", 0) + 1
+    st.session_state["login_attempts"] = attempts
+    st.session_state["last_failed_login"] = time.time()
+    LOGGER.warning("Failed login attempt %d for user", attempts)
+
+
+def _record_successful_login(username: str) -> None:
+    """Record a successful login and reset attempts."""
+    st.session_state["login_attempts"] = 0
+    st.session_state["last_failed_login"] = 0
+    st.session_state["auth_login_time"] = time.time()
+    LOGGER.info("Successful login for user: %s", username)
+
+
 def _check_login(username: str, password: str) -> Tuple[bool, str]:
     creds = _credentials()
     if not creds:
         return False, _auth_env_help()
 
+    # Check login attempt limits
     user = (username or "").strip()
+    allowed, msg = _check_login_attempts(user)
+    if not allowed:
+        return False, msg
 
-    if user in creds and creds[user].get("password") == password:
-        return True, ""
+    # Try exact match first
+    if user in creds:
+        stored = creds[user].get("password", "")
+        if _is_bcrypt_hash(stored):
+            if verify_password(password, stored):
+                return True, ""
+        elif stored == password:
+            return True, ""
 
+    # Try case-insensitive match
     lowered = {k.lower(): k for k in creds.keys()}
     resolved = lowered.get(user.lower())
-    if resolved and creds[resolved].get("password") == password:
-        return True, ""
+    if resolved:
+        stored = creds[resolved].get("password", "")
+        if _is_bcrypt_hash(stored):
+            if verify_password(password, stored):
+                return True, ""
+        elif stored == password:
+            return True, ""
 
+    _record_failed_login()
     return False, "Invalid username or password"
 
 
@@ -188,10 +307,8 @@ def render_auth_controls() -> bool:
 
     if is_authenticated():
         st.success(f"Signed in as {current_user()} ({current_role()})")
-        if st.button("Logout", width="stretch"):
-            st.session_state["authenticated"] = False
-            st.session_state["auth_user"] = ""
-            st.session_state["auth_role"] = "viewer"
+        if st.button("Logout", use_container_width=True):
+            _logout_user()
             st.rerun()
         return True
 
@@ -203,7 +320,7 @@ def render_auth_controls() -> bool:
 
     username = st.text_input("Username", key="login_username")
     password = st.text_input("Password", type="password", key="login_password")
-    if st.button("Login", type="primary", width="stretch"):
+    if st.button("Login", type="primary", use_container_width=True):
         ok, err = _check_login(username=username, password=password)
         if ok:
             resolved_user = _resolve_user(username)
@@ -211,6 +328,7 @@ def render_auth_controls() -> bool:
             st.session_state["authenticated"] = True
             st.session_state["auth_user"] = resolved_user
             st.session_state["auth_role"] = str(role).lower()
+            _record_successful_login(resolved_user)
             st.rerun()
         st.error(err)
 

@@ -7,10 +7,11 @@ import time
 from contextlib import asynccontextmanager
 from typing import Any, Dict, List, Optional, Union
 
-from fastapi import Depends, FastAPI, HTTPException, Request, Security
+from fastapi import Depends, FastAPI, HTTPException, Request, Security, status
 from fastapi.responses import JSONResponse
 from fastapi.security import APIKeyHeader
-from pydantic import BaseModel, Field
+from fastapi.exceptions import RequestValidationError
+from pydantic import BaseModel, Field, ValidationError
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
@@ -22,7 +23,7 @@ from services.model_service import predict_from_payload
 from services.telemetry_service import track_user_action
 from src.database import initialize_db
 from src.db_engine import get_backend
-from src.logger import get_app_logger, get_correlation_id, set_correlation_id
+from src.logger import get_app_logger, get_correlation_id, set_correlation_id, get_request_id, set_request_id, set_service_context, get_error_category, ErrorCategory
 
 
 LOGGER = get_app_logger("api")
@@ -121,18 +122,26 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
-    """Log all requests with timing and correlation ID."""
+    """Log all requests with timing, correlation ID, and request ID."""
     # Get or generate correlation ID
     correlation_id = request.headers.get("X-Correlation-ID") or get_correlation_id()
     set_correlation_id(correlation_id)
-    
+
+    # Generate or get request ID
+    request_id = request.headers.get("X-Request-ID") or get_request_id()
+    set_request_id(request_id)
+
+    # Set service context
+    set_service_context("api")
+
     start = time.time()
     response = await call_next(request)
     duration = time.time() - start
-    
-    # Add correlation ID to response headers
+
+    # Add correlation ID and request ID to response headers
     response.headers["X-Correlation-ID"] = correlation_id
-    
+    response.headers["X-Request-ID"] = request_id
+
     LOGGER.info(
         "api_request",
         extra={
@@ -141,6 +150,8 @@ async def log_requests(request: Request, call_next):
             "status_code": response.status_code,
             "duration_ms": round(duration * 1000, 2),
             "correlation_id": correlation_id,
+            "request_id": request_id,
+            "service": "api",
         },
     )
     return response
@@ -149,10 +160,95 @@ async def log_requests(request: Request, call_next):
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     """Global exception handler for unhandled errors."""
-    LOGGER.exception("Unhandled exception: %s", exc)
+    error_category = get_error_category(exc)
+    correlation_id = get_correlation_id()
+    request_id = get_request_id()
+
+    LOGGER.exception(
+        "Unhandled exception: %s",
+        exc,
+        extra={
+            "error_category": error_category,
+            "correlation_id": correlation_id,
+            "request_id": request_id,
+        },
+    )
     return JSONResponse(
         status_code=500,
-        content={"detail": "Internal server error"},
+        content={
+            "detail": "Internal server error",
+            "error_category": error_category,
+            "correlation_id": correlation_id,
+            "request_id": request_id,
+        },
+    )
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    """Handle request validation errors with detailed messages."""
+    correlation_id = get_correlation_id()
+    request_id = get_request_id()
+
+    errors = []
+    for error in exc.errors():
+        errors.append({
+            "field": ".".join(str(x) for x in error["loc"]),
+            "message": error["msg"],
+            "type": error["type"],
+        })
+
+    LOGGER.warning(
+        "Request validation failed",
+        extra={
+            "error_category": ErrorCategory.VALIDATION,
+            "validation_errors": errors,
+            "correlation_id": correlation_id,
+            "request_id": request_id,
+            "method": request.method,
+            "path": request.url.path,
+        },
+    )
+
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        content={
+            "detail": "Request validation failed",
+            "error_category": ErrorCategory.VALIDATION,
+            "errors": errors,
+            "correlation_id": correlation_id,
+            "request_id": request_id,
+        },
+    )
+
+
+@app.exception_handler(RateLimitExceeded)
+async def rate_limit_exceeded_handler(request: Request, exc: RateLimitExceeded):
+    """Handle rate limit exceeded errors."""
+    correlation_id = get_correlation_id()
+    request_id = get_request_id()
+
+    LOGGER.warning(
+        "Rate limit exceeded",
+        extra={
+            "error_category": "rate_limit_exceeded",
+            "correlation_id": correlation_id,
+            "request_id": request_id,
+            "method": request.method,
+            "path": request.url.path,
+            "client_ip": get_remote_address(request),
+        },
+    )
+
+    return JSONResponse(
+        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+        content={
+            "detail": "Rate limit exceeded",
+            "error_category": "rate_limit_exceeded",
+            "retry_after": exc.retry_after,
+            "correlation_id": correlation_id,
+            "request_id": request_id,
+        },
     )
 
 
@@ -160,7 +256,7 @@ async def global_exception_handler(request: Request, exc: Exception):
 def health() -> Dict[str, Any]:
     """Basic health endpoint with database connectivity check."""
     from src.db_engine import get_backend
-    
+
     db_status = "ok"
     try:
         backend = get_backend()
@@ -169,9 +265,46 @@ def health() -> Dict[str, Any]:
         conn.close()
     except Exception as e:
         db_status = f"error: {e}"
-    
+
     return {
         "status": "ok" if db_status == "ok" else "degraded",
+        "database": db_status,
+    }
+
+
+@app.get("/health/live")
+def health_live() -> Dict[str, str]:
+    """Liveness probe - indicates if the process is running.
+
+    Used by Kubernetes/container orchestrators to determine if the container
+    should be restarted. Returns 200 if the process is alive.
+    """
+    return {"status": "alive"}
+
+
+@app.get("/health/ready")
+def health_ready() -> Dict[str, Any]:
+    """Readiness probe - indicates if the service can handle requests.
+
+    Used by Kubernetes/container orchestrators to determine if traffic
+    should be routed to this instance. Checks database connectivity.
+    """
+    from src.db_engine import get_backend
+
+    db_status = "ok"
+    try:
+        backend = get_backend()
+        conn = backend.connect()
+        conn.execute("SELECT 1")
+        conn.close()
+    except Exception as e:
+        db_status = f"error: {e}"
+
+    ready = db_status == "ok"
+    status_code = 200 if ready else 503
+
+    return {
+        "status": "ready" if ready else "not_ready",
         "database": db_status,
     }
 
@@ -181,10 +314,10 @@ def detailed_health() -> Dict[str, Any]:
     """Detailed health endpoint with system metrics and database check."""
     from src.system_monitor import get_system_metrics, get_process_metrics
     from src.db_engine import get_backend
-    
+
     sys_metrics = get_system_metrics()
     proc_metrics = get_process_metrics()
-    
+
     db_status = "ok"
     db_info = {}
     try:
@@ -196,7 +329,7 @@ def detailed_health() -> Dict[str, Any]:
     except Exception as e:
         db_status = f"error: {e}"
         db_info = {"connected": False, "error": str(e)}
-    
+
     return {
         "status": "ok" if db_status == "ok" else "degraded",
         "system": sys_metrics,
@@ -209,8 +342,10 @@ def detailed_health() -> Dict[str, Any]:
 @limiter.limit(RATE_LIMIT)
 def predict(request: Request, request_body: PredictRequest, api_key: str = Depends(verify_api_key)) -> Dict[str, Any]:
     """Predict using latest production model artifact from registry."""
+    correlation_id = get_correlation_id()
+    request_id = get_request_id()
     start = time.time()
-    
+
     try:
         # Backward compatibility: allow legacy monkeypatches on services.api.main.
         try:
@@ -221,15 +356,76 @@ def predict(request: Request, request_body: PredictRequest, api_key: str = Depen
             predict_fn = predict_from_payload
 
         result = predict_fn(payload=request_body.features, dataset=request_body.dataset)
-        
+
         duration = time.time() - start
         track_user_action(page="api", action="prediction", metadata={"duration_ms": round(duration * 1000, 2)})
-        
+
+        # Log successful prediction
+        log_prediction_request(
+            model_id=result.get("model_id", "unknown"),
+            dataset=request_body.dataset or "unknown",
+            status="success",
+            num_predictions=result.get("predictions_count", 1),
+            duration_ms=round(duration * 1000, 2),
+            correlation_id=correlation_id,
+            request_id=request_id,
+            service="api",
+        )
+
         return result
     except FileNotFoundError as exc:
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        error_category = get_error_category(exc)
+        log_prediction_request(
+            model_id="unknown",
+            dataset=request_body.dataset or "unknown",
+            status="failed",
+            num_predictions=0,
+            error=str(exc),
+            correlation_id=correlation_id,
+            request_id=request_id,
+            service="api",
+        )
+        raise HTTPException(
+            status_code=500,
+            detail={"message": str(exc), "error_category": error_category, "correlation_id": correlation_id, "request_id": request_id},
+        ) from exc
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        error_category = get_error_category(exc)
+        log_prediction_request(
+            model_id="unknown",
+            dataset=request_body.dataset or "unknown",
+            status="failed",
+            num_predictions=0,
+            error=str(exc),
+            correlation_id=correlation_id,
+            request_id=request_id,
+            service="api",
+        )
+        raise HTTPException(
+            status_code=400,
+            detail={"message": str(exc), "error_category": error_category, "correlation_id": correlation_id, "request_id": request_id},
+        ) from exc
     except Exception as exc:
-        LOGGER.exception("Prediction failed")
-        raise HTTPException(status_code=500, detail=f"Prediction failed: {exc}") from exc
+        error_category = get_error_category(exc)
+        log_prediction_request(
+            model_id="unknown",
+            dataset=request_body.dataset or "unknown",
+            status="failed",
+            num_predictions=0,
+            error=str(exc),
+            correlation_id=correlation_id,
+            request_id=request_id,
+            service="api",
+        )
+        LOGGER.exception(
+            "Prediction failed",
+            extra={
+                "error_category": error_category,
+                "correlation_id": correlation_id,
+                "request_id": request_id,
+            },
+        )
+        raise HTTPException(
+            status_code=500,
+            detail={"message": f"Prediction failed: {exc}", "error_category": error_category, "correlation_id": correlation_id, "request_id": request_id},
+        ) from exc

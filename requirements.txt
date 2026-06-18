@@ -30,7 +30,7 @@ MarkupSafe==3.0.3
 narwhals==2.19.0
 numpy>=1.26.0
 packaging==26.1
-pandas==3.0.2
+pandas>=2.0.0,<3.0.0
 pillow==12.2.0
 playwright==1.60.0
 plotly==6.7.0

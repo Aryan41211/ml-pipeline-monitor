@@ -1,4 +1,5 @@
 import { defineConfig, devices } from '@playwright/test';
+import path from 'path';
 
 export default defineConfig({
   testDir: './tests/e2e',
@@ -20,7 +21,7 @@ export default defineConfig({
   ],
   webServer: {
     command: 'python -m streamlit run app.py --server.headless true --server.port 8501',
-    cwd: 'C:/projects/ML-pipeline-monitor',
+    cwd: path.resolve(__dirname),
     url: 'http://localhost:8501/_stcore/health',
     reuseExistingServer: !process.env.CI,
     timeout: 120000,

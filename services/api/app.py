@@ -7,11 +7,12 @@ import time
 from contextlib import asynccontextmanager
 from typing import Any, Dict, List, Optional, Union
 
-from fastapi import Depends, FastAPI, HTTPException, Request, Security, status
-from fastapi.responses import JSONResponse
+from fastapi import Depends, FastAPI, HTTPException, Request, Response, Security, status
+from fastapi.responses import JSONResponse, PlainTextResponse
 from fastapi.security import APIKeyHeader
 from fastapi.exceptions import RequestValidationError
 from pydantic import BaseModel, Field, ValidationError
+from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
@@ -24,6 +25,13 @@ from services.telemetry_service import track_user_action
 from src.database import initialize_db
 from src.db_engine import get_backend
 from src.logger import get_app_logger, get_correlation_id, set_correlation_id, get_request_id, set_request_id, set_service_context, get_error_category, ErrorCategory
+from src.metrics import (
+    registry,
+    record_api_request,
+    record_api_error,
+    record_prediction,
+    update_system_metrics,
+)
 
 
 LOGGER = get_app_logger("api")
@@ -141,6 +149,22 @@ async def log_requests(request: Request, call_next):
     # Add correlation ID and request ID to response headers
     response.headers["X-Correlation-ID"] = correlation_id
     response.headers["X-Request-ID"] = request_id
+
+    # Record Prometheus metrics
+    record_api_request(
+        method=request.method,
+        endpoint=request.url.path,
+        status_code=response.status_code,
+        duration_seconds=duration,
+    )
+
+    # Record errors for non-2xx responses
+    if response.status_code >= 400:
+        record_api_error(
+            method=request.method,
+            endpoint=request.url.path,
+            error_type=f"http_{response.status_code}",
+        )
 
     LOGGER.info(
         "api_request",
@@ -309,6 +333,14 @@ def health_ready() -> Dict[str, Any]:
     }
 
 
+@app.get("/metrics")
+def metrics() -> Response:
+    """Prometheus metrics endpoint."""
+    # Update system metrics before exposing
+    update_system_metrics()
+    return Response(content=generate_latest(registry), media_type=CONTENT_TYPE_LATEST)
+
+
 @app.get("/health/detailed")
 def detailed_health() -> Dict[str, Any]:
     """Detailed health endpoint with system metrics and database check."""
@@ -360,6 +392,14 @@ def predict(request: Request, request_body: PredictRequest, api_key: str = Depen
         duration = time.time() - start
         track_user_action(page="api", action="prediction", metadata={"duration_ms": round(duration * 1000, 2)})
 
+        # Record Prometheus metrics for successful prediction
+        record_prediction(
+            model_id=result.get("model_id", "unknown"),
+            dataset=request_body.dataset or "unknown",
+            status="success",
+            latency_seconds=duration,
+        )
+
         # Log successful prediction
         log_prediction_request(
             model_id=result.get("model_id", "unknown"),
@@ -385,6 +425,13 @@ def predict(request: Request, request_body: PredictRequest, api_key: str = Depen
             request_id=request_id,
             service="api",
         )
+        # Record Prometheus metrics for failed prediction
+        record_prediction(
+            model_id="unknown",
+            dataset=request_body.dataset or "unknown",
+            status="failed",
+            latency_seconds=time.time() - start,
+        )
         raise HTTPException(
             status_code=500,
             detail={"message": str(exc), "error_category": error_category, "correlation_id": correlation_id, "request_id": request_id},
@@ -401,6 +448,13 @@ def predict(request: Request, request_body: PredictRequest, api_key: str = Depen
             request_id=request_id,
             service="api",
         )
+        # Record Prometheus metrics for failed prediction
+        record_prediction(
+            model_id="unknown",
+            dataset=request_body.dataset or "unknown",
+            status="failed",
+            latency_seconds=time.time() - start,
+        )
         raise HTTPException(
             status_code=400,
             detail={"message": str(exc), "error_category": error_category, "correlation_id": correlation_id, "request_id": request_id},
@@ -416,6 +470,13 @@ def predict(request: Request, request_body: PredictRequest, api_key: str = Depen
             correlation_id=correlation_id,
             request_id=request_id,
             service="api",
+        )
+        # Record Prometheus metrics for failed prediction
+        record_prediction(
+            model_id="unknown",
+            dataset=request_body.dataset or "unknown",
+            status="failed",
+            latency_seconds=time.time() - start,
         )
         LOGGER.exception(
             "Prediction failed",

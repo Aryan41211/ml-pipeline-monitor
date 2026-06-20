@@ -13,6 +13,12 @@ from src.data_loader import DATASET_OPTIONS, get_feature_statistics, load_datase
 from src.database import get_experiments, save_experiment, save_model
 from src.feature_store import load_cached_splits, make_feature_key, save_cached_splits
 from src.logger import get_app_logger
+from src.metrics import (
+    record_experiment,
+    record_model_registration,
+    record_pipeline_run,
+    record_pipeline_stage,
+)
 from src.mlflow_tracker import log_pipeline_run
 from src.pipeline import CLF_REGISTRY, MLPipeline, PipelineResult, REG_REGISTRY
 
@@ -155,6 +161,13 @@ def run_pipeline_and_persist(
             ds["y_test"],
         )
     except Exception as exc:
+        # Record failed pipeline run
+        record_pipeline_run(
+            status="failed",
+            dataset=dataset_label,
+            model_type=model_type,
+            duration_seconds=0.0,
+        )
         emit_console_alert("critical", f"Pipeline failure for dataset={dataset_label}: {exc}")
         emit_email_alert(
             "critical",
@@ -165,6 +178,14 @@ def run_pipeline_and_persist(
         LOGGER.exception("Pipeline run failed")
         raise
 
+    # Record successful pipeline run
+    record_pipeline_run(
+        status="success",
+        dataset=dataset_label,
+        model_type=model_type,
+        duration_seconds=result.duration,
+    )
+
     save_experiment(
         run_id=result.run_id,
         name=f"{dataset_label} / {model_type}",
@@ -174,6 +195,13 @@ def run_pipeline_and_persist(
         params=params,
         metrics=result.metrics,
         duration=result.duration,
+    )
+
+    # Record experiment creation
+    record_experiment(
+        status="success",
+        dataset=dataset_label,
+        model_type=model_type,
     )
 
     artifact_paths = _persist_artifacts(result.run_id, result.model, result.scaler)
@@ -189,6 +217,13 @@ def run_pipeline_and_persist(
         artifact_path=artifact_paths["model_path"],
         params=params,
         experiment_id=result.run_id,
+    )
+
+    # Record model registration
+    record_model_registration(
+        dataset=dataset_label,
+        model_type=model_type,
+        stage="staging",  # Default stage for newly registered models
     )
 
     LOGGER.info(

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 import uuid
 from typing import Any, Dict, List, Optional
 
@@ -14,6 +15,7 @@ from src.data_loader import DATASET_OPTIONS, load_dataset
 from src.database import get_drift_reports, get_drift_reference, save_drift_reference, save_drift_report
 from src.drift_detector import run_drift_analysis
 from src.logger import get_app_logger
+from src.metrics import record_drift_detection
 
 LOGGER = get_app_logger("drift_service")
 
@@ -91,7 +93,7 @@ def run_drift_and_persist(
     alpha: float,
 ) -> Dict[str, Any]:
     """Run drift analysis and persist report in one service call.
-    
+
     Compares current production data against stored reference distribution
     (from training data at model promotion time).
     """
@@ -126,6 +128,7 @@ def run_drift_and_persist(
     else:
         reference = pd.DataFrame(ref_record["reference_data"], columns=ref_record["feature_names"])
 
+    start_time = time.time()
     report = run_drift_analysis(
         pd.DataFrame(reference, columns=ds["feature_names"]),
         pd.DataFrame(current, columns=ds["feature_names"]),
@@ -134,6 +137,7 @@ def run_drift_and_persist(
         significant_threshold=float(monitoring_cfg.get("psi_significant_threshold", 0.25)),
         feature_ratio_threshold=float(monitoring_cfg.get("drift_feature_ratio_threshold", 0.20)),
     )
+    drift_duration = time.time() - start_time
 
     report["overall_severity"] = _severity_from_report(report)
 
@@ -147,6 +151,16 @@ def run_drift_and_persist(
         drift_score=report["average_psi"],
         features_drifted=report["features_drifted"],
         feature_results=report["feature_results"],
+    )
+
+    # Record Prometheus metrics for drift detection
+    record_drift_detection(
+        dataset=dataset_label,
+        severity=report.get("overall_severity", "stable"),
+        drift_detected=report["overall_drift"],
+        drift_score_value=report["average_psi"],
+        features_drifted=report["features_drifted"],
+        duration_seconds=drift_duration,
     )
 
     if report["overall_drift"]:

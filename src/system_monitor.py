@@ -7,19 +7,41 @@ can correlate pipeline latency with host resource pressure.
 from __future__ import annotations
 
 import os
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 import psutil
 
 
+def _get_cpu_temperature_c() -> Optional[float]:
+    """Best-effort CPU temperature in Celsius.
+
+    Returns None if sensors are not available on the host.
+    """
+    try:
+        temps = psutil.sensors_temperatures(fahrenheit=False)
+    except Exception:
+        return None
+
+    if not temps:
+        return None
+
+    # Pick the first available temperature entry.
+    for _, entries in temps.items():
+        for entry in entries:
+            if entry.current is not None:
+                return float(entry.current)
+    return None
+
+
 def get_system_metrics() -> Dict[str, Any]:
-    """Return current CPU, memory, and disk utilisation."""
+    """Return current CPU, memory, disk, and host temperature (if available)."""
     cpu = psutil.cpu_percent(interval=0.3)
     mem = psutil.virtual_memory()
     disk = psutil.disk_usage("/")
 
     return {
         "cpu_percent": cpu,
+        "cpu_temperature_c": _get_cpu_temperature_c(),
         "cpu_logical_cores": psutil.cpu_count(logical=True),
         "cpu_physical_cores": psutil.cpu_count(logical=False),
         "memory_total_gb": round(mem.total / 2**30, 2),
@@ -44,3 +66,11 @@ def get_process_metrics() -> Dict[str, Any]:
         "num_threads": proc.num_threads(),
         "status": proc.status(),
     }
+
+
+def get_host_process_count() -> int:
+    """Return the number of processes currently visible to the OS."""
+    try:
+        return len(psutil.pids())
+    except Exception:
+        return 0

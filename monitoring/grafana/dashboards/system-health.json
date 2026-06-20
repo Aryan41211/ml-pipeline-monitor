@@ -1,0 +1,78 @@
+{
+  "uid": "system-health",
+  "title": "System Health",
+  "tags": ["ml", "system"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "10s",
+  "panels": [
+    {
+      "type": "timeseries",
+      "title": "CPU Usage (%)",
+      "datasource": "Prometheus",
+      "targets": [
+        { "expr": "ml_system_cpu_percent", "legendFormat": "cpu", "refId": "A" }
+      ],
+      "fieldConfig": { "defaults": {}, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } },
+      "gridPos": { "x": 0, "y": 0, "w": 12, "h": 9 }
+    },
+    {
+      "type": "timeseries",
+      "title": "RAM Usage (%)",
+      "datasource": "Prometheus",
+      "targets": [
+        { "expr": "ml_system_memory_percent", "legendFormat": "memory", "refId": "B" }
+      ],
+      "fieldConfig": { "defaults": {}, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } },
+      "gridPos": { "x": 12, "y": 0, "w": 12, "h": 9 }
+    },
+    {
+      "type": "timeseries",
+      "title": "Disk Usage (%)",
+      "datasource": "Prometheus",
+      "targets": [
+        { "expr": "ml_system_disk_percent", "legendFormat": "disk", "refId": "C" }
+      ],
+      "fieldConfig": { "defaults": {}, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } },
+      "gridPos": { "x": 0, "y": 9, "w": 12, "h": 8 }
+    },
+    {
+      "type": "timeseries",
+      "title": "CPU Temperature (°C)",
+      "datasource": "Prometheus",
+      "targets": [
+        { "expr": "ml_system_cpu_temperature_c", "legendFormat": "temp_c", "refId": "D" }
+      ],
+      "fieldConfig": { "defaults": {}, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } },
+      "gridPos": { "x": 12, "y": 9, "w": 12, "h": 8 }
+    },
+    {
+      "type": "timeseries",
+      "title": "Active Threads",
+      "datasource": "Prometheus",
+      "targets": [
+        { "expr": "ml_system_active_threads", "legendFormat": "active_threads", "refId": "E" }
+      ],
+      "fieldConfig": { "defaults": {}, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } },
+      "gridPos": { "x": 0, "y": 17, "w": 12, "h": 8 }
+    },
+    {
+      "type": "timeseries",
+      "title": "Process Count",
+      "datasource": "Prometheus",
+      "targets": [
+        { "expr": "ml_system_process_count", "legendFormat": "process_count", "refId": "F" }
+      ],
+      "fieldConfig": { "defaults": {}, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } },
+      "gridPos": { "x": 12, "y": 17, "w": 12, "h": 8 }
+    }
+  ],
+  "annotations": { "list": [] }
+}

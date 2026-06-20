@@ -1,3 +1,6 @@
+
+
+
 """
 Prometheus metrics for ML Pipeline Monitor.
 
@@ -188,6 +191,25 @@ process_num_threads = Gauge(
     registry=registry,
 )
 
+# System-level active threads and process count
+system_active_threads = Gauge(
+    "ml_system_active_threads",
+    "Active threads on the host (best-effort)",
+    registry=registry,
+)
+
+system_process_count = Gauge(
+    "ml_system_process_count",
+    "Process count on the host (best-effort)",
+    registry=registry,
+)
+
+system_cpu_temperature_c = Gauge(
+    "ml_system_cpu_temperature_c",
+    "CPU temperature in Celsius (best-effort; NaN if unavailable)",
+    registry=registry,
+)
+
 # ---------------------------------------------------------------------------
 # Experiment / Model Registry Metrics
 # ---------------------------------------------------------------------------
@@ -243,11 +265,32 @@ dataset_columns = Gauge(
 # ---------------------------------------------------------------------------
 
 def update_system_metrics() -> None:
-    """Update all system-level metrics from psutil."""
+    """Update all system-level metrics from psutil.
+
+    Note: Some values (like CPU temperature) are best-effort and may be NaN if
+    sensors aren't available in the current environment.
+    """
     import psutil
 
     # CPU
     system_cpu_percent.set(psutil.cpu_percent(interval=0.1))
+
+    cpu_temp_c = float("nan")
+    if hasattr(psutil, "sensors_temperatures"):
+        try:
+            temps = psutil.sensors_temperatures(fahrenheit=False)
+            if temps:
+                for _, entries in temps.items():
+                    for entry in entries:
+                        if entry.current is not None:
+                            cpu_temp_c = float(entry.current)
+                            break
+                    if not (cpu_temp_c != cpu_temp_c):  # not-NaN
+                        break
+        except Exception:
+            cpu_temp_c = float("nan")
+
+    system_cpu_temperature_c.set(cpu_temp_c)
 
     # Memory
     mem = psutil.virtual_memory()
@@ -261,13 +304,22 @@ def update_system_metrics() -> None:
     system_disk_used_bytes.set(disk.used)
     system_disk_free_bytes.set(disk.free)
 
-    # Process
+    # Process + thread info (for both process and host)
     proc = psutil.Process()
     process_cpu_percent.set(proc.cpu_percent(interval=0.1))
     mem_info = proc.memory_info()
     process_memory_rss_bytes.set(mem_info.rss)
     process_memory_vms_bytes.set(mem_info.vms)
     process_num_threads.set(proc.num_threads())
+
+    # Active threads: use current process thread count (best-effort)
+    system_active_threads.set(proc.num_threads())
+
+    # Process count: number of PIDs visible to the OS (best-effort)
+    try:
+        system_process_count.set(len(psutil.pids()))
+    except Exception:
+        system_process_count.set(0)
 
 
 def record_pipeline_run(

@@ -236,6 +236,31 @@ docker run --rm -p 8501:8501 ml-pipeline-monitor
 docker compose up --build
 ```
 
+### Prometheus + Grafana Monitoring
+
+This repo includes a Prometheus + Grafana stack via `docker-compose.yml`.
+
+- Prometheus: http://localhost:9090
+- Grafana: http://localhost:3000 (default user/pass in compose: admin/admin)
+- Metrics endpoint (scraped by Prometheus): `GET http://localhost:8000/metrics`
+
+Grafana dashboards are provisioned automatically from:
+
+- `monitoring/grafana/provisioning/`
+- `monitoring/grafana/dashboards/`
+
+Run:
+
+```bash
+docker compose up --build prometheus grafana
+```
+
+Optional: bring everything up (app + api + monitoring):
+
+```bash
+docker compose up --build
+```
+
 ### Optional Postgres profile (upgrade readiness)
 
 ```bash

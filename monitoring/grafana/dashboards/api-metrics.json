@@ -1,0 +1,77 @@
+{
+  "uid": "api-metrics",
+  "title": "API Metrics",
+  "tags": ["ml", "api"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "10s",
+  "panels": [
+    {
+      "type": "timeseries",
+      "title": "Requests/sec (by status code)",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "sum by (status_code) (rate(ml_api_requests_total[5m]))",
+          "legendFormat": "status {{status_code}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": { "defaults": {}, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } },
+      "gridPos": { "x": 0, "y": 0, "w": 12, "h": 9 }
+    },
+    {
+      "type": "timeseries",
+      "title": "Prediction latency (p95)",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum by (le, model_id, dataset) (rate(ml_api_request_duration_seconds_bucket[5m])))",
+          "legendFormat": "{{dataset}} {{model_id}} p95",
+          "refId": "B"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum by (le, model_id, dataset) (rate(ml_prediction_latency_seconds_bucket[5m])))",
+          "legendFormat": "{{dataset}} {{model_id}} prediction p95",
+          "refId": "C"
+        }
+      ],
+      "fieldConfig": { "defaults": {}, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } },
+      "gridPos": { "x": 12, "y": 0, "w": 12, "h": 9 }
+    },
+    {
+      "type": "timeseries",
+      "title": "Error rate (errors/sec)",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "sum by (error_type) (rate(ml_api_errors_total[5m]))",
+          "legendFormat": "{{error_type}}",
+          "refId": "D"
+        }
+      ],
+      "fieldConfig": { "defaults": {}, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } },
+      "gridPos": { "x": 0, "y": 9, "w": 12, "h": 8 }
+    },
+    {
+      "type": "timeseries",
+      "title": "Endpoint traffic (by endpoint)",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "sum by (endpoint) (rate(ml_api_requests_total[5m]))",
+          "legendFormat": "{{endpoint}}",
+          "refId": "E"
+        }
+      ],
+      "fieldConfig": { "defaults": {}, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } },
+      "gridPos": { "x": 12, "y": 9, "w": 12, "h": 8 }
+    }
+  ],
+  "annotations": { "list": [] }
+}

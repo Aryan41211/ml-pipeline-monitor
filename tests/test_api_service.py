@@ -42,4 +42,9 @@ def test_predict_endpoint_validation_error(monkeypatch):
     client = TestClient(app)
     response = client.post("/predict", json={"features": {"f1": 1.0}}, headers={"X-API-Key": "test-api-key"})
     assert response.status_code == 400
-    assert "bad input" in response.json().get("detail", "")
+    body = response.json()
+    # API returns:
+    # { "detail": { "message": ..., "error_category": ..., ... } }
+    detail = body.get("detail", {})
+    assert isinstance(detail, dict)
+    assert detail.get("message") == "bad input"

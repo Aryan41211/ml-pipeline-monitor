@@ -26,6 +26,12 @@ DEFAULT_CONFIG: Dict[str, Any] = {
         "psi_moderate_threshold": 0.10,
         "psi_significant_threshold": 0.25,
         "drift_feature_ratio_threshold": 0.20,
+        "automated_retraining": {
+            "enabled": True,
+            "drift_threshold": 0.20,
+            "min_performance_improvement": 0.02,
+            "cooldown_seconds": 300,
+        },
     },
     "storage": {
         "backend": "sqlite",

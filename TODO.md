@@ -1,18 +1,11 @@
-# TODO — Real-world datasets for ML Pipeline Monitor
+# TODO - Automated Retraining Pipeline (Triggered by Data Drift)
 
-- [ ] Gather current implementation details for dataset loading/splitting, dataset preview UI, feature store caching, pipeline stage assumptions, and experiment/model registry persistence.
-- [ ] Design dataset download/processing strategy for:
-  - [ ] Customer Churn Prediction
-  - [ ] Credit Card Fraud Detection
-  - [ ] House Price Prediction
-- [ ] Implement `datasets/raw/`, `datasets/processed/`, automatic download-if-missing, and `metadata.json` generation/statistics.
-- [ ] Update `src/data_loader.py` for new datasets while keeping backward compatibility with existing toy datasets.
-- [ ] Update feature store and pipeline integration so cached splits and task selection work for real datasets.
-- [ ] Update experiment tracking and model registry to store dataset/task correctly for new datasets.
-- [ ] Enhance Dataset Preview page with correlation heatmap (and keep existing preview elements).
-- [ ] Add/update tests to cover dataset loading, preview stats, caching behavior, and backward compatibility.
-- [ ] Run `pytest -q` and fix any failures.
-- [ ] Update `requirements.txt`, `config.yaml`, and `README.md` only if needed.
-- [ ] Commit with message `feat: add real world datasets`.
-- [ ] Push to GitHub.
-
+- [ ] Step 1: Add configuration keys for automated retraining in config.yaml + src/config_loader.py
+- [ ] Step 2: Extend DB schema (src/database.py) with retraining tables + accessor functions
+- [ ] Step 3: Implement services/automated_retraining_service.py (threshold, cooldown, retrain, compare, promote)
+- [ ] Step 4: Integrate automated retraining trigger into services/drift_service.py
+- [ ] Step 5: Create new Streamlit page pages/7_Automated_Retraining.py (history, comparison, promotion, logs)
+- [ ] Step 6: Add sidebar nav link in src/ui_theme.py
+- [ ] Step 7: Add/Update tests for cooldown + promotion decision + DB persistence
+- [ ] Step 8: Run pytest, fix failures, update README/config/requirements if needed
+- [ ] Step 9: Git operations: commit `feat: add automated retraining pipeline` and push to GitHub

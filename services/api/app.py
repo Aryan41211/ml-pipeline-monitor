@@ -12,7 +12,13 @@ from fastapi.responses import JSONResponse, PlainTextResponse
 from fastapi.security import APIKeyHeader
 from fastapi.exceptions import RequestValidationError
 from pydantic import BaseModel, Field, ValidationError
-from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
+# Optional dependency: prometheus_client is required only for the /metrics endpoint.
+# The test environment may not have it installed.
+try:
+    from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
+except ModuleNotFoundError:  # pragma: no cover
+    generate_latest = None
+    CONTENT_TYPE_LATEST = "text/plain; version=0.0.4"
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
@@ -32,6 +38,42 @@ from src.metrics import (
     record_prediction,
     update_system_metrics,
 )
+
+
+def log_prediction_request(
+    *,
+    model_id: str,
+    dataset: str,
+    status: str,
+    num_predictions: int,
+    duration_ms: float | int | None = None,
+    error: str | None = None,
+    correlation_id: str | None = None,
+    request_id: str | None = None,
+    service: str = "api",
+) -> None:
+    """Best-effort prediction request logging.
+
+    This API module is used by unit tests; keep this lightweight and
+    side-effect free (logger only) unless deeper persistence is added.
+    """
+    extra = {
+        "model_id": model_id,
+        "dataset": dataset,
+        "status": status,
+        "num_predictions": num_predictions,
+        "duration_ms": duration_ms,
+        "error": error,
+        "correlation_id": correlation_id,
+        "request_id": request_id,
+        "service": service,
+    }
+    # Remove Nones to keep logs clean
+    extra = {k: v for k, v in extra.items() if v is not None}
+    if status == "success":
+        LOGGER.info("prediction_request", extra=extra)
+    else:
+        LOGGER.warning("prediction_request_failed", extra=extra)
 
 
 LOGGER = get_app_logger("api")
@@ -69,6 +111,8 @@ class PredictRequest(BaseModel):
 @asynccontextmanager
 async def _lifespan(_: FastAPI):
     """Initialize persistence before serving requests, with graceful shutdown."""
+    import asyncio
+
     initialize_db()
     
     # Setup signal handlers for graceful shutdown
@@ -98,7 +142,6 @@ async def _lifespan(_: FastAPI):
             LOGGER.warning("Error during shutdown cleanup: %s", e)
         sys.exit(0)
     
-    import asyncio
     watcher_task = asyncio.create_task(_shutdown_watcher())
     
     try:
@@ -338,6 +381,11 @@ def metrics() -> Response:
     """Prometheus metrics endpoint."""
     # Update system metrics before exposing
     update_system_metrics()
+
+    # prometheus_client is optional in some environments (e.g., unit tests)
+    if generate_latest is None:  # pragma: no cover
+        return Response(content="", media_type=CONTENT_TYPE_LATEST)
+
     return Response(content=generate_latest(registry), media_type=CONTENT_TYPE_LATEST)
 
 

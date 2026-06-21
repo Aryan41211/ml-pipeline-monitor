@@ -770,6 +770,199 @@ def get_drift_reference(dataset: str) -> Optional[Dict[str, Any]]:
 
 
 # ---------------------------------------------------------------------------
+# Prediction History (Batch/Online Inference Logging)
+# ---------------------------------------------------------------------------
+
+def initialize_prediction_registry() -> None:
+    """Create tables for prediction request/history and latency tracking."""
+    backend = _backend_name()
+
+    prediction_registry_sqlite = """
+        CREATE TABLE IF NOT EXISTS prediction_requests (
+            id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+            request_id         TEXT UNIQUE,
+            correlation_id    TEXT,
+            model_id           TEXT NOT NULL,
+            dataset            TEXT,
+            input_type         TEXT NOT NULL,
+            input_hash         TEXT,
+            num_predictions    INTEGER NOT NULL,
+            status             TEXT NOT NULL,
+            duration_ms        REAL,
+            error              TEXT,
+            created_at         TEXT DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS predictions (
+            id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+            request_id        TEXT NOT NULL,
+            row_index         INTEGER NOT NULL,
+            prediction        TEXT NOT NULL,
+            probability       TEXT,
+            created_at        TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (request_id) REFERENCES prediction_requests(request_id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_prediction_requests_created
+            ON prediction_requests(created_at DESC);
+
+        CREATE INDEX IF NOT EXISTS idx_predictions_request_row
+            ON predictions(request_id, row_index);
+    """
+
+    prediction_registry_postgres = """
+        CREATE TABLE IF NOT EXISTS prediction_requests (
+            id                 BIGSERIAL PRIMARY KEY,
+            request_id         TEXT UNIQUE,
+            correlation_id    TEXT,
+            model_id           TEXT NOT NULL,
+            dataset            TEXT,
+            input_type         TEXT NOT NULL,
+            input_hash         TEXT,
+            num_predictions    INTEGER NOT NULL,
+            status             TEXT NOT NULL,
+            duration_ms        DOUBLE PRECISION,
+            error              TEXT,
+            created_at         TEXT DEFAULT CURRENT_TIMESTAMP::text
+        );
+
+        CREATE TABLE IF NOT EXISTS predictions (
+            id                 BIGSERIAL PRIMARY KEY,
+            request_id        TEXT NOT NULL,
+            row_index         INTEGER NOT NULL,
+            prediction        TEXT NOT NULL,
+            probability       TEXT,
+            created_at        TEXT DEFAULT CURRENT_TIMESTAMP::text,
+            FOREIGN KEY (request_id) REFERENCES prediction_requests(request_id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_prediction_requests_created
+            ON prediction_requests(created_at DESC);
+
+        CREATE INDEX IF NOT EXISTS idx_predictions_request_row
+            ON predictions(request_id, row_index);
+    """
+
+    with get_connection() as conn:
+        conn.executescript(
+            prediction_registry_postgres if backend == "postgres" else prediction_registry_sqlite
+        )
+
+
+def save_prediction_request(
+    *,
+    request_id: str,
+    correlation_id: str | None,
+    model_id: str,
+    dataset: str | None,
+    input_type: str,
+    input_hash: str | None,
+    num_predictions: int,
+    status: str,
+    duration_ms: float | None,
+    error: str | None,
+) -> None:
+    """Persist prediction request metadata."""
+    with get_connection() as conn:
+        conn.execute(
+            """
+            INSERT INTO prediction_requests
+                (request_id, correlation_id, model_id, dataset, input_type, input_hash,
+                 num_predictions, status, duration_ms, error)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(request_id) DO UPDATE SET
+                correlation_id=excluded.correlation_id,
+                model_id=excluded.model_id,
+                dataset=excluded.dataset,
+                input_type=excluded.input_type,
+                input_hash=excluded.input_hash,
+                num_predictions=excluded.num_predictions,
+                status=excluded.status,
+                duration_ms=excluded.duration_ms,
+                error=excluded.error
+            """,
+            (
+                request_id,
+                correlation_id,
+                model_id,
+                dataset,
+                input_type,
+                input_hash,
+                int(num_predictions),
+                status,
+                duration_ms,
+                error,
+            ),
+        )
+
+
+def save_predictions_for_request(
+    *,
+    request_id: str,
+    predictions: list[Any],
+    probabilities: list[Any] | None = None,
+) -> None:
+    """Persist per-row predictions for a request."""
+    probabilities = probabilities or [None] * len(predictions)
+    with get_connection() as conn:
+        for idx, pred in enumerate(predictions):
+            conn.execute(
+                """
+                INSERT INTO predictions (request_id, row_index, prediction, probability)
+                VALUES (?, ?, ?, ?)
+                """,
+                (
+                    request_id,
+                    int(idx),
+                    str(pred),
+                    None if probabilities[idx] is None else str(probabilities[idx]),
+                ),
+            )
+
+
+def get_prediction_history(limit: int = 50) -> list[dict[str, Any]]:
+    """Fetch prediction request history (newest first)."""
+    if limit <= 0 or limit > 1000:
+        limit = 50
+    with get_connection() as conn:
+        rows = conn.execute(
+            """
+            SELECT * FROM prediction_requests
+            ORDER BY created_at DESC
+            LIMIT ?
+            """,
+            (limit,),
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def get_prediction_history_by_request_id(request_id: str) -> dict[str, Any] | None:
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT * FROM prediction_requests WHERE request_id = ?",
+            (request_id,),
+        ).fetchone()
+        if not row:
+            return None
+        req = dict(row)
+
+        preds = conn.execute(
+            """
+            SELECT row_index, prediction, probability
+            FROM predictions
+            WHERE request_id = ?
+            ORDER BY row_index ASC
+            """,
+            (request_id,),
+        ).fetchall()
+        req["predictions"] = [
+            {"row_index": int(r["row_index"]), "prediction": r["prediction"], "probability": r["probability"]}
+            for r in preds
+        ]
+    return req
+
+
+# ---------------------------------------------------------------------------
 # Dataset Registry (Dataset Versioning + Data Lineage)
 # ---------------------------------------------------------------------------
 

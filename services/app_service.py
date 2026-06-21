@@ -9,13 +9,21 @@ from __future__ import annotations
 from typing import Any, Dict, List
 
 from src.config_loader import load_config
-from src.database import get_experiments, get_models, initialize_db
+from src.database import (
+    get_experiments,
+    get_models,
+    initialize_db,
+    initialize_dataset_registry,
+    initialize_prediction_registry,
+)
 from src.system_monitor import get_system_metrics
 
 
 def initialize_application() -> None:
     """Initialize persistent schema and runtime prerequisites."""
     initialize_db()
+    initialize_dataset_registry()
+    initialize_prediction_registry()
 
 
 def list_experiments(limit: int = 200) -> List[Dict[str, Any]]:

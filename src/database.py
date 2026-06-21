@@ -7,6 +7,8 @@ from contextlib import contextmanager
 from datetime import datetime, UTC
 from typing import Any, Dict, Iterator, List, Optional
 
+import numpy as np
+
 from src.db_engine import get_backend
 
 
@@ -65,6 +67,8 @@ def initialize_db() -> None:
                 task            TEXT    NOT NULL DEFAULT 'classification',
                 metrics         TEXT,
                 params          TEXT,
+                confusion_matrix TEXT,
+                feature_importances TEXT,
                 experiment_id   TEXT,
                 parent_model_id TEXT,
                 artifact_path   TEXT,
@@ -153,6 +157,8 @@ def initialize_db() -> None:
                 task            TEXT    NOT NULL DEFAULT 'classification',
                 metrics         TEXT,
                 params          TEXT,
+                confusion_matrix TEXT,
+                feature_importances TEXT,
                 experiment_id   TEXT,
                 parent_model_id TEXT,
                 artifact_path   TEXT,
@@ -238,6 +244,8 @@ def initialize_db() -> None:
         ensure_column_exists("models", "dataset_name", "TEXT")
         ensure_column_exists("models", "created_at", "TEXT DEFAULT CURRENT_TIMESTAMP")
         ensure_column_exists("models", "params", "TEXT")
+        ensure_column_exists("models", "confusion_matrix", "TEXT")
+        ensure_column_exists("models", "feature_importances", "TEXT")
         ensure_column_exists("models", "experiment_id", "TEXT")
         ensure_column_exists("models", "parent_model_id", "TEXT")
 
@@ -354,6 +362,8 @@ def save_model(
     experiment_id: Optional[str] = None,
     parent_model_id: Optional[str] = None,
     version: Optional[int] = None,
+    confusion_matrix: Optional[np.ndarray] = None,
+    feature_importances: Optional[Any] = None,
 ) -> Dict[str, Any]:
     now = datetime.now(UTC).isoformat(timespec="seconds")
     with get_connection() as conn:
@@ -376,12 +386,32 @@ def save_model(
 
         effective_experiment_id = experiment_id or run_id
 
+        confusion_json: Optional[str] = None
+        if confusion_matrix is not None:
+            confusion_json = json.dumps(np.asarray(confusion_matrix).tolist())
+
+        feature_importances_json: Optional[str] = None
+        if feature_importances is not None:
+            # Accept pd.Series or array-like
+            try:
+                if hasattr(feature_importances, "to_dict"):
+                    feature_importances_json = json.dumps(
+                        {str(k): float(v) for k, v in feature_importances.to_dict().items()}
+                    )
+                else:
+                    feature_importances_json = json.dumps(feature_importances)
+            except Exception:
+                # Last resort: store string representation
+                feature_importances_json = json.dumps(str(feature_importances))
+
         conn.execute(
             """
             INSERT INTO models
                 (model_id, run_id, name, version, dataset, dataset_name, model_type, task,
-                 metrics, params, experiment_id, parent_model_id, artifact_path, stage, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE((SELECT stage FROM models WHERE model_id = ?), 'development'), ?)
+                 metrics, params, confusion_matrix, feature_importances,
+                 experiment_id, parent_model_id, artifact_path, stage, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 
+                    COALESCE((SELECT stage FROM models WHERE model_id = ?), 'development'), ?)
             ON CONFLICT(model_id) DO UPDATE SET
                 run_id=excluded.run_id,
                 name=excluded.name,
@@ -392,6 +422,8 @@ def save_model(
                 task=excluded.task,
                 metrics=excluded.metrics,
                 params=excluded.params,
+                confusion_matrix=excluded.confusion_matrix,
+                feature_importances=excluded.feature_importances,
                 experiment_id=excluded.experiment_id,
                 parent_model_id=excluded.parent_model_id,
                 artifact_path=excluded.artifact_path,
@@ -408,6 +440,8 @@ def save_model(
                 task,
                 json.dumps(metrics),
                 json.dumps(params or {}),
+                confusion_json,
+                feature_importances_json,
                 effective_experiment_id,
                 parent_model_id,
                 artifact_path,
@@ -733,3 +767,156 @@ def get_drift_reference(dataset: str) -> Optional[Dict[str, Any]]:
         d["reference_data"] = np.array(json.loads(d["reference_data"]))
         return d
     return None
+
+
+# ---------------------------------------------------------------------------
+# Dataset Registry (Dataset Versioning + Data Lineage)
+# ---------------------------------------------------------------------------
+
+def initialize_dataset_registry() -> None:
+    """
+    Create dataset registry tables without modifying the existing initialize_db()
+    schema blocks (safer migrations for this codebase).
+    """
+    backend = _backend_name()
+
+    dataset_registry_sqlite = """
+        CREATE TABLE IF NOT EXISTS datasets (
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            dataset_id    TEXT UNIQUE NOT NULL,
+            dataset_name  TEXT NOT NULL,
+            created_at    TEXT DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS dataset_versions (
+            id                       INTEGER PRIMARY KEY AUTOINCREMENT,
+            dataset_id               TEXT NOT NULL,
+            version                  INTEGER NOT NULL,
+            hash                     TEXT NOT NULL,
+            row_count                INTEGER NOT NULL,
+            column_count             INTEGER NOT NULL,
+            missing_values_summary  TEXT NOT NULL,
+            created_at               TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (dataset_id) REFERENCES datasets(dataset_id),
+            UNIQUE(dataset_id, version),
+            UNIQUE(dataset_id, hash)
+        );
+
+        CREATE TABLE IF NOT EXISTS dataset_schema_snapshots (
+            id                    INTEGER PRIMARY KEY AUTOINCREMENT,
+            dataset_version_id  INTEGER NOT NULL,
+            column_name          TEXT NOT NULL,
+            dtype                 TEXT NOT NULL,
+            FOREIGN KEY (dataset_version_id) REFERENCES dataset_versions(id),
+            UNIQUE(dataset_version_id, column_name)
+        );
+
+        CREATE TABLE IF NOT EXISTS dataset_schema_changes (
+            id               INTEGER PRIMARY KEY AUTOINCREMENT,
+            dataset_id      TEXT NOT NULL,
+            from_version    INTEGER NOT NULL,
+            to_version      INTEGER NOT NULL,
+            added_columns   TEXT NOT NULL,
+            removed_columns TEXT NOT NULL,
+            dtype_changes   TEXT NOT NULL,
+            detected_at     TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (dataset_id) REFERENCES datasets(dataset_id),
+            UNIQUE(dataset_id, from_version, to_version)
+        );
+
+        CREATE TABLE IF NOT EXISTS dataset_lineage_edges (
+            id                INTEGER PRIMARY KEY AUTOINCREMENT,
+            edge_type        TEXT NOT NULL,
+            from_dataset_id  TEXT,
+            from_version     INTEGER,
+            to_dataset_id    TEXT,
+            to_version       INTEGER,
+            from_run_id      TEXT,
+            to_run_id        TEXT,
+            to_model_id      TEXT,
+            from_model_id    TEXT,
+            created_at       TEXT DEFAULT CURRENT_TIMESTAMP,
+            note             TEXT
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_dataset_versions_dataset_created
+            ON dataset_versions(dataset_id, created_at DESC);
+
+        CREATE INDEX IF NOT EXISTS idx_dataset_schema_changes_dataset
+            ON dataset_schema_changes(dataset_id, detected_at DESC);
+
+        CREATE INDEX IF NOT EXISTS idx_dataset_lineage_edges_type_created
+            ON dataset_lineage_edges(edge_type, created_at DESC);
+    """
+
+    dataset_registry_postgres = """
+        CREATE TABLE IF NOT EXISTS datasets (
+            id            BIGSERIAL PRIMARY KEY,
+            dataset_id    TEXT UNIQUE NOT NULL,
+            dataset_name  TEXT NOT NULL,
+            created_at    TEXT DEFAULT CURRENT_TIMESTAMP::text
+        );
+
+        CREATE TABLE IF NOT EXISTS dataset_versions (
+            id                       BIGSERIAL PRIMARY KEY,
+            dataset_id               TEXT NOT NULL,
+            version                  INTEGER NOT NULL,
+            hash                     TEXT NOT NULL,
+            row_count                INTEGER NOT NULL,
+            column_count             INTEGER NOT NULL,
+            missing_values_summary  TEXT NOT NULL,
+            created_at               TEXT DEFAULT CURRENT_TIMESTAMP::text,
+            FOREIGN KEY (dataset_id) REFERENCES datasets(dataset_id),
+            UNIQUE(dataset_id, version),
+            UNIQUE(dataset_id, hash)
+        );
+
+        CREATE TABLE IF NOT EXISTS dataset_schema_snapshots (
+            id                    BIGSERIAL PRIMARY KEY,
+            dataset_version_id  BIGINT NOT NULL,
+            column_name          TEXT NOT NULL,
+            dtype                 TEXT NOT NULL,
+            FOREIGN KEY (dataset_version_id) REFERENCES dataset_versions(id),
+            UNIQUE(dataset_version_id, column_name)
+        );
+
+        CREATE TABLE IF NOT EXISTS dataset_schema_changes (
+            id               BIGSERIAL PRIMARY KEY,
+            dataset_id      TEXT NOT NULL,
+            from_version    INTEGER NOT NULL,
+            to_version      INTEGER NOT NULL,
+            added_columns   TEXT NOT NULL,
+            removed_columns TEXT NOT NULL,
+            dtype_changes   TEXT NOT NULL,
+            detected_at     TEXT DEFAULT CURRENT_TIMESTAMP::text,
+            FOREIGN KEY (dataset_id) REFERENCES datasets(dataset_id),
+            UNIQUE(dataset_id, from_version, to_version)
+        );
+
+        CREATE TABLE IF NOT EXISTS dataset_lineage_edges (
+            id                BIGSERIAL PRIMARY KEY,
+            edge_type        TEXT NOT NULL,
+            from_dataset_id  TEXT,
+            from_version     INTEGER,
+            to_dataset_id    TEXT,
+            to_version       INTEGER,
+            from_run_id      TEXT,
+            to_run_id        TEXT,
+            to_model_id      TEXT,
+            from_model_id    TEXT,
+            created_at       TEXT DEFAULT CURRENT_TIMESTAMP::text,
+            note             TEXT
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_dataset_versions_dataset_created
+            ON dataset_versions(dataset_id, created_at DESC);
+
+        CREATE INDEX IF NOT EXISTS idx_dataset_schema_changes_dataset
+            ON dataset_schema_changes(dataset_id, detected_at DESC);
+
+        CREATE INDEX IF NOT EXISTS idx_dataset_lineage_edges_type_created
+            ON dataset_lineage_edges(edge_type, created_at DESC);
+    """
+
+    with get_connection() as conn:
+        conn.executescript(dataset_registry_postgres if backend == "postgres" else dataset_registry_sqlite)

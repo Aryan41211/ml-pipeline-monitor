@@ -1,7 +1,15 @@
 """E2E tests for authentication flows."""
 
+import os
+
 import pytest
 from playwright.sync_api import Page, expect
+
+# IMPORTANT: Streamlit is started once per test session in tests/e2e/conftest.py.
+# Auth env vars must be set before Streamlit process starts (i.e., at import time).
+os.environ.setdefault("AUTH_USERNAME", "testadmin")
+os.environ.setdefault("AUTH_PASSWORD", "testpass123")
+os.environ.setdefault("AUTH_ROLE", "admin")
 
 
 def test_login_page_loads(page: Page):
@@ -21,6 +29,9 @@ def test_login_with_invalid_credentials(page: Page):
     page.goto("/")
     page.wait_for_load_state("networkidle")
 
+    page.wait_for_selector("input[type='text']")
+    page.wait_for_selector("input[type='password']")
+
     page.fill("input[type='text']", "invalid_user")
     page.fill("input[type='password']", "wrong_password")
     page.click("button:has-text('Login')")
@@ -30,13 +41,11 @@ def test_login_with_invalid_credentials(page: Page):
 
 def test_login_with_valid_credentials(page: Page):
     """Test login with valid credentials succeeds."""
-    import os
-    os.environ["AUTH_USERNAME"] = "testadmin"
-    os.environ["AUTH_PASSWORD"] = "testpass123"
-    os.environ["AUTH_ROLE"] = "admin"
-
     page.goto("/")
     page.wait_for_load_state("networkidle")
+
+    page.wait_for_selector("input[type='text']")
+    page.wait_for_selector("input[type='password']")
 
     page.fill("input[type='text']", "testadmin")
     page.fill("input[type='password']", "testpass123")
@@ -48,6 +57,7 @@ def test_login_with_valid_credentials(page: Page):
 def test_logout(page: Page):
     """Test logout functionality."""
     import os
+
     os.environ["AUTH_USERNAME"] = "testadmin"
     os.environ["AUTH_PASSWORD"] = "testpass123"
     os.environ["AUTH_ROLE"] = "admin"
@@ -55,8 +65,8 @@ def test_logout(page: Page):
     page.goto("/")
     page.wait_for_load_state("networkidle")
 
-    page.fill("input[type='text']", "testadmin")
-    page.fill("input[type='password']", "testpass123")
+    page.get_by_label("Username").fill("testadmin")
+    page.get_by_label("Password").fill("testpass123")
     page.click("button:has-text('Login')")
 
     expect(page.locator("text=Signed in as testadmin")).to_be_visible()

@@ -217,6 +217,8 @@ def run_pipeline_and_persist(
         artifact_path=artifact_paths["model_path"],
         params=params,
         experiment_id=result.run_id,
+        confusion_matrix=result.confusion_mat,
+        feature_importances=result.feature_importances,
     )
 
     # Record model registration

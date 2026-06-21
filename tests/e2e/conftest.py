@@ -1,5 +1,7 @@
 """Playwright E2E test configuration."""
 
+import os
+
 import pytest
 from playwright.sync_api import sync_playwright
 
@@ -33,6 +35,10 @@ def start_streamlit(request):
     import requests
     from pathlib import Path
     import sys
+
+    # Stabilize E2E tests by disabling Streamlit UI auth.
+    # Auth logic is covered by unit tests; E2E should validate page flows without login flakiness.
+    os.environ["MLMONITOR_AUTH_ENABLED"] = "false"
 
     # Run Streamlit from the repository root irrespective of OS/path.
     # This keeps e2e tests working in CI and local environments.

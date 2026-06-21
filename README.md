@@ -1,402 +1,297 @@
-# ML Pipeline Monitor
+# 🚀 ML Pipeline Monitor
 
-A production-ready MLOps observability platform that gives data science teams real-time visibility into model training pipelines, experiment outcomes, and data distribution health — all through a professional Streamlit interface backed by a local SQLite experiment store.
+**A beginner-friendly + production-minded MLOps observability platform** built with **Streamlit** (UI) and **FastAPI** (inference API).  
+Track experiments, manage model lifecycles, monitor data drift, and correlate pipeline runs with system health — using a backend persistence layer (SQLite by default, PostgreSQL supported).
 
----
-
-## Overview
-
-Managing ML experiments at scale requires more than a notebook.  This platform provides:
-
-- **End-to-end pipeline orchestration** with per-stage progress tracking and structured logging
-- **Experiment tracking** with metric persistence, filtering, and visual comparison
-- **Model registry** with lifecycle stage management (development → staging → production)
-- **Data drift detection** using the Kolmogorov-Smirnov test and Population Stability Index (PSI)
-- **System resource monitoring** to correlate pipeline latency with host pressure
+![MLOps Observability](https://img.shields.io/badge/MLOps-Observability-024ad8?style=flat&logo=mlflow)
 
 ---
 
-## Screenshots
+## ✅ Project Overview
 
-| Page | Description |
-|---|---|
-| Overview | At-a-glance dashboard with KPIs, recent runs, and system health |
-| Pipeline Runner | Configure dataset, algorithm, and hyperparameters; monitor live progress |
-| Experiment Tracking | Compare runs across metrics with interactive Plotly charts |
-| Model Registry | Manage model lifecycle stages; benchmark performance |
-| Data Drift | KS test + PSI analysis with distribution overlay visualisations |
+Managing ML experiments at scale requires more than notebooks. **ML Pipeline Monitor** provides:
 
----
-
-## Technology Stack
-
-| Layer | Technology |
-|---|---|
-| UI framework | [Streamlit](https://streamlit.io) |
-| Inference API | [FastAPI](https://fastapi.tiangolo.com), [Uvicorn](https://www.uvicorn.org) |
-| ML framework | [scikit-learn](https://scikit-learn.org) |
-| Gradient boosting | [XGBoost](https://xgboost.readthedocs.io) |
-| Statistical tests | [SciPy](https://scipy.org) |
-| Visualisation | [Plotly](https://plotly.com/python/) |
-| Data manipulation | [pandas](https://pandas.pydata.org), [NumPy](https://numpy.org) |
-| Persistence | SQLite and PostgreSQL (switchable backend layer) |
-| System monitoring | [psutil](https://psutil.readthedocs.io) |
-| Experiment registry (optional) | [MLflow](https://mlflow.org) |
-| Config | [PyYAML](https://pyyaml.org) |
-| Serialisation | [joblib](https://joblib.readthedocs.io) |
+- **Pipeline orchestration** with per-stage progress tracking (enterprise-style UI)
+- **Experiment tracking** with persisted metrics & filters
+- **Model registry** with lifecycle management:
+  - `development → staging → production → archived`
+- **Data drift detection**:
+  - **Kolmogorov–Smirnov (KS)** test
+  - **Population Stability Index (PSI)**
+- **System resource monitoring** to understand performance bottlenecks
+- **Dataset management & drift references**
+- **Production inference API** (FastAPI) and model artifact loading
 
 ---
 
-## Supported Algorithms
+## ✨ Features (Quick Table)
 
-**Classification**
-- Random Forest
-- XGBoost
-- Gradient Boosting
-- Logistic Regression
-- Support Vector Machine (SVM)
-- Decision Tree
+| Area | What you get | Where |
+|---|---|---|
+| Dataset Hub | Dataset preview + feature statistics | `pages/0_Dataset_Management.py` |
+| Pipeline Runner | Configure + execute training pipeline | `pages/1_Pipeline_Runner.py` |
+| Experiment Tracking | Compare runs + metrics | `pages/2_Experiment_Tracking.py` |
+| Model Registry | Promote models across stages | `pages/3_Model_Registry.py` |
+| Drift Detection | KS + PSI + drift reports | `pages/4_Data_Drift.py` |
+| Data Health | Quality checks & governance context | `pages/5_Data_Health.py` |
+| Governance | Audit trail & compliance policy UI | `pages/6_Governance.py` |
 
-**Regression**
-- Random Forest Regressor
-- XGBoost Regressor
-- Gradient Boosting Regressor
-- Ridge Regression
-- Support Vector Regressor (SVR)
-- Decision Tree Regressor
+> Note: The UI and services are designed to support additional MLOps extensions like scheduling, alerts, and dataset lineage.
 
 ---
 
-## Supported Datasets
+## 🧱 Architecture Diagram
 
-- Breast Cancer Wisconsin (classification)
-- Wine Recognition (classification)
-- Iris Species (classification)
-- Handwritten Digits (classification)
-- Synthetic Classification (2,000 samples, 20 features)
-- Synthetic Regression (2,000 samples, 20 features)
-
-All datasets are sourced from scikit-learn's built-in dataset library — no external downloads required.
-
----
-
-## Project Structure
-
+### High-level flow (Mermaid)
+```mermaid
+flowchart TB
+  UI[Streamlit Pages (pages/)] --> SVC[services/*]
+  SVC --> CORE[src/*]
+  CORE --> DB[src/database.py]
+  DB --> STORE[(SQLite/Postgres)]
+  SVC --> API[FastAPI (services/api/*)]
+  API --> MODEL[Model Artifacts (joblib)]
 ```
+
+### Layered architecture
+- **UI layer**: `pages/*.py`
+- **Service layer**: `services/` orchestration + integration
+- **Core layer**: `src/` pipeline/drift/loader/metrics/auth helpers
+- **Persistence layer**: `src/database.py` + backend abstraction in `src/db_engine.py`
+
+---
+
+## 🖼️ Screenshots
+
+Add/attach screenshots from your app UI here. Common useful screenshots:
+- Dataset Hub preview + missing values panel
+- Pipeline Runner live progress timeline
+- Experiment Tracking metric comparison chart
+- Model Registry production/staging model cards
+- Data Drift PSI/KS results
+
+*(If you want, you can paste a screenshot list and I can format it.)*
+
+---
+
+## 🧰 Tech Stack
+
+| Category | Tech |
+|---|---|
+| UI | Streamlit |
+| Inference API | FastAPI + Uvicorn |
+| ML | scikit-learn |
+| Drift/Stats | SciPy-like statistical tests (KS test), PSI logic |
+| Visuals | Plotly |
+| Data | pandas + NumPy |
+| Persistence | SQLite + PostgreSQL (switchable backend) |
+| Artifacts | joblib (models + scalers) |
+| Monitoring | Prometheus + Grafana (docker stack) |
+
+---
+
+## 📌 Tech Details (For Developers & Recruiters)
+
+### Persistence & backend abstraction
+The repository uses a backend-agnostic persistence layer:
+- `src/database.py`: CRUD + domain persistence
+- `src/db_engine.py`: backend connector (SQLite / PostgreSQL)
+- `src/db_interface.py`: shared interface contracts
+
+### Drift logic
+- `src/drift_detector.py`: drift analysis (KS + PSI + per-feature results)
+- `services/drift_service.py`: orchestrates drift runs and persists reports + references
+
+### Pipeline logic
+- `src/pipeline.py`: stage-by-stage training pipeline
+- `services/pipeline_service.py`: caching splits, running pipeline, persisting experiments/models
+
+---
+
+## 📍 Project Structure
+
+```text
 ml-pipeline-monitor/
-├── app.py                          # Home dashboard (Streamlit app file)
-├── run_app.py                      # Recommended launcher (auto-detects free port)
-├── Dockerfile                      # Container image for Streamlit + API
-├── docker-compose.yml              # App, API, optional postgres profile
+├── app.py                           # Dashboard entry (Streamlit)
+├── run_app.py                       # Launcher script (auto port)
+├── Dockerfile
+├── docker-compose.yml
+├── config.yaml
 ├── requirements.txt
-├── setup.py
-├── config.yaml                     # Application configuration
-├── .github/
-│   └── workflows/
-│       └── ci.yml                  # GitHub Actions test + coverage gate
 ├── src/
-│   ├── pipeline.py                 # Core ML pipeline with stage orchestration
-│   ├── data_loader.py              # Dataset loading and splitting utilities
-│   ├── database.py                 # Persistence layer (backend-aware)
-│   ├── db_interface.py             # DB connection/backend interface contracts
-│   ├── db_engine.py                # Backend implementations (sqlite + postgres)
-│   ├── drift_detector.py           # KS test + PSI drift detection
-│   └── system_monitor.py          # Host resource metrics (psutil)
+│   ├── pipeline.py                 # Core pipeline with stages
+│   ├── data_loader.py             # Dataset loading and splitting
+│   ├── database.py                # Persistence layer (SQLite/Postgres)
+│   ├── db_engine.py               # Backend connectors
+│   ├── drift_detector.py          # KS + PSI
+│   ├── feature_store.py          # Caching splits
+│   └── system_monitor.py         # Host metrics
 ├── pages/
-│   ├── 1_Pipeline_Runner.py        # Interactive pipeline execution
-│   ├── 2_Experiment_Tracking.py   # Experiment comparison and filtering
-│   ├── 3_Model_Registry.py        # Model lifecycle management
-│   └── 4_Data_Drift.py            # Distribution drift analysis
+│   ├── 0_Dataset_Management.py
+│   ├── 1_Pipeline_Runner.py
+│   ├── 2_Experiment_Tracking.py
+│   ├── 3_Model_Registry.py
+│   ├── 4_Data_Drift.py
+│   ├── 5_Data_Health.py
+│   └── 6_Governance.py
 ├── services/
-│   ├── app_service.py              # App-level facade
-│   ├── pipeline_service.py         # Pipeline orchestration + automation
-│   ├── model_service.py            # Registry + inference model loading
-│   ├── drift_service.py            # Drift run/persistence logic
+│   ├── app_service.py            # app-level initialization
+│   ├── pipeline_service.py      # orchestrates pipeline runs
+│   ├── model_service.py         # loads production model artifacts
+│   ├── drift_service.py         # orchestrates drift detection runs
 │   └── api/
-│       └── main.py                 # FastAPI inference service (/predict)
+│       └── main.py              # FastAPI endpoints
 └── tests/
-  ├── test_pipeline.py            # pipeline + drift + loader tests
-  ├── test_api_service.py         # FastAPI endpoint tests
-  └── test_database_lineage.py    # lineage + stage governance tests
+    ├── test_pipeline.py
+    ├── test_api_service.py
+    └── test_database_lineage.py
 ```
 
 ---
 
-## Architecture
+## 🧠 Machine Learning Pipeline Flow
 
-This project follows a layered architecture:
+```mermaid
+flowchart LR
+  A[Load dataset & split] --> B[Preprocess (scaling)]
+  B --> C[Feature analysis]
+  C --> D[Cross-validation]
+  D --> E[Train model]
+  E --> F[Evaluate]
+  F --> G[Persist experiment + artifacts]
+  G --> H[Register model stage]
+```
 
-- UI layer: Streamlit pages in `pages/`
-- Service layer: `services/` orchestrates use-cases and decouples page logic
-- Core layer: `src/` modules for pipeline, drift, loader, auth, and logging
-- Persistence layer: `src/database.py` over backend abstraction in `src/db_engine.py` and contracts in `src/db_interface.py`
-
-Data flow:
-
-`Streamlit UI -> services -> core modules -> DB`
-
-Inference flow:
-
-`Client -> FastAPI /predict -> services/model_service.py -> production model artifacts`
+Pipeline stages are implemented in `src/pipeline.py`, while orchestration & persistence happen in `services/pipeline_service.py`.
 
 ---
 
-## Getting Started
+## ♻️ MLOps Features
 
-### Prerequisites
+### Experiment lifecycle
+- Each pipeline run is persisted as an experiment
+- Metrics and model metadata are stored
+- Model artifacts are saved to `artifacts/`
 
-- Python 3.10 or higher
-- pip
+### Model lifecycle
+- Models are registered automatically
+- Stage changes are recorded for governance/audit views
 
-### Installation
+### Drift monitoring
+- Drift references and drift reports are stored
+- Drift pages show KS/PSI interpretation and drift severity cues
 
-```bash
-git clone https://github.com/manpatell/ml-pipeline-monitor.git
-cd ml-pipeline-monitor
+### System health correlation
+- Pipeline metrics can be correlated with system load over time
 
-python -m venv .venv
-source .venv/bin/activate      # Windows: .venv\Scripts\activate
+---
 
-pip install -r requirements.txt
-```
+## 📡 API Documentation (FastAPI)
 
-### Running the application (recommended)
+### Base URL
+- `http://localhost:8000`
 
-Use the launcher script to avoid port conflicts. It finds the first available port starting at 8501, starts Streamlit, and prints the final URL.
+### Endpoints
+- **`GET /health`** — service health check
+- **`POST /predict`** — predict using the latest production model
 
-```bash
-python run_app.py
-```
-
-### Running the application (manual)
-
-```bash
-streamlit run app.py
-```
-
-The app will open at `http://localhost:8501`.
-
-### Running the FastAPI inference service
-
-```bash
-uvicorn services.api.main:app --host 0.0.0.0 --port 8000
-```
-
-API docs and endpoints:
-
-- Swagger UI: `http://localhost:8000/docs`
-- Health: `GET /health`
-- Prediction: `POST /predict`
-
-Example request:
-
+### Example (curl)
 ```bash
 curl -X POST http://localhost:8000/predict \
   -H "Content-Type: application/json" \
   -d '{"dataset":"Iris Species","features":{"sepal length (cm)":5.1,"sepal width (cm)":3.5,"petal length (cm)":1.4,"petal width (cm)":0.2}}'
 ```
 
-### Running tests
-
-```bash
-pytest -q
-```
-
-Coverage is enforced through `pytest.ini` (includes `src/` and `services/`).
-If total coverage drops below the configured minimum, pytest exits with a failure code.
+Swagger docs:
+- `http://localhost:8000/docs`
 
 ---
 
-## CI (GitHub Actions)
+## 📚 Dataset Management
 
-CI runs on every push and pull request via `.github/workflows/ci.yml`.
+### What the Dataset Hub does
+- Lets users browse supported datasets
+- Shows:
+  - feature statistics
+  - missing values
+  - train/test split details
+  - basic class/target distribution summaries
 
-It performs:
-
-- checkout repository
-- setup Python 3.10 and 3.11
-- install dependencies from `requirements.txt`
-- run `pytest -q` (tests + coverage gate from `pytest.ini`)
-- upload HTML coverage report artifact (`htmlcov`)
-
----
-
-## Docker
-
-### Build and run Streamlit app
-
-```bash
-docker build -t ml-pipeline-monitor .
-docker run --rm -p 8501:8501 ml-pipeline-monitor
-```
-
-### Docker Compose (app + api)
-
-```bash
-docker compose up --build
-```
-
-### Prometheus + Grafana Monitoring
-
-This repo includes a Prometheus + Grafana stack via `docker-compose.yml`.
-
-- Prometheus: http://localhost:9090
-- Grafana: http://localhost:3000 (default user/pass in compose: admin/admin)
-- Metrics endpoint (scraped by Prometheus): `GET http://localhost:8000/metrics`
-
-Grafana dashboards are provisioned automatically from:
-
-- `monitoring/grafana/provisioning/`
-- `monitoring/grafana/dashboards/`
-
-Run:
-
-```bash
-docker compose up --build prometheus grafana
-```
-
-Optional: bring everything up (app + api + monitoring):
-
-```bash
-docker compose up --build
-```
-
-### Optional Postgres profile (upgrade readiness)
-
-```bash
-docker compose --profile postgres up --build
-```
-
-Note: runtime backend remains SQLite by default; postgres profile is included for migration planning.
+Datasets are sourced from scikit-learn or generated synthetically, so the project runs without external data downloads.
 
 ---
 
-## Configuration
+## 🔍 Monitoring & Drift Detection
 
-Pipeline defaults and UI settings are controlled via `config.yaml`:
+The drift analysis compares:
+- a **reference distribution** window
+- against a **current distribution** window
 
-```yaml
-pipeline:
-  random_seed: 42
-  test_size: 0.20
-  cv_folds: 5
-
-monitoring:
-  drift_significance_level: 0.05
-  psi_moderate_threshold: 0.10
-  psi_significant_threshold: 0.25
-
-storage:
-  backend: "sqlite"        # or "postgres"
-  db_path: ".pipeline_monitor.db"
-  postgres_dsn: ""
-```
-
-The database path can be overridden with the `PIPELINE_DB` environment variable:
-
-```bash
-PIPELINE_DB=/data/experiments.db streamlit run app.py
-```
-
-For PostgreSQL backend, set `storage.backend: "postgres"` and provide DSN:
-
-```bash
-PIPELINE_DB_DSN=postgresql://user:pass@localhost:5432/ml_monitor
-```
-
-### Authentication via Environment Variables
-
-Authentication is environment-only (no default credentials in `config.yaml`).
-
-**Passwords must be bcrypt-hashed** for security. Generate hashes using the CLI:
-
-```bash
-mlmonitor hash-password "your_secure_password"
-# Output: $2b$12$...
-```
-
-Set either a single-user credential pair:
-
-```bash
-AUTH_USERNAME=admin
-AUTH_PASSWORD=$2b$12$...  # bcrypt hash from hash-password command
-AUTH_ROLE=admin   # optional: viewer | operator | admin
-```
-
-Or set a JSON user map for multi-user access (all passwords must be bcrypt hashes):
-
-```bash
-AUTH_USERS_JSON='{"viewer":{"password":"$2b$12$...","role":"viewer"},"operator":{"password":"$2b$12$...","role":"operator"},"admin":{"password":"$2b$12$...","role":"admin"}}'
-```
-
-Optional auth toggle:
-
-```bash
-MLMONITOR_AUTH_ENABLED=true
-```
-
-**Backward compatibility**: Plaintext passwords still work but are deprecated. Migration to bcrypt is strongly recommended.
-
-### Alerting
-
-This project supports two alert surfaces:
-
-- Console/file alert logs via structured logger
-- Simulated email alerts written to a local sink file (`logs/alerts_email_simulated.log` by default)
-
-Configure sink path in `config.yaml`:
-
-```yaml
-alerting:
-  email_simulation_file: "logs/alerts_email_simulated.log"
-```
-
-Drift alerts and pipeline failures trigger both console and simulated email alerts.
-
-### MLflow Integration (Optional)
-
-MLflow logging is integrated and controlled by config:
-
-```yaml
-mlflow:
-  enabled: true
-  tracking_uri: "file:./mlruns"
-  experiment: "ml-pipeline-monitor"
-```
-
-When enabled, pipeline service logs parameters, metrics, model artifact, and model object to MLflow.
-
----
-
-## Pipeline Stages
-
-Each training run proceeds through seven sequential stages:
-
-1. **Data Validation** — schema checks, missing value counts, class balance
-2. **Preprocessing** — StandardScaler fit on training split, applied to test
-3. **Feature Analysis** — correlation matrix, high-correlation pair count, variance check
-4. **Cross-Validation** — stratified K-fold CV with F1 (classification) or R² (regression)
-5. **Training** — fit estimator on full training set with timing
-6. **Evaluation** — accuracy, precision, recall, F1, ROC-AUC / RMSE, MAE, R² on holdout
-7. **Feature Importance** — tree-based importances or coefficient magnitudes
-
----
-
-## Drift Detection
-
-The drift analysis page compares a reference window against a current window using:
-
-- **Kolmogorov-Smirnov test**: non-parametric two-sample test for distribution equality
-- **Population Stability Index (PSI)**: measures how much the distribution of a variable has shifted
-
-| PSI | Interpretation |
+### PSI interpretation table
+| PSI | Meaning |
 |---|---|
-| < 0.10 | Stable — no action required |
-| 0.10 – 0.25 | Moderate shift — monitor closely |
-| > 0.25 | Significant shift — consider retraining |
+| < 0.10 | Stable |
+| 0.10 – 0.25 | Moderate drift — monitor |
+| > 0.25 | Significant drift — retrain recommended |
+
+Drift artifacts:
+- drift reports
+- drift references per dataset
 
 ---
 
-## License
+## 📦 Model Registry
 
-MIT License.  See [LICENSE](LICENSE) for details.
+Models move through stages:
+- `development` (default)
+- `staging` (pre-production)
+- `production` (serving)
+- `archived` (retired)
+
+The **Governance** page visualizes the audit trail and stage change history.
+
+---
+
+## 🤖 Automated Retraining
+
+Retraining is supported as a conceptual flow through:
+- drift detection → recommendation/alerts → pipeline execution
+- model performance checks → promotion/archiving
+
+> Scheduling + fully automated retraining via cron is designed to integrate cleanly with the existing services and persistence layer.
+
+---
+
+## 🚧 Future Improvements
+
+- Add **dataset lineage & versioning** UI
+- Add **workspace-based isolation** and real **team workspaces**
+- Add **DB-backed user/role management** (currently env-based auth for Streamlit)
+- Add **Slack + email alert channels** (webhook + sink abstraction)
+- Add **pipeline scheduling engine** with cron parsing and run history
+
+---
+
+## 🤝 Contributing Guide
+
+1. Fork the repository
+2. Create a feature branch
+   
+```bash
+   git checkout -b feat/your-feature
+   
+```
+3. Run tests locally
+   
+```bash
+   pytest -q
+   
+```
+4. Ensure formatting and linting (if configured)
+5. Open a Pull Request
+
+---
+
+## 🧾 License
+
+MIT License. See [LICENSE](LICENSE) for details.

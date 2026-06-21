@@ -956,10 +956,407 @@ def get_prediction_history_by_request_id(request_id: str) -> dict[str, Any] | No
             (request_id,),
         ).fetchall()
         req["predictions"] = [
-            {"row_index": int(r["row_index"]), "prediction": r["prediction"], "probability": r["probability"]}
+            {
+                "row_index": int(r["row_index"]),
+                "prediction": r["prediction"],
+                "probability": r["probability"],
+            }
             for r in preds
         ]
     return req
+
+
+# ---------------------------------------------------------------------------
+# Governance: Users, Teams, Workspaces, Alerts, Scheduling
+# ---------------------------------------------------------------------------
+
+def initialize_governance_registry() -> None:
+    """Create governance tables (users/teams/workspaces, alert history, schedules)."""
+    backend = _backend_name()
+
+    governance_registry_sqlite = """
+        CREATE TABLE IF NOT EXISTS teams (
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            team_name    TEXT NOT NULL UNIQUE,
+            created_at    TEXT DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS users (
+            id             INTEGER PRIMARY KEY AUTOINCREMENT,
+            username      TEXT NOT NULL UNIQUE,
+            password_hash TEXT NOT NULL,
+            role          TEXT NOT NULL,
+            team_id       INTEGER,
+            created_at    TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (team_id) REFERENCES teams(id)
+        );
+
+        CREATE TABLE IF NOT EXISTS workspaces (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            workspace_name TEXT NOT NULL UNIQUE,
+            team_id         INTEGER NOT NULL,
+            created_at     TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (team_id) REFERENCES teams(id)
+        );
+
+        CREATE TABLE IF NOT EXISTS workspace_members (
+            id               INTEGER PRIMARY KEY AUTOINCREMENT,
+            workspace_id    INTEGER NOT NULL,
+            user_id         INTEGER NOT NULL,
+            role_override   TEXT,
+            created_at      TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (workspace_id) REFERENCES workspaces(id),
+            FOREIGN KEY (user_id) REFERENCES users(id),
+            UNIQUE(workspace_id, user_id)
+        );
+
+        CREATE TABLE IF NOT EXISTS user_activity_logs (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id         INTEGER NOT NULL,
+            workspace_id   INTEGER,
+            action          TEXT NOT NULL,
+            metadata_json   TEXT NOT NULL,
+            created_at      TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(id),
+            FOREIGN KEY (workspace_id) REFERENCES workspaces(id)
+        );
+
+        CREATE TABLE IF NOT EXISTS alert_events (
+            id               INTEGER PRIMARY KEY AUTOINCREMENT,
+            workspace_id    INTEGER,
+            alert_type      TEXT NOT NULL,
+            severity        TEXT NOT NULL,
+            message         TEXT NOT NULL,
+            metadata_json  TEXT NOT NULL,
+            created_at      TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (workspace_id) REFERENCES workspaces(id)
+        );
+
+        CREATE TABLE IF NOT EXISTS alert_channels (
+            id             INTEGER PRIMARY KEY AUTOINCREMENT,
+            workspace_id  INTEGER NOT NULL,
+            channel_type  TEXT NOT NULL,  -- email|slack
+            enabled        INTEGER NOT NULL DEFAULT 1,
+            target         TEXT NOT NULL, -- email address or slack webhook url
+            created_at     TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (workspace_id) REFERENCES workspaces(id),
+            UNIQUE(workspace_id, channel_type, target)
+        );
+
+        CREATE TABLE IF NOT EXISTS schedules (
+            id                INTEGER PRIMARY KEY AUTOINCREMENT,
+            workspace_id     INTEGER NOT NULL,
+            schedule_name    TEXT NOT NULL,
+            schedule_type    TEXT NOT NULL, -- training|drift_scan|retraining
+            cron_expression  TEXT NOT NULL,
+            timezone         TEXT NOT NULL DEFAULT 'UTC',
+            enabled          INTEGER NOT NULL DEFAULT 1,
+            next_run_at      TEXT,
+            last_run_at      TEXT,
+            pipeline_dataset TEXT,
+            pipeline_model_type TEXT,
+            created_at       TEXT DEFAULT CURRENT_TIMESTAMP,
+            updated_at       TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (workspace_id) REFERENCES workspaces(id)
+        );
+
+        CREATE TABLE IF NOT EXISTS schedule_runs (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            schedule_id    INTEGER NOT NULL,
+            status         TEXT NOT NULL, -- queued|running|success|failed
+            started_at     TEXT DEFAULT CURRENT_TIMESTAMP,
+            completed_at   TEXT,
+            error           TEXT,
+            metadata_json  TEXT NOT NULL,
+            FOREIGN KEY (schedule_id) REFERENCES schedules(id),
+            UNIQUE(schedule_id, started_at)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_alert_events_workspace_created
+            ON alert_events(workspace_id, created_at DESC);
+
+        CREATE INDEX IF NOT EXISTS idx_schedule_next_run
+            ON schedules(next_run_at, enabled);
+    """
+
+    governance_registry_postgres = """
+        CREATE TABLE IF NOT EXISTS teams (
+            id            BIGSERIAL PRIMARY KEY,
+            team_name    TEXT NOT NULL UNIQUE,
+            created_at    TEXT DEFAULT CURRENT_TIMESTAMP::text
+        );
+
+        CREATE TABLE IF NOT EXISTS users (
+            id             BIGSERIAL PRIMARY KEY,
+            username      TEXT NOT NULL UNIQUE,
+            password_hash TEXT NOT NULL,
+            role          TEXT NOT NULL,
+            team_id       BIGINT,
+            created_at    TEXT DEFAULT CURRENT_TIMESTAMP::text,
+            FOREIGN KEY (team_id) REFERENCES teams(id)
+        );
+
+        CREATE TABLE IF NOT EXISTS workspaces (
+            id               BIGSERIAL PRIMARY KEY,
+            workspace_name  TEXT NOT NULL UNIQUE,
+            team_id          BIGINT NOT NULL,
+            created_at      TEXT DEFAULT CURRENT_TIMESTAMP::text,
+            FOREIGN KEY (team_id) REFERENCES teams(id)
+        );
+
+        CREATE TABLE IF NOT EXISTS workspace_members (
+            id             BIGSERIAL PRIMARY KEY,
+            workspace_id  BIGINT NOT NULL,
+            user_id       BIGINT NOT NULL,
+            role_override TEXT,
+            created_at    TEXT DEFAULT CURRENT_TIMESTAMP::text,
+            FOREIGN KEY (workspace_id) REFERENCES workspaces(id),
+            FOREIGN KEY (user_id) REFERENCES users(id),
+            UNIQUE(workspace_id, user_id)
+        );
+
+        CREATE TABLE IF NOT EXISTS user_activity_logs (
+            id              BIGSERIAL PRIMARY KEY,
+            user_id         BIGINT NOT NULL,
+            workspace_id   BIGINT,
+            action          TEXT NOT NULL,
+            metadata_json  TEXT NOT NULL,
+            created_at      TEXT DEFAULT CURRENT_TIMESTAMP::text,
+            FOREIGN KEY (user_id) REFERENCES users(id),
+            FOREIGN KEY (workspace_id) REFERENCES workspaces(id)
+        );
+
+        CREATE TABLE IF NOT EXISTS alert_events (
+            id               BIGSERIAL PRIMARY KEY,
+            workspace_id    BIGINT,
+            alert_type      TEXT NOT NULL,
+            severity        TEXT NOT NULL,
+            message         TEXT NOT NULL,
+            metadata_json  TEXT NOT NULL,
+            created_at      TEXT DEFAULT CURRENT_TIMESTAMP::text,
+            FOREIGN KEY (workspace_id) REFERENCES workspaces(id)
+        );
+
+        CREATE TABLE IF NOT EXISTS alert_channels (
+            id             BIGSERIAL PRIMARY KEY,
+            workspace_id  BIGINT NOT NULL,
+            channel_type  TEXT NOT NULL,  -- email|slack
+            enabled        INTEGER NOT NULL DEFAULT 1,
+            target         TEXT NOT NULL, -- email address or slack webhook url
+            created_at     TEXT DEFAULT CURRENT_TIMESTAMP::text,
+            FOREIGN KEY (workspace_id) REFERENCES workspaces(id),
+            UNIQUE(workspace_id, channel_type, target)
+        );
+
+        CREATE TABLE IF NOT EXISTS schedules (
+            id                BIGSERIAL PRIMARY KEY,
+            workspace_id     BIGINT NOT NULL,
+            schedule_name    TEXT NOT NULL,
+            schedule_type    TEXT NOT NULL, -- training|drift_scan|retraining
+            cron_expression  TEXT NOT NULL,
+            timezone         TEXT NOT NULL DEFAULT 'UTC',
+            enabled          INTEGER NOT NULL DEFAULT 1,
+            next_run_at      TEXT,
+            last_run_at      TEXT,
+            pipeline_dataset TEXT,
+            pipeline_model_type TEXT,
+            created_at       TEXT DEFAULT CURRENT_TIMESTAMP::text,
+            updated_at       TEXT DEFAULT CURRENT_TIMESTAMP::text,
+            FOREIGN KEY (workspace_id) REFERENCES workspaces(id)
+        );
+
+        CREATE TABLE IF NOT EXISTS schedule_runs (
+            id              BIGSERIAL PRIMARY KEY,
+            schedule_id    BIGINT NOT NULL,
+            status         TEXT NOT NULL, -- queued|running|success|failed
+            started_at     TEXT DEFAULT CURRENT_TIMESTAMP::text,
+            completed_at   TEXT,
+            error           TEXT,
+            metadata_json  TEXT NOT NULL,
+            FOREIGN KEY (schedule_id) REFERENCES schedules(id),
+            UNIQUE(schedule_id, started_at)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_alert_events_workspace_created
+            ON alert_events(workspace_id, created_at DESC);
+
+        CREATE INDEX IF NOT EXISTS idx_schedule_next_run
+            ON schedules(next_run_at, enabled);
+    """
+
+    with get_connection() as conn:
+        conn.executescript(
+            governance_registry_postgres if backend == "postgres" else governance_registry_sqlite
+        )
+
+
+# -------------------- Minimal CRUD helpers --------------------
+
+def create_team(team_name: str) -> int:
+    with get_connection() as conn:
+        cur = conn.execute(
+            "INSERT INTO teams (team_name) VALUES (?) ON CONFLICT(team_name) DO NOTHING RETURNING id",
+            (team_name,),
+        )
+        row = cur.fetchone()
+        if row:
+            return int(row["id"])
+        existing = conn.execute("SELECT id FROM teams WHERE team_name = ?", (team_name,)).fetchone()
+        return int(existing["id"])
+
+
+def create_user(*, username: str, password_hash: str, role: str, team_id: int) -> int:
+    with get_connection() as conn:
+        cur = conn.execute(
+            """
+            INSERT INTO users (username, password_hash, role, team_id)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(username) DO UPDATE SET
+                password_hash=excluded.password_hash,
+                role=excluded.role,
+                team_id=excluded.team_id
+            RETURNING id
+            """,
+            (username, password_hash, role, team_id),
+        )
+        row = cur.fetchone()
+        return int(row["id"])
+
+
+def create_workspace(*, workspace_name: str, team_id: int) -> int:
+    with get_connection() as conn:
+        row = conn.execute(
+            """
+            INSERT INTO workspaces (workspace_name, team_id)
+            VALUES (?, ?)
+            ON CONFLICT(workspace_name) DO UPDATE SET team_id=excluded.team_id
+            RETURNING id
+            """,
+            (workspace_name, team_id),
+        ).fetchone()
+        return int(row["id"])
+
+
+def log_user_activity(*, user_id: int, workspace_id: int | None, action: str, metadata: dict[str, Any] | None = None) -> None:
+    with get_connection() as conn:
+        conn.execute(
+            """
+            INSERT INTO user_activity_logs (user_id, workspace_id, action, metadata_json)
+            VALUES (?, ?, ?, ?)
+            """,
+            (user_id, workspace_id, action, json.dumps(metadata or {})),
+        )
+
+
+def save_alert_event(
+    *,
+    workspace_id: int | None,
+    alert_type: str,
+    severity: str,
+    message: str,
+    metadata: dict[str, Any] | None = None,
+) -> None:
+    with get_connection() as conn:
+        conn.execute(
+            """
+            INSERT INTO alert_events (workspace_id, alert_type, severity, message, metadata_json)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (workspace_id, alert_type, severity, message, json.dumps(metadata or {})),
+        )
+
+
+def list_alert_events(*, workspace_id: int | None = None, limit: int = 50) -> list[dict[str, Any]]:
+    if limit <= 0 or limit > 1000:
+        limit = 50
+    with get_connection() as conn:
+        if workspace_id is None:
+            rows = conn.execute(
+                """
+                SELECT * FROM alert_events ORDER BY created_at DESC LIMIT ?
+                """,
+                (limit,),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                """
+                SELECT * FROM alert_events
+                WHERE workspace_id = ?
+                ORDER BY created_at DESC
+                LIMIT ?
+                """,
+                (workspace_id, limit),
+            ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def create_schedule(
+    *,
+    workspace_id: int,
+    schedule_name: str,
+    schedule_type: str,
+    cron_expression: str,
+    timezone: str = "UTC",
+    enabled: bool = True,
+    next_run_at: str | None = None,
+    pipeline_dataset: str | None = None,
+    pipeline_model_type: str | None = None,
+) -> int:
+    with get_connection() as conn:
+        row = conn.execute(
+            """
+            INSERT INTO schedules
+                (workspace_id, schedule_name, schedule_type, cron_expression, timezone, enabled, next_run_at, pipeline_dataset, pipeline_model_type)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            RETURNING id
+            """,
+            (
+                workspace_id,
+                schedule_name,
+                schedule_type,
+                cron_expression,
+                timezone,
+                1 if enabled else 0,
+                next_run_at,
+                pipeline_dataset,
+                pipeline_model_type,
+            ),
+        ).fetchone()
+        return int(row["id"])
+
+
+def list_schedules(*, workspace_id: int | None = None, limit: int = 200) -> list[dict[str, Any]]:
+    if limit <= 0 or limit > 1000:
+        limit = 200
+    with get_connection() as conn:
+        if workspace_id is None:
+            rows = conn.execute(
+                "SELECT * FROM schedules ORDER BY created_at DESC LIMIT ?",
+                (limit,),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT * FROM schedules WHERE workspace_id = ? ORDER BY created_at DESC LIMIT ?",
+                (workspace_id, limit),
+            ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def record_schedule_run(
+    *,
+    schedule_id: int,
+    status: str,
+    error: str | None = None,
+    metadata: dict[str, Any] | None = None,
+) -> None:
+    with get_connection() as conn:
+        conn.execute(
+            """
+            INSERT INTO schedule_runs (schedule_id, status, error, metadata_json)
+            VALUES (?, ?, ?, ?)
+            """,
+            (schedule_id, status, error, json.dumps(metadata or {})),
+        )
 
 
 # ---------------------------------------------------------------------------

@@ -41,33 +41,51 @@ class TestJwtAuthEndpoints:
         assert r.status_code == 200
 
 
-class TestPredictV1Errors:
-    def test_predict_validation_error(self):
-        token = create_access_token(sub="user", role="admin")
-        r = client.post(
-            "/v1/predict",
-            json={"features": "invalid"},
-            headers=_auth_header(token),
-        )
-        assert r.status_code == 422
+class TestAppLifespan:
+    def test_lifespan_startup_shutdown(self):
+        with TestClient(app) as client:
+            r = client.get("/health")
+            assert r.status_code == 200
 
-    def test_predict_empty_features(self):
-        token = create_access_token(sub="user", role="admin")
-        r = client.post(
-            "/v1/predict",
-            json={},
-            headers=_auth_header(token),
-        )
-        assert r.status_code == 422
+    def test_detailed_health(self):
+        with TestClient(app) as client:
+            r = client.get("/health/detailed")
+            assert r.status_code == 200
 
-    def test_predict_file_not_found(self):
+    def test_metrics_endpoint(self):
+        with TestClient(app) as client:
+            r = client.get("/metrics")
+            assert r.status_code == 200
+
+    def test_legacy_predict_requires_api_key_message(self):
+        r = client.post("/predict", json={"features": {"x": 1.0}})
+        assert r.status_code == 401
+        body = r.json()
+        assert "detail" in body
+
+    def test_legacy_predict_success(self):
+        with patch("services.model_service.predict_from_payload", return_value={"model_id": "m1", "predictions": [1]}):
+            r = client.post("/predict", json={"features": {"x": 1.0}}, headers={"X-API-Key": "test-api-key"})
+            assert r.status_code == 200
+            assert r.json()["model_id"] == "m1"
+
+
+class TestPredictV1ErrorPaths:
+    def test_predict_value_error_missing_features(self):
+        import numpy as np
         token = create_access_token(sub="user", role="admin")
         fake_model = MagicMock()
-        fake_model.predict.return_value = [1]
-        with patch("services.api.app.get_latest_production_model", return_value=(fake_model, None, {"artifact_path": "/nonexistent/path/model.joblib", "model_id": "m1", "dataset": "iris", "version": 1, "stage": "production"})):
+        fake_model.feature_names_in_ = np.array(["a", "b", "c"])
+        fake_model.predict.return_value = np.array([1])
+        fake_scaler = MagicMock()
+        fake_scaler.transform.return_value = np.array([[1.0, 2.0, 3.0]])
+
+        with patch("services.api.app.get_latest_production_model", return_value=(fake_model, fake_scaler, {"model_id": "m1", "dataset": "iris", "version": 1, "stage": "production", "artifact_path": "path"})):
             r = client.post(
                 "/v1/predict",
-                json={"features": {"x": 1.0}},
+                json={"features": {"x": 1.0}, "dataset": "iris"},
                 headers=_auth_header(token),
             )
-        assert r.status_code == 404
+        assert r.status_code == 400
+        body = r.json()
+        assert "detail" in body

@@ -53,3 +53,30 @@ def test_global_secrets_manager_singleton():
     # Just verify the function returns a SecretsManager instance
     mgr = get_secrets_manager()
     assert isinstance(mgr, SecretsManager)
+
+
+def test_get_secret_from_env():
+    mgr = SecretsManager(secrets_dir="/nonexistent")
+    with patch.dict(os.environ, {"MY_KEY": "env_val"}):
+        assert mgr.get("my_key") == "env_val"
+
+
+def test_get_required_secret_from_env():
+    mgr = SecretsManager(secrets_dir="/nonexistent")
+    with patch.dict(os.environ, {"REQUIRED_KEY": "required_val"}):
+        assert mgr.get_required("required_key") == "required_val"
+
+
+def test_load_all_with_prefix():
+    mgr = SecretsManager(secrets_dir="/nonexistent")
+    with patch.dict(os.environ, {"TEST_A": "1", "OTHER_B": "2"}):
+        result = mgr.load_all(prefix="test")
+    assert "test_a" in result
+    assert result["test_a"] == "1"
+    assert "test_b" not in result
+
+
+def test_convenience_functions():
+    with patch.dict(os.environ, {"CONV_KEY": "conv_val"}):
+        assert get_secret("conv_key") == "conv_val"
+        assert get_required_secret("conv_key") == "conv_val"

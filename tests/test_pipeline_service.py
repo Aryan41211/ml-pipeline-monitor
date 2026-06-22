@@ -94,3 +94,24 @@ def test_list_experiments():
         result = list_experiments(limit=10)
     m.assert_called_once_with(limit=10)
     assert len(result) == 1
+
+
+def test_validate_pipeline_inputs_bad_cv_folds():
+    with pytest.raises(ValueError, match="cv_folds must be between 2 and 10"):
+        _validate_pipeline_inputs("iris", "iris", "Random Forest", "classification", 0.2, 1, 42)
+
+
+def test_validate_pipeline_inputs_bad_random_state():
+    with pytest.raises(ValueError, match="random_state is required"):
+        _validate_pipeline_inputs("iris", "iris", "Random Forest", "classification", 0.2, 5, None)
+
+
+def test_validate_pipeline_inputs_bad_task():
+    with pytest.raises(ValueError, match="Invalid task"):
+        _validate_pipeline_inputs("iris", "iris", "Random Forest", "unknown", 0.2, 5, 42)
+
+
+def test_get_dataset_options_fallback():
+    with patch("services.pipeline_service.DATASET_OPTIONS", {}):
+        opts = get_dataset_options()
+    assert isinstance(opts, dict)

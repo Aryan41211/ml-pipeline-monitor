@@ -88,11 +88,12 @@ class TestPredictV1:
         assert r.status_code == 401
 
     def test_predict_success(self):
+        import numpy as np
         token = _get_token()
         fake_model = MagicMock()
-        fake_model.predict.return_value = [1]
+        fake_model.predict.return_value = np.array([1])
         fake_scaler = MagicMock()
-        fake_scaler.transform.return_value = [[1.0, 2.0]]
+        fake_scaler.transform.return_value = np.array([[1.0, 2.0]])
 
         with patch("services.api.app.get_latest_production_model", return_value=(fake_model, fake_scaler, "path")):
             r = client.post(

@@ -167,29 +167,39 @@ def _align_features(model: Any, frame: pd.DataFrame) -> pd.DataFrame:
     return aligned
 
 
-def predict_from_payload(payload: Any, dataset: Optional[str] = None) -> Dict[str, Any]:
+def predict_from_payload(
+    payload: Any,
+    dataset: Optional[str] = None,
+    model: Optional[Any] = None,
+    scaler: Optional[Any] = None,
+    model_meta: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
     """Run prediction against latest production model."""
     if payload is None:
         raise ValueError("payload is required")
     if dataset:
         _validate_dataset(dataset)
-    model, scaler, model_meta = load_production_artifacts(dataset=dataset)
-    X = _align_features(model, _to_dataframe(payload))
 
-    X_infer = scaler.transform(X) if scaler is not None else X
-    preds = model.predict(X_infer)
+    use_model, use_scaler, use_meta = model, scaler, model_meta
+    if use_model is None:
+        use_model, use_scaler, use_meta = load_production_artifacts(dataset=dataset)
+
+    X = _align_features(use_model, _to_dataframe(payload))
+
+    X_infer = use_scaler.transform(X) if use_scaler is not None else X
+    preds = use_model.predict(X_infer)
 
     response: Dict[str, Any] = {
-        "model_id": model_meta.get("model_id"),
-        "dataset": model_meta.get("dataset"),
-        "version": model_meta.get("version"),
-        "stage": model_meta.get("stage"),
+        "model_id": (use_meta or {}).get("model_id"),
+        "dataset": (use_meta or {}).get("dataset"),
+        "version": (use_meta or {}).get("version"),
+        "stage": (use_meta or {}).get("stage"),
         "predictions": preds.tolist(),
     }
 
-    if hasattr(model, "predict_proba"):
+    if hasattr(use_model, "predict_proba"):
         try:
-            response["probabilities"] = model.predict_proba(X_infer).tolist()
+            response["probabilities"] = use_model.predict_proba(X_infer).tolist()
         except Exception:
             pass
 

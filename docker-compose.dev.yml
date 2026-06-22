@@ -1,0 +1,96 @@
+version: "3.9"
+
+# Development override for docker-compose.yml
+# Run with: docker-compose -f docker-compose.yml -f docker-compose.dev.yml up
+
+services:
+  app:
+    build:
+      target: development
+    command: ["streamlit", "run", "app.py", "--server.port=8501", "--server.address=0.0.0.0", "--server.runOnSave=true"]
+    environment:
+      - MLMONITOR_AUTH_ENABLED=false
+      - PIPELINE_DB=/app/data/pipeline_monitor.db
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./src:/app/src:ro
+      - ./services:/app/services:ro
+      - ./pages:/app/pages:ro
+      - ./app.py:/app/app.py:ro
+      - ./config.yaml:/app/config.yaml:ro
+      - ./artifacts:/app/artifacts
+      - ./data:/app/data
+      - ./logs:/app/logs
+    develop:
+      watch:
+        - action: sync
+          path: ./src
+          target: /app/src
+        - action: sync
+          path: ./services
+          target: /app/services
+        - action: sync
+          path: ./pages
+          target: /app/pages
+        - action: sync
+          path: ./app.py
+          target: /app/app.py
+
+  api:
+    build:
+      target: development
+    command: ["uvicorn", "services.api.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    environment:
+      - MLMONITOR_AUTH_ENABLED=false
+      - PIPELINE_DB=/app/data/pipeline_monitor.db
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./src:/app/src:ro
+      - ./services:/app/services:ro
+      - ./artifacts:/app/artifacts
+      - ./data:/app/data
+      - ./logs:/app/logs
+
+  worker:
+    build:
+      target: development
+    command: ["python", "-m", "services.worker"]
+    environment:
+      - MLMONITOR_AUTH_ENABLED=false
+      - PIPELINE_DB=/app/data/pipeline_monitor.db
+    volumes:
+      - ./src:/app/src:ro
+      - ./services:/app/services:ro
+      - ./artifacts:/app/artifacts
+      - ./data:/app/data
+      - ./logs:/app/logs
+
+  postgres:
+    profiles: ["postgres"]
+    environment:
+      - POSTGRES_USER=mlmonitor
+      - POSTGRES_PASSWORD=mlmonitor
+      - POSTGRES_DB=mlmonitor
+
+  redis:
+    ports:
+      - "6379:6379"
+
+  prometheus:
+    ports:
+      - "9090:9090"
+
+  grafana:
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+
+  flower:
+    ports:
+      - "5555:5555"
+    environment:
+      - FLOWER_BASIC_AUTH=admin:admin

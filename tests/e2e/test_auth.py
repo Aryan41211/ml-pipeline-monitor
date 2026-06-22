@@ -65,8 +65,8 @@ def test_logout(page: Page):
     page.goto("/")
     page.wait_for_load_state("networkidle")
 
-    page.get_by_label("Username").fill("testadmin")
-    page.get_by_label("Password").fill("testpass123")
+    page.locator("input[aria-label='Username']").fill("testadmin")
+    page.locator("input[aria-label='Password'][type='password']").fill("testpass123")
     page.click("button:has-text('Login')")
 
     expect(page.locator("text=Signed in as testadmin")).to_be_visible()

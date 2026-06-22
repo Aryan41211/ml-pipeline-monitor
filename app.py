@@ -96,7 +96,12 @@ with col_action:
 c1, c2, c3, c4 = st.columns(4)
 with c1: component_kpi_card("Experiments", f"{len(exp_df)}", "All-time runs", icon="📊", trend="+4")
 with c2: component_kpi_card("Models", f"{len(mdl_df)}", "In Registry", icon="🧠", trend="+1")
-with c3: component_kpi_card("Serving", str(len(mdl_df[mdl_df["stage"]=="production"])), "Production", icon="🚀", tone="success")
+# Guard against missing 'stage' column when registry is empty/uninitialized.
+_production_count = 0
+if not mdl_df.empty and "stage" in mdl_df.columns:
+    _production_count = len(mdl_df[mdl_df["stage"] == "production"])
+
+with c3: component_kpi_card("Serving", str(_production_count), "Production", icon="🚀", tone="success")
 with c4: component_kpi_card("Accuracy", f"{best_acc:.3f}", "Best Result", icon="🏆", tone="success")
 
 render_spacer("md")

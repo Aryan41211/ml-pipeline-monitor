@@ -1,0 +1,128 @@
+# Production configuration for ML Pipeline Monitor
+# This file extends config.yaml with production-specific settings
+
+pipeline:
+  random_seed: 42
+  test_size: 0.20
+  cv_folds: 5
+  n_jobs: -1
+
+datasets:
+  breast_cancer:
+    display_name: "Breast Cancer Wisconsin"
+    task: classification
+    source: sklearn
+  wine:
+    display_name: "Wine Recognition"
+    task: classification
+    source: sklearn
+  iris:
+    display_name: "Iris Species"
+    task: classification
+    source: sklearn
+  digits:
+    display_name: "Handwritten Digits"
+    task: classification
+    source: sklearn
+  synthetic_clf:
+    display_name: "Synthetic Classification"
+    task: classification
+    source: generated
+  synthetic_reg:
+    display_name: "Synthetic Regression"
+    task: regression
+    source: generated
+
+monitoring:
+  enabled: true
+  prometheus_enabled: true
+  grafana_enabled: true
+  metrics_port: 8000
+  drift_significance_level: 0.05
+  psi_moderate_threshold: 0.10
+  psi_significant_threshold: 0.25
+  drift_feature_ratio_threshold: 0.20
+  automated_retraining:
+    enabled: true
+    drift_threshold: 0.20
+    min_performance_improvement: 0.02
+    cooldown_seconds: 300
+
+storage:
+  backend: "postgres"
+  db_path: ".pipeline_monitor.db"
+  postgres_dsn: ""  # Set via PIPELINE_DB_DSN environment variable
+  artifacts_root: "artifacts"
+  connection_pool:
+    min_size: 2
+    max_size: 20
+    max_idle: 300
+    max_lifetime: 3600
+
+auth:
+  enabled: true
+  session_timeout_seconds: 28800  # 8 hours
+  max_login_attempts: 5
+  login_lockout_seconds: 300
+
+logging:
+  level: "INFO"
+  file: "logs/app.log"
+  max_bytes: 10000000
+  backup_count: 5
+  format: "json"  # json or console
+
+alerting:
+  email_simulation_file: "logs/alerts_email_simulated.log"
+  smtp_host: ""  # Set via SMTP_HOST secret
+  smtp_port: 587
+  smtp_user: ""  # Set via SMTP_USER secret
+  smtp_password: ""  # Set via SMTP_PASSWORD secret
+  slack_webhook: ""  # Set via SLACK_WEBHOOK secret
+
+mlflow:
+  enabled: false
+  tracking_uri: ""  # Set via MLFLOW_TRACKING_URI secret
+  experiment: "ml-pipeline-monitor"
+
+ui:
+  primary_color: "#024ad8"
+  max_experiments_displayed: 500
+  chart_height: 420
+
+api:
+  rate_limit: "100/minute"
+  cors_origins:
+    - "https://your-domain.com"
+  api_key_header: "X-API-Key"
+  jwt_secret: ""  # Set via JWT_SECRET secret
+  jwt_algorithm: "HS256"
+  jwt_expiration_minutes: 60
+  jwt_refresh_expiration_days: 7
+
+worker:
+  concurrency: 4
+  prefetch_multiplier: 1
+  max_tasks_per_child: 100
+  task_acks_late: true
+  worker_max_memory_per_child: 500000
+
+database:
+  pool_pre_ping: true
+  pool_recycle: 3600
+  echo: false
+  echo_pool: false
+
+security:
+  bcrypt_rounds: 12
+  password_min_length: 12
+  password_require_uppercase: true
+  password_require_lowercase: true
+  password_require_digits: true
+  password_require_special: true
+  cors_allow_credentials: true
+  secure_headers:
+    x_frame_options: "DENY"
+    x_content_type_options: "nosniff"
+    referrer_policy: "strict-origin-when-cross-origin"
+    content_security_policy: "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:;"

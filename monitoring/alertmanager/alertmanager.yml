@@ -1,0 +1,59 @@
+global:
+  resolve_timeout: 5m
+  smtp_smarthost: 'localhost:587'
+  smtp_from: 'ml-pipeline-monitor@example.com'
+  smtp_auth_username: ''
+  smtp_auth_password: ''
+
+route:
+  group_by: ['alertname', 'job', 'severity']
+  group_wait: 10s
+  group_interval: 10s
+  repeat_interval: 1h
+  receiver: 'ml-pipeline-monitor'
+  routes:
+    - match:
+        severity: critical
+      receiver: 'ml-pipeline-monitor'
+      continue: true
+    - match:
+        severity: warning
+      receiver: 'ml-pipeline-monitor'
+
+receivers:
+  - name: 'ml-pipeline-monitor'
+    email_configs:
+      - to: 'mlops-team@example.com'
+        from: 'ml-pipeline-monitor@example.com'
+        smarthost: 'localhost:587'
+        subject: '{{ .GroupLabels.alertname }}: {{ .CommonAnnotations.summary }}'
+        body: |
+          {{ range .Alerts }}
+          Alert: {{ .Labels.alertname }}
+          Severity: {{ .Labels.severity }}
+          Summary: {{ .Annotations.summary }}
+          Description: {{ .Annotations.description }}
+          Start Time: {{ .StartsAt.Format "2006-01-02 15:04:05" }}
+          {{ end }}
+    slack_configs:
+      - api_url: '${SLACK_WEBHOOK}'
+        channel: '#ml-pipeline-monitor'
+        title: '{{ .GroupLabels.alertname }}'
+        text: |
+          {{ range .Alerts }}
+          *Alert:* {{ .Labels.alertname }}
+          *Severity:* {{ .Labels.severity }}
+          *Summary:* {{ .Annotations.summary }}
+          {{ end }}
+    webhook_configs:
+      - url: 'http://app:8501/alert'
+        send_resolved: true
+        http_config:
+          timeout: 5s
+
+inhibit_rules:
+  - source_match:
+      severity: 'critical'
+    target_match:
+      severity: 'warning'
+    equal: ['alertname', 'job']

@@ -19,7 +19,7 @@ def test_predict_endpoint_success(monkeypatch):
         "predictions": [1],
     }
 
-    monkeypatch.setattr("services.api.main.predict_from_payload", lambda payload, dataset=None: expected)
+    monkeypatch.setattr("services.model_service.predict_from_payload", lambda payload, dataset=None: expected)
     monkeypatch.setenv("MLMONITOR_API_KEY", "test-api-key")
 
     client = TestClient(app)
@@ -34,7 +34,7 @@ def test_predict_endpoint_success(monkeypatch):
 
 def test_predict_endpoint_validation_error(monkeypatch):
     monkeypatch.setattr(
-        "services.api.main.predict_from_payload",
+        "services.model_service.predict_from_payload",
         lambda payload, dataset=None: (_ for _ in ()).throw(ValueError("bad input")),
     )
     monkeypatch.setenv("MLMONITOR_API_KEY", "test-api-key")

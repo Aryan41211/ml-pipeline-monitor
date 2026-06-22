@@ -28,14 +28,6 @@ scrape_configs:
     scrape_interval: 10s
     scrape_timeout: 5s
 
-  # ML Pipeline Monitor Streamlit App (if metrics endpoint is added)
-  - job_name: 'ml-pipeline-monitor-app'
-    metrics_path: '/metrics'
-    static_configs:
-      - targets: ['app:8501']
-    scrape_interval: 30s
-    scrape_timeout: 10s
-
   # Node Exporter for host-level metrics (optional - run on host)
   # - job_name: 'node-exporter'
   #   static_configs:

@@ -40,3 +40,5 @@
 {'time': '2026-06-22T20:37:33+00:00', 'severity': 'critical', 'subject': 'Data drift alert', 'message': 'Drift detected for dataset=Iris', 'metadata': {'dataset': 'Iris', 'drift_ratio': 1.0, 'average_psi': 0.5, 'features_drifted': 1}}
 {'time': '2026-06-22T20:43:00+00:00', 'severity': 'critical', 'subject': 'Data drift alert', 'message': 'Drift detected for dataset=Iris', 'metadata': {'dataset': 'Iris', 'drift_ratio': 1.0, 'average_psi': 0.5, 'features_drifted': 1}}
 {'time': '2026-06-22T20:43:57+00:00', 'severity': 'critical', 'subject': 'Data drift alert', 'message': 'Drift detected for dataset=Iris', 'metadata': {'dataset': 'Iris', 'drift_ratio': 1.0, 'average_psi': 0.5, 'features_drifted': 1}}
+{'time': '2026-06-22T20:48:57+00:00', 'severity': 'critical', 'subject': 'Data drift alert', 'message': 'Drift detected for dataset=Iris', 'metadata': {'dataset': 'Iris', 'drift_ratio': 1.0, 'average_psi': 0.5, 'features_drifted': 1}}
+{'time': '2026-06-22T20:53:25+00:00', 'severity': 'critical', 'subject': 'Data drift alert', 'message': 'Drift detected for dataset=Iris', 'metadata': {'dataset': 'Iris', 'drift_ratio': 1.0, 'average_psi': 0.5, 'features_drifted': 1}}

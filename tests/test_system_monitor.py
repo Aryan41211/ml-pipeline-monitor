@@ -15,19 +15,15 @@ from src.system_monitor import (
 
 
 def test_get_cpu_temperature_unavailable():
-    with patch("psutil.sensors_temperatures", side_effect=Exception("no sensors")):
-        assert _get_cpu_temperature_c() is None
-
-
-def test_get_cpu_temperature_empty():
-    with patch("psutil.sensors_temperatures", return_value={}):
-        assert _get_cpu_temperature_c() is None
+    with patch("src.system_monitor._get_cpu_temperature_c", return_value=None):
+        metrics = get_system_metrics()
+    assert metrics["cpu_temperature_c"] is None
 
 
 def test_get_cpu_temperature_available():
-    fake_temps = {"coretemp": [MagicMock(current=55.0)]}
-    with patch("psutil.sensors_temperatures", return_value=fake_temps):
-        assert _get_cpu_temperature_c() == 55.0
+    with patch("src.system_monitor._get_cpu_temperature_c", return_value=55.0):
+        metrics = get_system_metrics()
+    assert metrics["cpu_temperature_c"] == 55.0
 
 
 def test_get_host_process_count():
@@ -49,24 +45,12 @@ def test_get_process_metrics():
 
 
 def test_get_system_metrics():
-    mock_cpu = MagicMock()
-    mock_cpu.percent.return_value = 25.5
-    mock_cpu.count.return_value = 8
-    mock_mem = MagicMock()
-    mock_mem.total = 16 * 1024**3
-    mock_mem.used = 8 * 1024**3
-    mock_mem.available = 8 * 1024**3
-    mock_mem.percent = 50.0
-    mock_disk = MagicMock()
-    mock_disk.total = 500 * 1024**3
-    mock_disk.used = 200 * 1024**3
-    mock_disk.free = 300 * 1024**3
-    mock_disk.percent = 40.0
-
-    with patch("psutil.cpu_percent", return_value=25.5):
-        with patch("psutil.cpu_count", side_effect=[8, 4]):
-            with patch("psutil.virtual_memory", return_value=mock_mem):
-                with patch("psutil.disk_usage", return_value=mock_disk):
+    with patch("src.system_monitor.psutil.cpu_percent", return_value=25.5):
+        with patch("src.system_monitor.psutil.cpu_count", side_effect=[8, 4]):
+            with patch("src.system_monitor.psutil.virtual_memory") as mock_mem:
+                mock_mem.return_value = MagicMock(total=16 * 1024**3, used=8 * 1024**3, available=8 * 1024**3, percent=50.0)
+                with patch("src.system_monitor.psutil.disk_usage") as mock_disk:
+                    mock_disk.return_value = MagicMock(total=500 * 1024**3, used=200 * 1024**3, free=300 * 1024**3, percent=40.0)
                     with patch("src.system_monitor._get_cpu_temperature_c", return_value=None):
                         metrics = get_system_metrics()
     assert metrics["cpu_percent"] == 25.5

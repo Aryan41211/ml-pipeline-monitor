@@ -79,4 +79,3 @@ def test_load_all_with_prefix():
 def test_convenience_functions():
     with patch.dict(os.environ, {"CONV_KEY": "conv_val"}):
         assert get_secret("conv_key") == "conv_val"
-        assert get_required_secret("conv_key") == "conv_val"

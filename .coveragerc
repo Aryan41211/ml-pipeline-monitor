@@ -5,6 +5,7 @@ source =
 omit =
     */tests/*
     */test_*
+    */site-packages/*
     src/auth.py
     src/cli.py
     src/ui_theme.py

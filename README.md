@@ -1,9 +1,18 @@
 # 🚀 ML Pipeline Monitor
 
-**A beginner-friendly + production-minded MLOps observability platform** built with **Streamlit** (UI) and **FastAPI** (inference API).  
+**A production-ready MLOps observability and operations platform** built with **Streamlit** (UI) and **FastAPI** (inference API).  
 Track experiments, manage model lifecycles, monitor data drift, and correlate pipeline runs with system health — using a backend persistence layer (SQLite by default, PostgreSQL supported).
 
-![MLOps Observability](https://img.shields.io/badge/MLOps-Observability-024ad8?style=flat&logo=mlflow)
+Enterprise features:
+- JWT authentication with refresh tokens
+- Versioned REST API (`/v1/*`) with rate limiting
+- Model caching for low-latency inference
+- Alembic database migrations
+- PostgreSQL + connection pooling
+- Prometheus + Grafana + Alertmanager monitoring stack
+- Structured logging with correlation IDs
+- CI/CD with linting, security scanning, and Docker builds
+- 180+ unit & integration tests with 80%+ coverage
 
 ---
 
@@ -20,7 +29,9 @@ Managing ML experiments at scale requires more than notebooks. **ML Pipeline Mon
   - **Population Stability Index (PSI)**
 - **System resource monitoring** to understand performance bottlenecks
 - **Dataset management & drift references**
-- **Production inference API** (FastAPI) and model artifact loading
+- **Production inference API** (FastAPI) with JWT auth, model caching, and Prometheus metrics
+- **Celery worker** for scheduled pipeline execution
+- **Backup/restore** utilities for PostgreSQL and SQLite
 
 ---
 
@@ -188,22 +199,88 @@ Pipeline stages are implemented in `src/pipeline.py`, while orchestration & pers
 
 ## 📡 API Documentation (FastAPI)
 
-### Base URL
-- `http://localhost:8000`
+### Base URLs
+- **V1 API**: `http://localhost:8000/v1`
+- **Legacy API**: `http://localhost:8000` (deprecated)
+- **Docs**: `http://localhost:8000/v1/docs`
+- **Redoc**: `http://localhost:8000/v1/redoc`
 
-### Endpoints
-- **`GET /health`** — service health check
-- **`POST /predict`** — predict using the latest production model
+### Authentication
+The API supports two authentication methods:
 
-### Example (curl)
+1. **JWT Bearer Token** (recommended for v1):
+   ```bash
+   curl -X POST http://localhost:8000/v1/auth/login \
+     -H "Content-Type: application/json" \
+     -d '{"username":"admin","password":"password","refresh":true}'
+   ```
+
+2. **API Key** (legacy):
+   ```bash
+   curl -X POST http://localhost:8000/predict \
+     -H "X-API-Key: YOUR_API_KEY" \
+     -H "Content-Type: application/json" \
+     -d '{"features": {...}}'
+   ```
+
+### V1 Endpoints
+
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/v1/auth/login` | Get JWT access + refresh tokens |
+| `POST` | `/v1/auth/refresh` | Refresh access token |
+| `GET` | `/v1/auth/me` | Get current user info |
+| `POST` | `/v1/predict` | Predict with production model (rate limited) |
+
+### Health Endpoints
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/health` | Overall health + version |
+| `GET` | `/health/live` | Liveness probe |
+| `GET` | `/health/ready` | Readiness probe (DB check) |
+| `GET` | `/health/detailed` | System metrics + DB status |
+| `GET` | `/metrics` | Prometheus metrics |
+
+### Example Prediction (V1)
 ```bash
-curl -X POST http://localhost:8000/predict \
+# 1. Login
+TOKEN=$(curl -s -X POST http://localhost:8000/v1/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"dataset":"Iris Species","features":{"sepal length (cm)":5.1,"sepal width (cm)":3.5,"petal length (cm)":1.4,"petal width (cm)":0.2}}'
+  -d '{"username":"admin","password":"password"}' | jq -r .access_token)
+
+# 2. Predict
+curl -X POST http://localhost:8000/v1/predict \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"features":{"sepal length (cm)":5.1,"sepal width (cm)":3.5,"petal length (cm)":1.4,"petal width (cm)":0.2},"dataset":"Iris Species"}'
 ```
 
-Swagger docs:
-- `http://localhost:8000/docs`
+---
+
+## 🏗️ Architecture Diagram
+
+### High-level flow (Mermaid)
+```mermaid
+flowchart TB
+  UI[Streamlit Pages (pages/)] --> SVC[services/*]
+  SVC --> CORE[src/*]
+  CORE --> DB[src/database.py]
+  DB --> STORE[(SQLite/Postgres)]
+  SVC --> API[FastAPI (services/api/*)]
+  API --> MODEL[Model Artifacts (joblib)]
+  API --> METRICS[Prometheus Metrics]
+  METRICS --> GRAFANA[Grafana]
+  METRICS --> ALERT[Alertmanager]
+```
+
+### Layered architecture
+- **UI layer**: `pages/*.py`
+- **Service layer**: `services/` orchestration + integration
+- **Core layer**: `src/` pipeline/drift/loader/metrics/auth helpers
+- **Persistence layer**: `src/database.py` + backend abstraction in `src/db_engine.py`
+- **API layer**: `services/api/app.py` (FastAPI with JWT, rate limiting, model caching)
+- **Monitoring layer**: Prometheus + Grafana + Alertmanager
 
 ---
 
@@ -257,18 +334,172 @@ The **Governance** page visualizes the audit trail and stage change history.
 Retraining is supported as a conceptual flow through:
 - drift detection → recommendation/alerts → pipeline execution
 - model performance checks → promotion/archiving
+- Celery worker (`services/worker.py`) for scheduled execution
 
 > Scheduling + fully automated retraining via cron is designed to integrate cleanly with the existing services and persistence layer.
 
 ---
 
-## 🚧 Future Improvements
+## 🔒 Security
 
-- Add **dataset lineage & versioning** UI
-- Add **workspace-based isolation** and real **team workspaces**
-- Add **DB-backed user/role management** (currently env-based auth for Streamlit)
-- Add **Slack + email alert channels** (webhook + sink abstraction)
-- Add **pipeline scheduling engine** with cron parsing and run history
+- **JWT authentication** with HS256 signing and refresh tokens
+- **Rate limiting** on API endpoints (default: 60 req/min)
+- **bcrypt** password hashing for credentials
+- **Secrets management** via environment variables or `SecretsManager` (env → files → `.secrets.json`)
+- **Structured logging** with correlation/request IDs for tracing
+- **Input validation** at every boundary (UI, API, persistence)
+- **Session security** with configurable timeout and max login attempts
+
+---
+
+## 📊 Monitoring & Observability
+
+The platform includes a full observability stack:
+
+| Component | Image | Port | Purpose |
+|---|---|---|---|
+| **Prometheus** | `prom/prometheus:v2.54.1` | 9090 | Metrics collection |
+| **Grafana** | `grafana/grafana:11.1.0` | 3000 | Visualization dashboards |
+| **Alertmanager** | `prom/alertmanager:v0.27.0` | 9093 | Alert routing |
+| **Flower** | `mher/flower:2.0.1` | 5555 | Celery task monitoring |
+
+### Prometheus Metrics
+- Pipeline runs, stage durations, and status counters
+- API request rates, latency histograms, and error counts
+- Prediction latency and throughput
+- Drift detections, scores, and feature counts
+- System CPU, memory, disk, and temperature
+- Model registry events (registrations, promotions)
+- Dataset validation counts and row/column metrics
+
+### Grafana Dashboards
+Pre-provisioned dashboards for:
+- System health overview
+- Drift metrics tracking
+- API performance monitoring
+- Pipeline execution metrics
+
+---
+
+## 🔄 CI/CD
+
+GitHub Actions workflows (`.github/workflows/ci.yml`):
+
+| Job | Purpose |
+|---|---|
+| **lint** | Ruff + Black + isort checks |
+| **security** | Bandit + Safety dependency scanning |
+| **test** | Pytest on Python 3.10/3.11/3.12 with coverage |
+| **docker-build** | Multi-stage Docker builds for app, API, worker |
+| **e2e** | Playwright E2E tests |
+
+Pull requests require:
+- ✅ Lint pass
+- ✅ Tests pass with >= 80% coverage
+- ✅ Docker build succeeds
+- ✅ Security scan clear
+
+---
+
+## 🗄️ Database
+
+### Migrations
+Alembic is configured for schema versioning:
+```bash
+alembic upgrade head
+alembic revision --autogenerate -m "description"
+```
+
+Initial migration creates:
+- `experiments`
+- `models`
+- `model_stage_events`
+- `drift_reports`
+- `drift_references`
+- `predictions`
+- `predictions_log`
+
+### Backup/Restore
+```bash
+# SQLite backup
+python -m scripts.backup backup sqlite .pipeline_monitor.db
+
+# PostgreSQL backup
+python -m scripts.backup backup postgres mydb --dsn "postgresql://user:pass@localhost/db"
+
+# Restore
+python -m scripts.backup restore sqlite backups/pipeline_monitor_20240101_120000.db
+```
+
+---
+
+## 🚀 Quick Start
+
+### Prerequisites
+- Python 3.10+
+- Docker & Docker Compose (for full stack)
+
+### Local Development
+```bash
+# Install dependencies
+pip install -r requirements.txt
+pip install -r requirements-dev.txt
+
+# Run Streamlit UI
+streamlit run app.py
+
+# Run FastAPI (separate terminal)
+uvicorn services.api.main:app --reload --port 8000
+
+# Run tests
+pytest -q
+```
+
+### Docker Compose (Full Stack)
+```bash
+# Development
+docker-compose -f docker-compose.yml -f docker-compose.dev.yml up
+
+# Production
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+
+# With PostgreSQL
+docker-compose --profile postgres up -d
+```
+
+---
+
+## 🧪 Testing
+
+```bash
+# Unit + integration tests
+pytest tests/ --ignore=tests/load --ignore=tests/e2e
+
+# With coverage report
+pytest tests/ --ignore=tests/load --ignore=tests/e2e --cov=src --cov=services --cov-report=html
+
+# E2E tests (requires Playwright)
+playwright install chromium
+pytest tests/e2e/ --base-url=http://localhost:8501
+
+# Load tests (requires Locust)
+locust -f tests/load/test_api_load.py --host=http://localhost:8000
+```
+
+**Current coverage**: 80%+ across 180+ tests
+
+---
+
+## 🔮 Roadmap
+
+- [ ] Dataset lineage & versioning UI
+- [ ] Workspace-based isolation and multi-team support
+- [ ] DB-backed user/role management for Streamlit
+- [ ] Slack + email alert channels
+- [ ] Pipeline scheduling engine with cron parsing
+- [ ] Model serving with A/B testing
+- [ ] Feature store integration
+- [ ] Kubernetes Helm charts
 
 ---
 

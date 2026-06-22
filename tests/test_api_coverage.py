@@ -62,10 +62,12 @@ class TestPredictV1Errors:
 
     def test_predict_file_not_found(self):
         token = create_access_token(sub="user", role="admin")
-        with patch("services.api.app.get_latest_production_model", return_value=(MagicMock(), None, {"artifact_path": "/nonexistent"})):
+        fake_model = MagicMock()
+        fake_model.predict.return_value = [1]
+        with patch("services.api.app.get_latest_production_model", return_value=(fake_model, None, {"artifact_path": "/nonexistent/path/model.joblib", "model_id": "m1", "dataset": "iris", "version": 1, "stage": "production"})):
             r = client.post(
                 "/v1/predict",
                 json={"features": {"x": 1.0}},
                 headers=_auth_header(token),
             )
-        assert r.status_code in (404, 500)
+        assert r.status_code == 404

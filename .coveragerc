@@ -1,0 +1,25 @@
+[run]
+source =
+    src
+    services
+omit =
+    */tests/*
+    */test_*
+    src/auth.py
+    src/cli.py
+    src/ui_theme.py
+    src/design_system.py
+    src/components.py
+    src/_custom_password_input.py
+    services/worker.py
+
+[report]
+exclude_lines =
+    pragma: no cover
+    def __repr__
+    raise AssertionError
+    raise NotImplementedError
+    if __name__ == .__main__.:
+    if TYPE_CHECKING:
+    @abstractmethod
+fail_under = 80

@@ -26,7 +26,7 @@ from slowapi.util import get_remote_address
 import signal
 import sys
 
-from services.model_service import predict_from_payload as _legacy_predict_from_payload
+from services.model_service import predict_from_payload
 from services.telemetry_service import track_user_action
 from src.database import initialize_db
 from src.db_engine import get_backend
@@ -619,9 +619,15 @@ def predict_legacy(request: Request, request_body: PredictRequest, api_key: str 
     request_id = get_request_id()
     start = time.time()
 
-    result = predict_from_payload(payload=request_body.features, dataset=request_body.dataset)
-    duration = time.time() - start
+    try:
+        import services.model_service as _model_service
+        result = _model_service.predict_from_payload(payload=request_body.features, dataset=request_body.dataset)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail={"message": str(exc)}) from exc
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail={"message": str(exc)}) from exc
 
+    duration = time.time() - start
     record_prediction(
         model_id=result.get("model_id", "unknown"),
         dataset=request_body.dataset or "unknown",

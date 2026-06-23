@@ -1,7 +1,7 @@
 """
-Enterprise UI/UX Design System for ML Pipeline Monitor.
-HP-inspired white/ink/blue design language — premium, clean, enterprise SaaS.
-Forma DJR Micro via Inter, HP Electric Blue (#024ad8) as lone signal CTA.
+Premium Enterprise UI/UX Design System for ML Pipeline Monitor.
+Inspired by Vercel, Linear, Stripe, Perplexity — dark mode first with glassmorphism.
+Clean minimal aesthetic with subtle animations and modern interactions.
 """
 
 from __future__ import annotations
@@ -18,64 +18,62 @@ import plotly.io as pio
 import streamlit as st
 
 # ===========================================================================
-# HP Design System Tokens
+# Premium Dark Design System Tokens
 # ===========================================================================
 
 class HP:
-    """HP Design Language tokens — white/ink/blue system."""
+    """Premium Dark Design Language tokens — dark mode first, inspired by Vercel/Stripe."""
     
-    # Brand & Accent
-    primary = "#024ad8"
-    primary_bright = "#296ef9"
-    primary_deep = "#0e3191"
-    primary_soft = "#c9e0fc"
-    on_primary = "#ffffff"
+    # Brand & Accent - Premium blue/cyan gradient
+    primary = "#0070F3"
+    primary_bright = "#3399FF"
+    primary_deep = "#0052CC"
+    primary_soft = "#B6E0FF"
+    on_primary = "#FFFFFF"
     
-    # Ink
-    ink = "#1a1a1a"
-    ink_deep = "#000000"
-    ink_soft = "#292929"
-    on_ink = "#ffffff"
+    # Dark Mode - Deep background shades
+    background = "#0B0F19"
+    surface = "#111827"
+    card = "#1F2937"
+    card_hover = "#2D3748"
     
-    # Surfaces
-    canvas = "#ffffff"
-    paper = "#ffffff"
-    cloud = "#f7f7f7"
-    fog = "#e8e8e8"
-    steel = "#c2c2c2"
-    graphite = "#636363"
-    charcoal = "#3d3d3d"
+    # Glassmorphism
+    glass = "rgba(31, 41, 55, 0.6)"
+    glass_border = "rgba(255, 255, 255, 0.08)"
     
-    # Semantic
-    bloom_coral = "#ff5050"
-    bloom_rose = "#f9d4d2"
-    bloom_deep = "#b3262b"
-    storm_mist = "#8ebdce"
-    storm_sea = "#7fadbe"
-    storm_deep = "#356373"
+    # Text hierarchy - High contrast white and soft gray
+    text_primary = "#F9FAFB"
+    text_secondary = "#E5E7EB"
+    text_tertiary = "#9CA3AF"
     
-    # Hairlines
-    hairline = "#e8e8e8"
-    hairline_strong = "#c2c2c2"
+    # Status colors
+    success = "#10B981"
+    success_soft = "#10B98115"
+    warning = "#FBBF24"
+    warning_soft = "#F59E0B15"
+    error = "#EF4444"
+    error_soft = "#EF444415"
+    
+    # Borders - Subtle dark borders
+    border = "#374151"
+    border_strong = "#4B5563"
     
     # Typography
-    font_family = "Inter, 'Segoe UI', Arial, sans-serif"
-    font_display = "Inter, 'Segoe UI', Arial, sans-serif"
+    font_family = "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
+    font_mono = "JetBrains Mono, 'Fira Code', monospace"
     
     # Radius
-    radius_none = "0px"
-    radius_sm = "3px"
-    radius_md = "4px"
-    radius_lg = "8px"
+    radius_sm = "6px"
+    radius_md = "8px"
+    radius_lg = "12px"
     radius_xl = "16px"
     radius_pill = "9999px"
     
     # Shadows
-    shadow_soft = "0 2px 8px rgba(26, 26, 26, 0.08)"
-    shadow_modal = "0 8px 24px rgba(26, 26, 26, 0.12)"
-    
-    # Chevron decoration
-    chevron_color = "#024ad8"
+    shadow_soft = "0 4px 12px rgba(0, 0, 0, 0.15)"
+    shadow_hover = "0 8px 24px rgba(0, 0, 0, 0.25)"
+    shadow_glass = "0 8px 32px rgba(0, 0, 0, 0.12)"
+    shadow_modal = "0 24px 60px rgba(0, 0, 0, 0.4)"
 
 
 STAGE_TO_TONE = {
@@ -94,28 +92,28 @@ STATUS_TO_TONE = {
     "stable": "success", "significant": "danger",
 }
 
-PLOTLY_COLORWAY = ["#024ad8", "#1a1a1a", "#296ef9", "#636363", "#0e3191", "#ff5050"]
+PLOTLY_COLORWAY = ["#0070F3", "#3399FF", "#10B981", "#FBBF24", "#EF4444", "#8B5CF6"]
 
 # ===========================================================================
-# Plotly Theming — HP white canvas
+# Plotly Theming — Premium Dark Template
 # ===========================================================================
 
 def apply_plotly_defaults() -> None:
-    if "hp_white" not in pio.templates:
-        pio.templates["hp_white"] = go.layout.Template(
+    if "hp_dark" not in pio.templates:
+        pio.templates["hp_dark"] = go.layout.Template(
             layout={
                 "colorway": PLOTLY_COLORWAY,
-                "font": {"family": "Inter, Arial, sans-serif", "size": 13, "color": "#1a1a1a"},
-                "plot_bgcolor": "#ffffff",
-                "paper_bgcolor": "#ffffff",
-                "legend": {"title": None, "orientation": "h", "yanchor": "bottom", "y": 1.02, "x": 0},
+                "font": {"family": "Inter, Arial, sans-serif", "size": 13, "color": HP.text_primary},
+                "paper_bgcolor": "transparent",
+                "plot_bgcolor": HP.card,
+                "legend": {"title": None, "orientation": "h", "yanchor": "bottom", "y": 1.02, "x": 0, "font": {"color": HP.text_secondary}},
                 "margin": {"l": 10, "r": 10, "t": 40, "b": 10},
-                "xaxis": {"showgrid": False, "linecolor": "#e8e8e8", "tickfont": {"color": "#636363", "size": 11}},
-                "yaxis": {"showgrid": True, "gridcolor": "rgba(232, 232, 232, 0.6)", "linecolor": "#e8e8e8", "tickfont": {"color": "#636363", "size": 11}},
-                "title": {"font": {"family": "Inter, Arial, sans-serif", "size": 16, "color": "#1a1a1a", "weight": 500}},
+                "xaxis": {"showgrid": True, "gridcolor": "rgba(55, 65, 85, 0.3)", "linecolor": HP.border, "tickfont": {"color": HP.text_tertiary, "size": 11}},
+                "yaxis": {"showgrid": True, "gridcolor": "rgba(55, 65, 85, 0.3)", "linecolor": HP.border, "tickfont": {"color": HP.text_tertiary, "size": 11}},
+                "title": {"font": {"family": "Inter, Arial, sans-serif", "size": 16, "color": HP.text_primary, "weight": 500}},
             }
         )
-    pio.templates.default = "hp_white"
+    pio.templates.default = "hp_dark"
 
 # ===========================================================================
 # HP CSS Injection

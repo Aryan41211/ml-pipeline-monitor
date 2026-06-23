@@ -17,64 +17,87 @@ import plotly.graph_objects as go
 import plotly.io as pio
 import streamlit as st
 
+from src.design_system import (
+    DARK, LIGHT, COLORS, TYPOGRAPHY, SPACING, SHADOWS, BORDER_RADIUS,
+    ANIMATION, GRADIENTS, CHART_COLORS, PLOTLY_COLORWAY, STATUS_TO_TONE,
+    apply_plotly_defaults, section_header, status_badge, metric_card, glass_container, kpi_card as design_kpi_card
+)
+
 # ===========================================================================
-# Premium Dark Design System Tokens
+# Premium Dark Design System Tokens (from centralized design_system)
 # ===========================================================================
+
+BACKGROUND_PRIMARY = DARK["background"]
+BACKGROUND_SECONDARY = DARK["surface"]
+SURFACE = DARK["card"]
+SURFACE_ELEVATED = DARK["card_hover"]
+
+TEXT_PRIMARY = DARK["text_primary"]
+TEXT_SECONDARY = DARK["text_secondary"]
+
+ACCENT_PRIMARY = DARK["accent"]
+ACCENT_SECONDARY = LIGHT["accent"]
+
+BORDER = DARK["border"]
 
 class HP:
-    """Premium Dark Design Language tokens — dark mode first, inspired by Vercel/Stripe."""
+    """Premium Dark Design Language tokens — modern dark mode aesthetic.
+    Delegates to centralized design_system DARK theme tokens.
+    """
     
-    # Brand & Accent - Premium blue/cyan gradient
-    primary = "#0070F3"
-    primary_bright = "#3399FF"
-    primary_deep = "#0052CC"
-    primary_soft = "#B6E0FF"
-    on_primary = "#FFFFFF"
+    # Background layers
+    background = DARK["background"]
+    surface = DARK["surface"]
+    card = DARK["card"]
+    card_hover = DARK["card_hover"]
     
-    # Dark Mode - Deep background shades
-    background = "#0B0F19"
-    surface = "#111827"
-    card = "#1F2937"
-    card_hover = "#2D3748"
+    # Accent colors - premium blue/cyan gradient
+    primary = DARK["accent"]
+    primary_bright = DARK["accent_bright"]
+    primary_deep = DARK["accent_deep"]
+    primary_soft = DARK["accent_soft"]
     
-    # Glassmorphism
-    glass = "rgba(31, 41, 55, 0.6)"
-    glass_border = "rgba(255, 255, 255, 0.08)"
-    
-    # Text hierarchy - High contrast white and soft gray
-    text_primary = "#F9FAFB"
-    text_secondary = "#E5E7EB"
-    text_tertiary = "#9CA3AF"
+    # Text hierarchy
+    text_primary = DARK["text_primary"]
+    text_secondary = DARK["text_secondary"]
     
     # Status colors
-    success = "#10B981"
-    success_soft = "#10B98115"
-    warning = "#FBBF24"
-    warning_soft = "#F59E0B15"
-    error = "#EF4444"
-    error_soft = "#EF444415"
+    success = DARK["success"]
+    warning = DARK["warning"]
+    error = DARK["error"]
     
-    # Borders - Subtle dark borders
-    border = "#374151"
-    border_strong = "#4B5563"
+    # Borders
+    border = DARK["border"]
+    border_strong = DARK["border_strong"]
     
     # Typography
-    font_family = "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
-    font_mono = "JetBrains Mono, 'Fira Code', monospace"
+    font_family = TYPOGRAPHY["font_family"]
+    font_mono = TYPOGRAPHY["font_mono"]
     
     # Radius
-    radius_sm = "6px"
-    radius_md = "8px"
-    radius_lg = "12px"
-    radius_xl = "16px"
-    radius_pill = "9999px"
+    radius_sm = BORDER_RADIUS["sm"]
+    radius_md = BORDER_RADIUS["md"]
+    radius_lg = BORDER_RADIUS["lg"]
+    radius_xl = BORDER_RADIUS["xl"]
+    radius_pill = BORDER_RADIUS["pill"]
     
     # Shadows
-    shadow_soft = "0 4px 12px rgba(0, 0, 0, 0.15)"
-    shadow_hover = "0 8px 24px rgba(0, 0, 0, 0.25)"
-    shadow_glass = "0 8px 32px rgba(0, 0, 0, 0.12)"
-    shadow_modal = "0 24px 60px rgba(0, 0, 0, 0.4)"
-
+    shadow_soft = SHADOWS["soft"]
+    shadow_hover = SHADOWS["hover"]
+    
+    # CSS variable aliases (required by apply_ui_theme CSS)
+    ink = DARK["ink"]
+    ink_deep = DARK["ink_deep"]
+    ink_soft = DARK["ink_soft"]
+    canvas = DARK["canvas"]
+    cloud = DARK["cloud"]
+    fog = DARK["fog"]
+    steel = DARK["steel"]
+    graphite = DARK["graphite"]
+    charcoal = DARK["charcoal"]
+    hairline = DARK["hairline"]
+    bloom_deep = DARK["bloom_deep"]
+    bloom_rose = DARK["bloom_rose"]
 
 STAGE_TO_TONE = {
     "production": "success",
@@ -82,38 +105,6 @@ STAGE_TO_TONE = {
     "development": "info",
     "archived": "neutral",
 }
-
-STATUS_TO_TONE = {
-    "completed": "success", "success": "success", "done": "success",
-    "warning": "warning", "moderate": "warning",
-    "failed": "danger", "error": "danger", "critical": "danger",
-    "pending": "info", "running": "info",
-    "queued": "neutral", "skipped": "neutral", "none": "neutral",
-    "stable": "success", "significant": "danger",
-}
-
-PLOTLY_COLORWAY = ["#0070F3", "#3399FF", "#10B981", "#FBBF24", "#EF4444", "#8B5CF6"]
-
-# ===========================================================================
-# Plotly Theming — Premium Dark Template
-# ===========================================================================
-
-def apply_plotly_defaults() -> None:
-    if "hp_dark" not in pio.templates:
-        pio.templates["hp_dark"] = go.layout.Template(
-            layout={
-                "colorway": PLOTLY_COLORWAY,
-                "font": {"family": "Inter, Arial, sans-serif", "size": 13, "color": HP.text_primary},
-                "paper_bgcolor": "transparent",
-                "plot_bgcolor": HP.card,
-                "legend": {"title": None, "orientation": "h", "yanchor": "bottom", "y": 1.02, "x": 0, "font": {"color": HP.text_secondary}},
-                "margin": {"l": 10, "r": 10, "t": 40, "b": 10},
-                "xaxis": {"showgrid": True, "gridcolor": "rgba(55, 65, 85, 0.3)", "linecolor": HP.border, "tickfont": {"color": HP.text_tertiary, "size": 11}},
-                "yaxis": {"showgrid": True, "gridcolor": "rgba(55, 65, 85, 0.3)", "linecolor": HP.border, "tickfont": {"color": HP.text_tertiary, "size": 11}},
-                "title": {"font": {"family": "Inter, Arial, sans-serif", "size": 16, "color": HP.text_primary, "weight": 500}},
-            }
-        )
-    pio.templates.default = "hp_dark"
 
 # ===========================================================================
 # HP CSS Injection

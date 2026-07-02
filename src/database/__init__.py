@@ -1,30 +1,17 @@
 """
-Backward compatibility wrapper for the database module.
+Database package for ML Pipeline Monitor.
 
-This module maintains backward compatibility with code that imports from
-`src.database`. All functionality has been moved to the `src.database` package.
-
-Migration Guide:
-- Old: `from src.database import save_experiment`
-- New: `from src.database import save_experiment` (still works via this wrapper)
-
-For new code, prefer importing directly from the submodules:
-- `from src.database.experiments import save_experiment`
-- `from src.database.models import save_model`
-- etc.
+Provides a modular persistence layer with clear separation of concerns:
+- Schema management and migrations
+- Experiment tracking
+- Model registry
+- Drift detection reports
+- Governance (teams, users, workspaces)
+- Prediction history
+- Dataset lineage
 """
 
-from __future__ import annotations
-
-# Re-export all public APIs from the new modular structure
-# This ensures backward compatibility with existing imports
-
-from src.database.schema import (
-    initialize_db,
-    initialize_dataset_registry,
-    initialize_prediction_registry,
-    initialize_governance_registry,
-)
+from src.database.schema import initialize_db, initialize_dataset_registry, initialize_prediction_registry, initialize_governance_registry
 from src.database.experiments import (
     save_experiment,
     get_experiments,
@@ -61,16 +48,6 @@ from src.database.governance import (
     create_schedule,
     list_schedules,
     record_schedule_run,
-)
-from src.database.lineage import (
-    create_dataset,
-    create_dataset_version,
-    save_schema_snapshot,
-    save_schema_change,
-    create_lineage_edge,
-    get_dataset_versions,
-    get_schema_changes,
-    get_lineage_edges,
 )
 
 __all__ = [
@@ -111,13 +88,4 @@ __all__ = [
     "create_schedule",
     "list_schedules",
     "record_schedule_run",
-    # Lineage
-    "create_dataset",
-    "create_dataset_version",
-    "save_schema_snapshot",
-    "save_schema_change",
-    "create_lineage_edge",
-    "get_dataset_versions",
-    "get_schema_changes",
-    "get_lineage_edges",
 ]

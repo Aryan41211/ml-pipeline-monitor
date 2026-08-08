@@ -26,7 +26,7 @@ class TestSecretsMore:
 
 class TestPipelineServiceMore:
     def test_get_pipeline_defaults_with_cfg(self):
-        with patch("services.pipeline_service.load_config", return_value={"pipeline": {"random_seed": 42, "test_size": 0.2, "cv_folds": 5, "n_jobs": -1}}):
+        with patch("ml_pipeline_monitor.services.pipeline_service.load_config", return_value={"pipeline": {"random_seed": 42, "test_size": 0.2, "cv_folds": 5, "n_jobs": -1}}):
             d = get_pipeline_defaults()
         assert d["random_seed"] == 42
         assert d["test_size"] == 0.2

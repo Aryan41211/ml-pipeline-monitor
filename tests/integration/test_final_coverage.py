@@ -14,14 +14,14 @@ from ml_pipeline_monitor.core.secrets import SecretsManager
 
 class TestPipelineServiceMore:
     def test_list_experiments_with_limit(self):
-        with patch("services.pipeline_service.get_experiments", return_value=[{"run_id": i} for i in range(5)]) as m:
+        with patch("ml_pipeline_monitor.services.pipeline_service.get_experiments", return_value=[{"run_id": i} for i in range(5)]) as m:
             result = list_experiments(limit=5)
         m.assert_called_once_with(limit=5)
         assert len(result) == 5
 
     def test_get_dataset_preview(self):
-        with patch("services.pipeline_service.load_dataset", return_value={"X_train": "x", "X_test": "x", "y_train": "y", "y_test": "y", "feature_names": ["f1", "f2"]}):
-            with patch("services.pipeline_service.get_feature_statistics", return_value={"mean": [1.0]}):
+        with patch("ml_pipeline_monitor.services.pipeline_service.load_dataset", return_value={"X_train": "x", "X_test": "x", "y_train": "y", "y_test": "y", "feature_names": ["f1", "f2"]}):
+            with patch("ml_pipeline_monitor.services.pipeline_service.get_feature_statistics", return_value={"mean": [1.0]}):
                 result = get_dataset_preview("iris", test_size=0.2, random_state=42)
         assert "dataset" in result
         assert "feature_stats" in result

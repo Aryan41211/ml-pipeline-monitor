@@ -29,19 +29,19 @@ def _fake_pipeline_result():
 
 
 def test_run_pipeline_and_persist_success():
-    with patch("services.pipeline_service.load_config", return_value={"pipeline": {"n_jobs": 1}}):
-        with patch("services.pipeline_service.make_feature_key", return_value="key-123"):
-            with patch("services.pipeline_service.load_cached_splits", return_value=None):
-                with patch("services.pipeline_service.load_dataset", return_value={"X_train": [[1]], "X_test": [[1]], "y_train": [0], "y_test": [0]}):
-                    with patch("services.pipeline_service.save_cached_splits"):
-                        with patch("services.pipeline_service.MLPipeline") as mock_pipe:
+    with patch("ml_pipeline_monitor.services.pipeline_service.load_config", return_value={"pipeline": {"n_jobs": 1}}):
+        with patch("ml_pipeline_monitor.services.pipeline_service.make_feature_key", return_value="key-123"):
+            with patch("ml_pipeline_monitor.services.pipeline_service.load_cached_splits", return_value=None):
+                with patch("ml_pipeline_monitor.services.pipeline_service.load_dataset", return_value={"X_train": [[1]], "X_test": [[1]], "y_train": [0], "y_test": [0]}):
+                    with patch("ml_pipeline_monitor.services.pipeline_service.save_cached_splits"):
+                        with patch("ml_pipeline_monitor.services.pipeline_service.MLPipeline") as mock_pipe:
                             mock_pipe.return_value.run.return_value = _fake_pipeline_result()
-                            with patch("services.pipeline_service.save_experiment"):
-                                with patch("services.pipeline_service.save_model"):
-                                    with patch("services.pipeline_service.record_pipeline_run"):
-                                        with patch("services.pipeline_service.emit_console_alert"):
-                                            with patch("services.pipeline_service.emit_email_alert"):
-                                                with patch("services.pipeline_service._persist_artifacts"):
+                            with patch("ml_pipeline_monitor.services.pipeline_service.save_experiment"):
+                                with patch("ml_pipeline_monitor.services.pipeline_service.save_model"):
+                                    with patch("ml_pipeline_monitor.services.pipeline_service.record_pipeline_run"):
+                                        with patch("ml_pipeline_monitor.services.pipeline_service.emit_console_alert"):
+                                            with patch("ml_pipeline_monitor.services.pipeline_service.emit_email_alert"):
+                                                with patch("ml_pipeline_monitor.services.pipeline_service._persist_artifacts"):
                                                     result = run_pipeline_and_persist(
                                                         dataset_label="iris",
                                                         dataset_key="iris",
@@ -57,17 +57,17 @@ def test_run_pipeline_and_persist_success():
 
 
 def test_run_pipeline_and_persist_failure():
-    with patch("services.pipeline_service.load_config", return_value={"pipeline": {"n_jobs": 1}}):
-        with patch("services.pipeline_service.make_feature_key", return_value="key-123"):
-            with patch("services.pipeline_service.load_cached_splits", return_value=None):
-                with patch("services.pipeline_service.load_dataset", return_value={"X_train": [[1]], "X_test": [[1]], "y_train": [0], "y_test": [0]}):
-                    with patch("services.pipeline_service.save_cached_splits"):
-                        with patch("services.pipeline_service.MLPipeline") as mock_pipe:
+    with patch("ml_pipeline_monitor.services.pipeline_service.load_config", return_value={"pipeline": {"n_jobs": 1}}):
+        with patch("ml_pipeline_monitor.services.pipeline_service.make_feature_key", return_value="key-123"):
+            with patch("ml_pipeline_monitor.services.pipeline_service.load_cached_splits", return_value=None):
+                with patch("ml_pipeline_monitor.services.pipeline_service.load_dataset", return_value={"X_train": [[1]], "X_test": [[1]], "y_train": [0], "y_test": [0]}):
+                    with patch("ml_pipeline_monitor.services.pipeline_service.save_cached_splits"):
+                        with patch("ml_pipeline_monitor.services.pipeline_service.MLPipeline") as mock_pipe:
                             mock_pipe.return_value.run.side_effect = RuntimeError("boom")
-                            with patch("services.pipeline_service.record_pipeline_run"):
-                                with patch("services.pipeline_service.emit_console_alert"):
-                                    with patch("services.pipeline_service.emit_email_alert"):
-                                        with patch("services.pipeline_service._persist_artifacts"):
+                            with patch("ml_pipeline_monitor.services.pipeline_service.record_pipeline_run"):
+                                with patch("ml_pipeline_monitor.services.pipeline_service.emit_console_alert"):
+                                    with patch("ml_pipeline_monitor.services.pipeline_service.emit_email_alert"):
+                                        with patch("ml_pipeline_monitor.services.pipeline_service._persist_artifacts"):
                                             with pytest.raises(RuntimeError, match="boom"):
                                                 run_pipeline_and_persist(
                                                     dataset_label="iris",
@@ -82,7 +82,7 @@ def test_run_pipeline_and_persist_failure():
 
 
 def test_get_pipeline_defaults():
-    with patch("services.pipeline_service.load_config", return_value={"pipeline": {"random_seed": 42, "test_size": 0.2, "cv_folds": 5, "n_jobs": -1}}):
+    with patch("ml_pipeline_monitor.services.pipeline_service.load_config", return_value={"pipeline": {"random_seed": 42, "test_size": 0.2, "cv_folds": 5, "n_jobs": -1}}):
         defaults = get_pipeline_defaults()
     assert defaults["random_seed"] == 42
     assert defaults["test_size"] == 0.2

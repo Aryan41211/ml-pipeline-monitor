@@ -54,6 +54,9 @@ htmlcov/
 # --- Streamlit ---
 .streamlit/secrets.toml
 
+# --- Secrets ---
+.secrets.json
+
 # --- Runtime Database ---
 .pipeline_monitor.db
 .pipeline_monitor.db-shm

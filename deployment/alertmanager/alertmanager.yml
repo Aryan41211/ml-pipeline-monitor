@@ -1,9 +1,9 @@
 global:
   resolve_timeout: 5m
-  smtp_smarthost: 'localhost:587'
-  smtp_from: 'ml-pipeline-monitor@example.com'
-  smtp_auth_username: ''
-  smtp_auth_password: ''
+  smtp_smarthost: '${SMTP_HOST:-localhost}:${SMTP_PORT:-587}'
+  smtp_from: '${SMTP_FROM:-ml-pipeline-monitor@example.com}'
+  smtp_auth_username: '${SMTP_USER:-}'
+  smtp_auth_password: '${SMTP_PASSWORD:-}'
 
 route:
   group_by: ['alertname', 'job', 'severity']
@@ -25,7 +25,7 @@ receivers:
     email_configs:
       - to: 'mlops-team@example.com'
         from: 'ml-pipeline-monitor@example.com'
-        smarthost: 'localhost:587'
+        smarthost: '${SMTP_HOST:-localhost}:${SMTP_PORT:-587}'
         subject: '{{ .GroupLabels.alertname }}: {{ .CommonAnnotations.summary }}'
         body: |
           {{ range .Alerts }}

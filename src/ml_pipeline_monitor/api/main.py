@@ -632,6 +632,9 @@ def predict_legacy(request: Request, request_body: PredictRequest, api_key: str 
         raise HTTPException(status_code=400, detail={"message": str(exc)}) from exc
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail={"message": str(exc)}) from exc
+    except Exception as exc:
+        LOGGER.warning("Legacy predict failed: %s", exc)
+        raise HTTPException(status_code=500, detail={"message": f"Prediction failed: {exc}"}) from exc
 
     duration = time.time() - start
     record_prediction(

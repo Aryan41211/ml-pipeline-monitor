@@ -1,5 +1,8 @@
 """
 Package setup for ml-pipeline-monitor.
+
+This file is maintained for backward compatibility with older pip versions.
+The canonical configuration is in pyproject.toml.
 """
 from setuptools import find_packages, setup
 
@@ -12,13 +15,14 @@ with open("requirements.txt", encoding="utf-8") as fh:
 setup(
     name="ml-pipeline-monitor",
     version="1.0.0",
-    author="Manpat Ell",
+    author="Aryan41211",
     description="Production-grade MLOps observability platform built with Streamlit",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/manpatell/ml-pipeline-monitor",
-    packages=find_packages(exclude=["tests*"]),
-    python_requires=">=3.10",
+    url="https://github.com/Aryan41211/ml-pipeline-monitor",
+    package_dir={"": "src"},
+    packages=find_packages(where="src", exclude=["tests*"]),
+    python_requires=">=3.11",
     install_requires=requirements,
     classifiers=[
         "Programming Language :: Python :: 3",
@@ -29,8 +33,7 @@ setup(
     ],
     entry_points={
         "console_scripts": [
-            "mlmonitor=src.cli:main",
-            "mlmonitor-api=services.api.main:run",
+            "mlmonitor-api=ml_pipeline_monitor.api.__main__:run",
         ],
     },
 )

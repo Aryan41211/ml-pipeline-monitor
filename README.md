@@ -15,41 +15,101 @@ Enterprise-grade MLOps platform for monitoring, tracking, and governing machine 
 ## Architecture
 
 ```
-ml-pipeline-monitor/
+ML-pipeline-monitor/
+├── app.py                    # Streamlit entry point
+├── run_app.py                # Auto port discovery launcher
+│
 ├── src/
-│   ├── database/           # Modular persistence layer
-│   │   ├── schema.py      # Table definitions & migrations
-│   │   ├── experiments.py # Experiment CRUD
-│   │   ├── models.py      # Model registry CRUD
-│   │   ├── drift.py       # Drift reports CRUD
-│   │   ├── predictions.py # Prediction history
-│   │   ├── governance.py  # Teams, users, workspaces
-│   │   └── lineage.py     # Dataset lineage
-│   ├── services/          # Business logic layer
-│   │   ├── app_service.py
-│   │   ├── pipeline_service.py
-│   │   ├── model_service.py
-│   │   ├── drift_service.py
-│   │   ├── data_health_service.py
-│   │   └── telemetry_service.py
-│   ├── ui_theme.py        # Enterprise design system
-│   ├── auth.py            # Authentication & authorization
-│   ├── pipeline.py        # ML pipeline orchestration
-│   ├── data_loader.py     # Dataset loading utilities
-│   ├── drift_detector.py  # Statistical drift detection
-│   └── ...
-├── pages/                 # Streamlit UI pages
-├── services/api/          # FastAPI inference server
-├── tests/                 # Test suite
-├── docs/                  # Documentation
-└── monitoring/            # Prometheus, Grafana configs
+│   └── ml_pipeline_monitor/  # Python package
+│       ├── api/               # FastAPI inference API
+│       │   ├── main.py        # Routes, middleware, auth
+│       │   └── __main__.py    # uvicorn launcher
+│       │
+│       ├── core/              # Cross-cutting concerns
+│       │   ├── config_loader.py
+│       │   ├── logger.py
+│       │   ├── metrics.py
+│       │   ├── auth.py
+│       │   ├── jwt_auth.py
+│       │   ├── secrets.py
+│       │   ├── alerts.py
+│       │   └── system_monitor.py
+│       │
+│       ├── database/          # Persistence layer
+│       │   ├── connection.py  # SQLite + PostgreSQL backends
+│       │   ├── schema.py      # Table DDL + initialization
+│       │   ├── experiments.py # Experiment CRUD
+│       │   ├── models.py      # Model registry CRUD
+│       │   ├── drift.py       # Drift report CRUD
+│       │   ├── predictions.py # Prediction history
+│       │   ├── governance.py  # Teams, users, workspaces
+│       │   └── lineage.py     # Dataset lineage
+│       │
+│       ├── ml/                # ML / data-science logic
+│       │   ├── pipeline.py    # Stage-by-stage ML pipeline
+│       │   ├── data_loader.py # Dataset loading
+│       │   ├── drift_detector.py
+│       │   ├── feature_store.py
+│       │   ├── model_cache.py
+│       │   └── data_validation.py
+│       │
+│       ├── services/          # Business logic layer
+│       │   ├── app_service.py
+│       │   ├── pipeline_service.py
+│       │   ├── model_service.py
+│       │   ├── drift_service.py
+│       │   ├── data_health_service.py
+│       │   ├── telemetry_service.py
+│       │   └── worker.py      # Celery background worker
+│       │
+│       └── utils/
+│           └── ui_theme.py    # Enterprise design system
+│
+├── pages/                     # Streamlit UI pages
+│   ├── 0_Dataset_Management.py
+│   ├── 1_Pipeline_Runner.py
+│   ├── 2_Experiment_Tracking.py
+│   ├── 3_Model_Registry.py
+│   ├── 4_Data_Drift.py
+│   ├── 5_Data_Health.py
+│   └── 6_Governance.py
+│
+├── tests/                     # Test suite
+│   ├── unit/                  # 13 unit test files
+│   ├── integration/           # 11 integration test files
+│   ├── e2e/                   # 8 Playwright E2E tests
+│   └── load/                  # Load tests
+│
+├── alembic/                   # Database migrations
+│   └── versions/
+│
+├── config/
+│   ├── config.yaml            # Development configuration
+│   └── config.prod.yaml       # Production overrides
+│
+├── deployment/                # Infrastructure configs
+│   ├── prometheus/
+│   ├── grafana/
+│   ├── alertmanager/
+│   └── nginx/
+│
+├── scripts/
+│   ├── database/              # init-db.sql, backup.py
+│   └── development/           # update_imports.py
+│
+├── data/                      # Dataset storage
+├── artifacts/                 # Generated model artifacts
+├── docs/
+└── .github/workflows/
+    ├── ci.yml
+    └── e2e.yml
 ```
 
 ## Quick Start
 
 ### Prerequisites
 
-- Python 3.10+
+- Python 3.11+
 - PostgreSQL (optional, SQLite works out of the box)
 - Docker & Docker Compose (for monitoring stack)
 
@@ -67,8 +127,11 @@ source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 # Install dependencies
 pip install -r requirements.txt
 
+# Install package in development mode
+pip install -e .
+
 # Initialize database
-python -c "from src.database import initialize_db; initialize_db()"
+python -c "from ml_pipeline_monitor.database import initialize_db; initialize_db()"
 ```
 
 ### Running the Application
@@ -78,7 +141,7 @@ python -c "from src.database import initialize_db; initialize_db()"
 streamlit run app.py
 
 # Start FastAPI server (in separate terminal)
-uvicorn services.api.main:app --reload --port 8000
+uvicorn ml_pipeline_monitor.api.main:app --reload --port 8000
 ```
 
 ### Docker Deployment
@@ -88,55 +151,55 @@ uvicorn services.api.main:app --reload --port 8000
 docker-compose up -d
 
 # Development mode
-docker-compose -f docker-compose.dev.yml up
+docker-compose -f docker-compose.yml -f docker-compose.dev.yml up
+
+# With PostgreSQL
+docker-compose --profile postgres up -d
 ```
 
 ## Configuration
 
-Edit `config.yaml` to customize:
+Edit `config/config.yaml` to customize:
 
 ```yaml
-database:
-  backend: sqlite  # or postgres
-  path: data/ml_monitor.db
-
 pipeline:
   test_size: 0.20
   random_seed: 42
   cv_folds: 5
 
+storage:
+  backend: sqlite  # or postgres
+  db_path: .pipeline_monitor.db
+  artifacts_root: artifacts
+
 monitoring:
-  prometheus_port: 9090
-  grafana_port: 3000
+  drift_significance_level: 0.05
+  psi_moderate_threshold: 0.10
+  psi_significant_threshold: 0.25
 ```
 
 ## Testing
 
 ```bash
-# Run unit tests
+# Run unit + integration tests
 pytest tests/ --ignore=tests/load --ignore=tests/e2e
 
 # Run with coverage
-pytest tests/ --cov=src --cov-report=html
+pytest tests/ --cov=ml_pipeline_monitor --cov-report=html
 
 # Run E2E tests (requires Playwright)
 playwright install
 pytest tests/e2e/
+
+# Run load tests
+pytest tests/load/ -v
 ```
-
-## Documentation
-
-- [Architecture Guide](docs/architecture.md)
-- [Deployment Guide](docs/deployment.md)
-- [API Reference](docs/api_reference.md)
-- [Operations Manual](docs/operations.md)
-- [Troubleshooting](docs/troubleshooting.md)
 
 ## Tech Stack
 
 **Backend:**
-- FastAPI - REST API
-- SQLAlchemy - Database ORM
+- FastAPI - REST API with JWT auth
+- SQLAlchemy-compatible backends - SQLite + PostgreSQL
 - scikit-learn, XGBoost - ML frameworks
 - Prometheus - Metrics collection
 
@@ -146,15 +209,17 @@ pytest tests/e2e/
 - Custom HP Design System - Enterprise UI components
 
 **Infrastructure:**
-- Docker - Containerization
+- Docker - Multi-stage containerization
 - PostgreSQL - Production database
-- Redis - Caching & job queue
+- Redis - Caching & Celery broker
 - Celery - Background tasks
-- Prometheus + Grafana - Monitoring
+- Prometheus + Grafana - Monitoring & alerting
 
-## Development
+## Documentation
 
-See [CLAUDE.md](CLAUDE.md) for development guidelines and architecture decisions.
+- [Deployment Guide](docs/DEPLOYMENT.md)
+- [Operations Manual](docs/OPERATIONS.md)
+- [CLAUDE.md](CLAUDE.md) - Development guidelines and architecture decisions
 
 ## License
 
@@ -166,7 +231,3 @@ MIT License - see [LICENSE](LICENSE) file for details.
 2. Create a feature branch
 3. Make changes with tests
 4. Submit a pull request
-
-## Support
-
-For issues and questions, please open a GitHub issue.

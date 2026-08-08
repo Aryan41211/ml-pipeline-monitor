@@ -1,45 +1,100 @@
-# Python
+# =============================================================================
+# ML Pipeline Monitor - .gitignore
+# =============================================================================
+
+# --- Python ---
 __pycache__/
 *.py[cod]
 *$py.class
+*.so
+*.egg
 *.egg-info/
 dist/
 build/
-*.egg
-.eggs/
+eggs/
+*.whl
+pip-log.txt
+pip-delete-this-directory.txt
 
-# Virtual environments
+# --- Virtual Environments ---
 .venv/
 venv/
 env/
 .env
+.env.local
+.env.*.local
 
-# Jupyter
-.ipynb_checkpoints/
-
-# Runtime artifacts
-.pipeline_monitor.db
-.model_artifacts/
-*.pkl
-*.joblib
-
-# IDE
+# --- IDE / Editor ---
 .vscode/
 .idea/
 *.swp
 *.swo
+*~
+.project
+.settings/
+.classpath
 
-# OS
+# --- OS ---
 .DS_Store
 Thumbs.db
+Desktop.ini
+ehthumbs.db
 
-# Streamlit
+# --- Testing / Coverage ---
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.tox/
+.nox/
+
+# --- Streamlit ---
 .streamlit/secrets.toml
 
-# Coverage & logs
-.coverage
-htmlcov/
-.coverage.*
+# --- Runtime Database ---
+.pipeline_monitor.db
+.pipeline_monitor.db-shm
+.pipeline_monitor.db-wal
+*.db
+*.db-shm
+*.db-wal
+
+# --- Artifacts / Model Files ---
+artifacts/models/*.joblib
+artifacts/models/*.pkl
+artifacts/scalers/*.joblib
+artifacts/scalers/*.pkl
+artifacts/feature_store/*.joblib
+artifacts/feature_store/*.pkl
+.model_artifacts/
+*.joblib
+*.pkl
+
+# --- Logs ---
 logs/
-playwright-report/
 *.log
+
+# --- Playwright / E2E ---
+playwright-report/
+test-results/
+blob-report/
+.playwright/
+
+# --- Jupyter ---
+.ipynb_checkpoints/
+
+# --- Docker ---
+docker-compose.override.yml
+
+# --- Build ---
+*.tar.gz
+*.zip
+
+# --- Backups ---
+backups/
+
+# --- Deepeval ---
+.deepeval/

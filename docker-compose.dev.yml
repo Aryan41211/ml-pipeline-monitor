@@ -1,5 +1,3 @@
-version: "3.9"
-
 # Development override for docker-compose.yml
 # Run with: docker-compose -f docker-compose.yml -f docker-compose.dev.yml up
 

@@ -7,9 +7,9 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from services.app_service import initialize_application
-from src.auth import render_auth_controls, current_role
-from src.ui_theme import (
+from ml_pipeline_monitor.services.app_service import initialize_application
+from ml_pipeline_monitor.core.auth import render_auth_controls, current_role
+from ml_pipeline_monitor.utils.ui_theme import (
     apply_ui_theme,
     component_health_score,
     component_insight_panel,

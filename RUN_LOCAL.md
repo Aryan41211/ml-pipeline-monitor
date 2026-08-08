@@ -53,7 +53,7 @@ Open:
 ## 4) FastAPI backend (inference API)
 ### Command
 ```bash
-uvicorn services.api.main:app --reload --port 8000 --host 0.0.0.0
+uvicorn ml_pipeline_monitor.api.__main__:app --reload --port 8000 --host 0.0.0.0
 ```
 
 Swagger docs:

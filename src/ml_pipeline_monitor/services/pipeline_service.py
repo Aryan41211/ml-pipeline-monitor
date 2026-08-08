@@ -1,0 +1,270 @@
+"""Pipeline service for manual and scheduled execution workflows."""
+
+from __future__ import annotations
+
+from datetime import datetime, timedelta, timezone
+from typing import Any, Callable, Dict, Optional
+
+import joblib
+
+from ml_pipeline_monitor.core.alerts import emit_console_alert, emit_email_alert
+from ml_pipeline_monitor.core.config_loader import get_artifact_dirs, load_config
+from ml_pipeline_monitor.ml.data_loader import DATASET_OPTIONS, get_feature_statistics, load_dataset
+from ml_pipeline_monitor.database import get_experiments, save_experiment, save_model
+from ml_pipeline_monitor.ml.feature_store import load_cached_splits, make_feature_key, save_cached_splits
+from ml_pipeline_monitor.core.logger import get_app_logger
+from ml_pipeline_monitor.core.metrics import (
+    record_experiment,
+    record_model_registration,
+    record_pipeline_run,
+    record_pipeline_stage,
+)
+from ml_pipeline_monitor.ml.mlflow_tracker import log_pipeline_run
+from ml_pipeline_monitor.ml.pipeline import CLF_REGISTRY, MLPipeline, PipelineResult, REG_REGISTRY
+
+
+ProgressCallback = Callable[[str, float, str], None]
+LOGGER = get_app_logger("pipeline_service")
+
+
+def list_experiments(limit: int = 200) -> list[Dict[str, Any]]:
+    """Return persisted experiments for analytics views."""
+    return get_experiments(limit=limit)
+
+
+def get_pipeline_defaults() -> Dict[str, Any]:
+    """Return default pipeline controls from config."""
+    cfg = load_config().get("pipeline", {})
+    return {
+        "test_size": float(cfg.get("test_size", 0.20)),
+        "cv_folds": int(cfg.get("cv_folds", 5)),
+        "random_seed": int(cfg.get("random_seed", 42)),
+        "n_jobs": int(cfg.get("n_jobs", -1)),
+    }
+
+
+def get_dataset_options() -> Dict[str, str]:
+    """Expose dataset options to UI without direct core imports."""
+    return dict(DATASET_OPTIONS)
+
+
+def get_task_and_model_options(dataset_key: str) -> Dict[str, Any]:
+    """Resolve task type and available model choices for a dataset key."""
+    app_cfg = load_config()
+    ds_cfg = app_cfg.get("datasets", {})
+    task = ds_cfg.get(dataset_key, {}).get("task")
+    if task not in {"classification", "regression"}:
+        clf_datasets = {"breast_cancer", "wine", "iris", "digits", "synthetic_clf"}
+        task = "classification" if dataset_key in clf_datasets else "regression"
+
+    return {
+        "task": task,
+        "model_options": list(CLF_REGISTRY.keys()) if task == "classification" else list(REG_REGISTRY.keys()),
+    }
+
+
+def get_dataset_preview(dataset_key: str, *, test_size: float, random_state: int) -> Dict[str, Any]:
+    """Load dataset preview and feature statistics for UI pages."""
+    ds = load_dataset(dataset_key, test_size=float(test_size), random_state=int(random_state))
+    feat_stats = get_feature_statistics(ds["X_train"])
+    return {"dataset": ds, "feature_stats": feat_stats}
+
+
+def _persist_artifacts(run_id: str, model: object, scaler: object) -> Dict[str, str]:
+    """Persist model and scaler using canonical artifact layout."""
+    dirs = get_artifact_dirs()
+    model_path = dirs["models"] / f"{run_id}_model.joblib"
+    scaler_path = dirs["scalers"] / f"{run_id}_scaler.joblib"
+
+    joblib.dump(model, model_path)
+    if scaler is not None:
+        joblib.dump(scaler, scaler_path)
+
+    return {
+        "model_path": str(model_path),
+        "scaler_path": str(scaler_path),
+    }
+
+
+def _validate_pipeline_inputs(
+    dataset_label: str,
+    dataset_key: str,
+    model_type: str,
+    task: str,
+    test_size: float,
+    cv_folds: int,
+    random_state: int,
+) -> None:
+    """Validate pipeline input parameters."""
+    if not dataset_label or not dataset_label.strip():
+        raise ValueError("dataset_label is required")
+    if not dataset_key or dataset_key not in DATASET_OPTIONS.values():
+        raise ValueError(f"Invalid dataset_key: {dataset_key}")
+    if not model_type or model_type not in {**CLF_REGISTRY, **REG_REGISTRY}:
+        raise ValueError(f"Unsupported model_type: {model_type}")
+    if task not in {"classification", "regression"}:
+        raise ValueError(f"Invalid task: {task}. Must be 'classification' or 'regression'")
+    if not 0.05 <= test_size <= 0.5:
+        raise ValueError("test_size must be between 0.05 and 0.5")
+    if not 2 <= cv_folds <= 10:
+        raise ValueError("cv_folds must be between 2 and 10")
+    if random_state < 0:
+        raise ValueError("random_state must be non-negative")
+
+
+def run_pipeline_and_persist(
+    *,
+    dataset_label: str,
+    dataset_key: str,
+    model_type: str,
+    task: str,
+    params: Dict[str, Any],
+    test_size: float,
+    cv_folds: int,
+    random_state: int,
+    progress_callback: Optional[ProgressCallback] = None,
+) -> Dict[str, Any]:
+    """Execute pipeline run end-to-end and persist experiment/model artifacts."""
+    _validate_pipeline_inputs(dataset_label, dataset_key, model_type, task, test_size, cv_folds, random_state)
+
+    app_cfg = load_config()
+    pipeline_cfg = app_cfg.get("pipeline", {})
+    feature_key = make_feature_key(dataset_key, test_size, random_state)
+    ds = load_cached_splits(feature_key)
+    if ds is None:
+        ds = load_dataset(
+            dataset_key,
+            test_size=float(test_size),
+            random_state=int(random_state),
+        )
+        save_cached_splits(feature_key, ds)
+        LOGGER.info("Feature store miss: cached new splits for key=%s", feature_key)
+    else:
+        LOGGER.info("Feature store hit: reused splits for key=%s", feature_key)
+
+    try:
+        pipeline = MLPipeline(
+            dataset_name=dataset_label,
+            model_type=model_type,
+            task=task,
+            params=params,
+            cv_folds=int(cv_folds),
+            random_state=int(random_state),
+            n_jobs=int(pipeline_cfg.get("n_jobs", -1)),
+            progress_callback=progress_callback,
+        )
+
+        result: PipelineResult = pipeline.run(
+            ds["X_train"],
+            ds["X_test"],
+            ds["y_train"],
+            ds["y_test"],
+        )
+    except Exception as exc:
+        # Record failed pipeline run
+        record_pipeline_run(
+            status="failed",
+            dataset=dataset_label,
+            model_type=model_type,
+            duration_seconds=0.0,
+        )
+        emit_console_alert("critical", f"Pipeline failure for dataset={dataset_label}: {exc}")
+        emit_email_alert(
+            "critical",
+            subject="Pipeline failure detected",
+            message=f"Pipeline run failed for dataset={dataset_label}, model={model_type}",
+            metadata={"dataset": dataset_label, "model_type": model_type, "error": str(exc)},
+        )
+        LOGGER.exception("Pipeline run failed")
+        raise
+
+    # Record successful pipeline run
+    record_pipeline_run(
+        status="success",
+        dataset=dataset_label,
+        model_type=model_type,
+        duration_seconds=result.duration,
+    )
+
+    save_experiment(
+        run_id=result.run_id,
+        name=f"{dataset_label} / {model_type}",
+        dataset=dataset_label,
+        model_type=model_type,
+        task=task,
+        params=params,
+        metrics=result.metrics,
+        duration=result.duration,
+    )
+
+    # Record experiment creation
+    record_experiment(
+        status="success",
+        dataset=dataset_label,
+        model_type=model_type,
+    )
+
+    artifact_paths = _persist_artifacts(result.run_id, result.model, result.scaler)
+
+    model_record = save_model(
+        model_id=result.run_id,
+        run_id=result.run_id,
+        name=model_type,
+        dataset=dataset_label,
+        model_type=model_type,
+        task=task,
+        metrics=result.metrics,
+        artifact_path=artifact_paths["model_path"],
+        params=params,
+        experiment_id=result.run_id,
+        confusion_matrix=result.confusion_mat,
+        feature_importances=result.feature_importances,
+    )
+
+    # Record model registration
+    record_model_registration(
+        dataset=dataset_label,
+        model_type=model_type,
+        stage="staging",  # Default stage for newly registered models
+    )
+
+    LOGGER.info(
+        "Pipeline run completed run_id=%s dataset=%s model=%s version=%s",
+        result.run_id,
+        dataset_label,
+        model_type,
+        model_record.get("version"),
+    )
+
+    log_pipeline_run(
+        run_name=f"{dataset_label}-{model_type}-{result.run_id}",
+        params=params,
+        metrics=result.metrics,
+        artifact_path=artifact_paths["model_path"],
+        model=result.model,
+    )
+
+    return {
+        "result": result,
+        "dataset": ds,
+        "model_record": model_record,
+        "artifacts": artifact_paths,
+    }
+
+
+def compute_next_run_ts(interval_minutes: int) -> datetime:
+    """Return next scheduled run timestamp from now."""
+    return datetime.now(timezone.utc) + timedelta(minutes=max(1, int(interval_minutes)))
+
+
+def should_trigger_scheduled_run(
+    enabled: bool,
+    next_run_at: Optional[datetime],
+    now: Optional[datetime] = None,
+) -> bool:
+    """Determine if the simulated cron run should trigger now."""
+    if not enabled or next_run_at is None:
+        return False
+
+    now = now or datetime.now(timezone.utc)
+    return now >= next_run_at

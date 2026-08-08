@@ -8,16 +8,16 @@ import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 
-from services.app_service import initialize_application
-from src.auth import has_role, render_auth_controls, require_role, current_role
-from services.model_service import (
+from ml_pipeline_monitor.services.app_service import initialize_application
+from ml_pipeline_monitor.core.auth import has_role, render_auth_controls, require_role, current_role
+from ml_pipeline_monitor.services.model_service import (
     get_rollback_hint,
     list_lineage,
     list_models,
     revert_to_previous_production,
     set_model_stage,
 )
-from src.ui_theme import (
+from ml_pipeline_monitor.utils.ui_theme import (
     apply_ui_theme,
     component_empty_state,
     component_insight_panel,

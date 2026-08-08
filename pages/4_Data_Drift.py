@@ -7,16 +7,16 @@ import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 
-from services.app_service import initialize_application
-from services.drift_service import (
+from ml_pipeline_monitor.services.app_service import initialize_application
+from ml_pipeline_monitor.services.drift_service import (
     get_dataset_options,
     get_drift_preview_dataset,
     get_monitoring_defaults,
     list_drift_reports,
     run_drift_and_persist,
 )
-from src.auth import can_run_pipeline, render_auth_controls, current_role
-from src.ui_theme import (
+from ml_pipeline_monitor.core.auth import can_run_pipeline, render_auth_controls, current_role
+from ml_pipeline_monitor.utils.ui_theme import (
     apply_ui_theme,
     component_alert_card,
     component_health_score,

@@ -4,10 +4,10 @@ Dataset Management — Data Hub
 import pandas as pd
 import streamlit as st
 
-from services.app_service import initialize_application
-from services.pipeline_service import get_dataset_options, get_dataset_preview
-from src.auth import render_auth_controls, current_role
-from src.ui_theme import (
+from ml_pipeline_monitor.services.app_service import initialize_application
+from ml_pipeline_monitor.services.pipeline_service import get_dataset_options, get_dataset_preview
+from ml_pipeline_monitor.core.auth import render_auth_controls, current_role
+from ml_pipeline_monitor.utils.ui_theme import (
     apply_ui_theme,
     component_insight_panel,
     component_kpi_card,

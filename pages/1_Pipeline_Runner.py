@@ -8,16 +8,16 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 
-from services.app_service import initialize_application
-from services.pipeline_service import (
+from ml_pipeline_monitor.services.app_service import initialize_application
+from ml_pipeline_monitor.services.pipeline_service import (
     get_dataset_options,
     get_dataset_preview,
     get_task_and_model_options,
     run_pipeline_and_persist,
 )
-from src.auth import can_run_pipeline, render_auth_controls, current_role
-from src.pipeline import DEFAULT_PARAMS
-from src.ui_theme import (
+from ml_pipeline_monitor.core.auth import can_run_pipeline, render_auth_controls, current_role
+from ml_pipeline_monitor.ml.pipeline import DEFAULT_PARAMS
+from ml_pipeline_monitor.utils.ui_theme import (
     apply_ui_theme,
     component_insight_panel,
     component_kpi_card,

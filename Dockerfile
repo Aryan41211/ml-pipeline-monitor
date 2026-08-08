@@ -4,7 +4,7 @@
 # =============================================================================
 # Stage 1: Base dependencies and system packages
 # =============================================================================
-FROM python:3.10-slim AS base
+FROM python:3.12-slim AS base
 
 # Security: Create non-root user
 ARG UID=1000
@@ -25,7 +25,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Set Python environment variables
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PYTHONPATH=/app \
+    PYTHONPATH=/app/src \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 
@@ -72,16 +72,14 @@ CMD ["streamlit", "run", "app.py", "--server.port=8501", "--server.address=0.0.0
 FROM base AS production
 
 # Copy only production dependencies
-COPY --from=dependencies /usr/local/lib/python3.10/site-packages /usr/local/lib/python3.10/site-packages
+COPY --from=dependencies /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
 COPY --from=dependencies /usr/local/bin /usr/local/bin
 
 # Copy application code
 COPY --chown=appuser:appuser src/ ./src/
-COPY --chown=appuser:appuser services/ ./services/
 COPY --chown=appuser:appuser pages/ ./pages/
 COPY --chown=appuser:appuser app.py ./
-COPY --chown=appuser:appuser config.yaml ./
-COPY --chown=appuser:appuser config.prod.yaml ./
+COPY --chown=appuser:appuser config/ ./config/
 COPY --chown=appuser:appuser run_app.py ./
 COPY --chown=appuser:appuser LICENSE ./
 
@@ -108,7 +106,7 @@ CMD ["streamlit", "run", "app.py", "--server.port=8501", "--server.address=0.0.0
 FROM production AS api
 
 # Override command for API service
-CMD ["uvicorn", "services.api.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4"]
+CMD ["uvicorn", "ml_pipeline_monitor.api.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4"]
 
 # =============================================================================
 # Stage 6: Worker image (for background jobs)
@@ -116,4 +114,4 @@ CMD ["uvicorn", "services.api.main:app", "--host", "0.0.0.0", "--port", "8000", 
 FROM production AS worker
 
 # Override command for background worker
-CMD ["python", "-m", "services.worker"]
+CMD ["python", "-m", "ml_pipeline_monitor.services.worker"]

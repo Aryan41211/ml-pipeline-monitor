@@ -1,15 +1,11 @@
 [run]
-source = src, services
+source = src/ml_pipeline_monitor
 omit =
     */tests/*
     */test_*
-    src/auth.py
-    src/cli.py
-    src/ui_theme.py
-    src/design_system.py
-    src/components.py
-    src/_custom_password_input.py
-    services/worker.py
+    src/ml_pipeline_monitor/core/auth.py
+    src/ml_pipeline_monitor/utils/ui_theme.py
+    src/ml_pipeline_monitor/services/worker.py
 
 [report]
 exclude_lines =

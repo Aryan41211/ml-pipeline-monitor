@@ -4,10 +4,10 @@ Governance & Compliance — Audit & Policy Management
 import pandas as pd
 import streamlit as st
 
-from services.app_service import initialize_application
-from services.model_service import list_lineage, list_models
-from src.auth import can_administer, render_auth_controls, require_role, current_role
-from src.ui_theme import (
+from ml_pipeline_monitor.services.app_service import initialize_application
+from ml_pipeline_monitor.services.model_service import list_lineage, list_models
+from ml_pipeline_monitor.core.auth import can_administer, render_auth_controls, require_role, current_role
+from ml_pipeline_monitor.utils.ui_theme import (
     apply_ui_theme,
     component_alert_card,
     component_insight_panel,

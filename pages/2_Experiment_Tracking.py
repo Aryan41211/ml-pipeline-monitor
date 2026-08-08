@@ -7,10 +7,10 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 
-from services.app_service import initialize_application
-from src.auth import render_auth_controls, current_role
-from services.pipeline_service import list_experiments
-from src.ui_theme import (
+from ml_pipeline_monitor.services.app_service import initialize_application
+from ml_pipeline_monitor.core.auth import render_auth_controls, current_role
+from ml_pipeline_monitor.services.pipeline_service import list_experiments
+from ml_pipeline_monitor.utils.ui_theme import (
     apply_ui_theme,
     component_empty_state,
     component_insight_panel,

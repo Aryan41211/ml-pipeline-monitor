@@ -7,10 +7,10 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 
-from services.app_service import get_dashboard_snapshot, initialize_application
-from services.telemetry_service import track_user_action
-from src.auth import current_role, render_auth_controls, is_authenticated, is_auth_enabled
-from src.ui_theme import (
+from ml_pipeline_monitor.services.app_service import get_dashboard_snapshot, initialize_application
+from ml_pipeline_monitor.services.telemetry_service import track_user_action
+from ml_pipeline_monitor.core.auth import current_role, render_auth_controls, is_authenticated, is_auth_enabled
+from ml_pipeline_monitor.utils.ui_theme import (
     apply_ui_theme,
     component_alert_card,
     component_health_score,

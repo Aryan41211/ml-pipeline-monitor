@@ -507,7 +507,15 @@ async def predict_v1(
     request_id = get_request_id()
     start = time.time()
 
-    cached = get_latest_production_model(body.dataset)
+    try:
+        cached = get_latest_production_model(body.dataset)
+    except Exception as exc:
+        LOGGER.warning("Failed to fetch production model: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to access model registry. Ensure the database is initialized.",
+        ) from exc
+
     if cached is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

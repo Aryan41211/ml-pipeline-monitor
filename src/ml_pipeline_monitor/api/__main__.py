@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import uvicorn
 
-from ml_pipeline_monitor.api.main import app
 
 
 def run() -> None:

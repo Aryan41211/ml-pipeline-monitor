@@ -8,10 +8,10 @@ from contextlib import asynccontextmanager
 from typing import Any, Dict, List, Optional, Union
 
 from fastapi import Depends, FastAPI, HTTPException, Request, Response, Security, status
-from fastapi.responses import JSONResponse, PlainTextResponse
+from fastapi.responses import JSONResponse
 from fastapi.security import APIKeyHeader, HTTPAuthorizationCredentials, HTTPBearer
 from fastapi.exceptions import RequestValidationError
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, Field
 
 try:
     from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
@@ -35,7 +35,6 @@ from ml_pipeline_monitor.core.jwt_auth import (
     TokenPayload,
     create_access_token,
     create_refresh_token,
-    decode_token,
     verify_token,
 )
 from ml_pipeline_monitor.core.logger import (

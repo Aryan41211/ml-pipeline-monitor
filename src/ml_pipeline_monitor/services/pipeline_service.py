@@ -17,7 +17,6 @@ from ml_pipeline_monitor.core.metrics import (
     record_experiment,
     record_model_registration,
     record_pipeline_run,
-    record_pipeline_stage,
 )
 from ml_pipeline_monitor.ml.mlflow_tracker import log_pipeline_run
 from ml_pipeline_monitor.ml.pipeline import CLF_REGISTRY, MLPipeline, PipelineResult, REG_REGISTRY

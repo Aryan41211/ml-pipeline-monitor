@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import time
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from ml_pipeline_monitor.core.config_loader import load_config
 from ml_pipeline_monitor.core.logger import get_app_logger

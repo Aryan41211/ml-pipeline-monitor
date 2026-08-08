@@ -7,7 +7,7 @@ and prediction history retrieval for the inference API.
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from ml_pipeline_monitor.database.schema import _get_connection
 

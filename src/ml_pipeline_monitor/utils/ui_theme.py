@@ -6,13 +6,9 @@ Clean minimal aesthetic with subtle animations and modern interactions.
 
 from __future__ import annotations
 
-import json
-from typing import Any, Dict, Iterable, List, Optional, Sequence
+from typing import Dict, List, Optional, Sequence
 
 import pandas as pd
-import plotly.express as px
-import plotly.graph_objects as go
-import plotly.io as pio
 import streamlit as st
 
 # ===========================================================================

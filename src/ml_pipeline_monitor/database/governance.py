@@ -8,7 +8,7 @@ and user activity logging for multi-tenant governance.
 from __future__ import annotations
 
 import json
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from ml_pipeline_monitor.database.schema import _get_connection
 

@@ -1,94 +1,70 @@
-# Production override for docker-compose.yml
-# Run with: docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+# =============================================================================
+# ML Pipeline Monitor - Standalone Production Docker Compose
+# =============================================================================
+# Usage:
+#   docker compose -f docker-compose.prod.yml up -d
+#   docker compose -f docker-compose.prod.yml --profile monitoring up -d
+# =============================================================================
+
+x-common-env: &common-env
+  PYTHONDONTWRITEBYTECODE: "1"
+  PYTHONUNBUFFERED: "1"
+  CONFIG_PATH: "/app/config/config.prod.yaml"
+
+x-logging: &default-logging
+  driver: "json-file"
+  options:
+    max-size: "10m"
+    max-file: "5"
+
+x-healthcheck: &default-healthcheck
+  interval: 30s
+  timeout: 10s
+  retries: 3
+  start_period: 40s
 
 services:
+  # ===========================================================================
+  # Streamlit UI Application
+  # ===========================================================================
   app:
     build:
+      context: .
+      dockerfile: Dockerfile
       target: production
+      args:
+        UID: ${UID:-1000}
+        GID: ${GID:-1000}
+    container_name: ml-pipeline-monitor-app
     environment:
-      - MLMONITOR_AUTH_ENABLED=true
-      - CONFIG_PATH=/app/config/config.prod.yaml
-    deploy:
-      replicas: 2
-      update_config:
-        parallelism: 1
-        delay: 10s
-        failure_action: rollback
-        monitor: 60s
-        max_failure_ratio: 0.3
-      restart_policy:
-        condition: on-failure
-        delay: 5s
-        max_attempts: 3
-        window: 120s
-      placement:
-        constraints:
-          - node.role == worker
-
-  api:
-    build:
-      target: api
-    environment:
-      - CONFIG_PATH=/app/config/config.prod.yaml
-    deploy:
-      replicas: 3
-      update_config:
-        parallelism: 1
-        delay: 10s
-        failure_action: rollback
-        monitor: 60s
-        max_failure_ratio: 0.3
-      restart_policy:
-        condition: on-failure
-        delay: 5s
-        max_attempts: 3
-        window: 120s
-      placement:
-        constraints:
-          - node.role == worker
-
-  worker:
-    build:
-      target: worker
-    deploy:
-      replicas: 2
-      restart_policy:
-        condition: on-failure
-        delay: 10s
-        max_attempts: 5
-        window: 300s
-      placement:
-        constraints:
-          - node.role == worker
-
-  postgres:
-    profiles: ["postgres"]
-    deploy:
-      placement:
-        constraints:
-          - node.role == manager
-      resources:
-        limits:
-          cpus: '4'
-          memory: 4G
-        reservations:
-          cpus: '1'
-          memory: 1G
-
-  redis:
-    deploy:
-      placement:
-        constraints:
-          - node.role == manager
-      resources:
-        limits:
-          cpus: '1'
-          memory: 1G
-        reservations:
-          cpus: '0.25'
-          memory: 256M
-
-  prometheus:
+      <<: *common-env
+      PIPELINE_DB_DSN: ${PIPELINE_DB_DSN:?PIPELINE_DB_DSN must be set in .env}
+      MLMONITOR_AUTH_ENABLED: ${MLMONITOR_AUTH_ENABLED:-true}
+      AUTH_USERNAME: ${AUTH_USERNAME:?AUTH_USERNAME must be set in .env}
+      AUTH_PASSWORD: ${AUTH_PASSWORD:?AUTH_PASSWORD must be set in .env}
+      AUTH_ROLE: ${AUTH_ROLE:-admin}
+      AUTH_USERS_JSON: ${AUTH_USERS_JSON:-}
+      MLMONITOR_API_KEY: ${MLMONITOR_API_KEY:?MLMONITOR_API_KEY must be set in .env}
+      MLMONITOR_RATE_LIMIT: ${MLMONITOR_RATE_LIMIT:-60/minute}
+      SMTP_HOST: ${SMTP_HOST:-localhost}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SLACK_WEBHOOK: ${SLACK_WEBHOOK:-}
+      MLFLOW_TRACKING_URI: ${MLFLOW_TRACKING_URI:-}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set in .env}
+    volumes:
+      - ./artifacts:/app/artifacts
+      - ./data:/app/data
+      - ./logs:/app/logs
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    logging: *default-logging
+    healthcheck:
+      <<: *default-healthcheck
+      test: ["CMD", "curl", "-f", "http://localhost:8501/_stcore/health"]
     deploy:
       resources:
         limits:
@@ -98,7 +74,173 @@ services:
           cpus: '0.5'
           memory: 512M
 
-  grafana:
+  # ===========================================================================
+  # FastAPI Inference API
+  # ===========================================================================
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: api
+      args:
+        UID: ${UID:-1000}
+        GID: ${GID:-1000}
+    container_name: ml-pipeline-monitor-api
+    environment:
+      <<: *common-env
+      PIPELINE_DB_DSN: ${PIPELINE_DB_DSN:?PIPELINE_DB_DSN must be set in .env}
+      MLMONITOR_API_KEY: ${MLMONITOR_API_KEY:?MLMONITOR_API_KEY must be set in .env}
+      MLMONITOR_RATE_LIMIT: ${MLMONITOR_RATE_LIMIT:-100/minute}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set in .env}
+      JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
+      JWT_EXPIRATION_MINUTES: ${JWT_EXPIRATION_MINUTES:-60}
+    volumes:
+      - ./artifacts:/app/artifacts
+      - ./data:/app/data
+      - ./logs:/app/logs
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    logging: *default-logging
+    healthcheck:
+      <<: *default-healthcheck
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health/ready"]
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+  # ===========================================================================
+  # Background Worker
+  # ===========================================================================
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: worker
+      args:
+        UID: ${UID:-1000}
+        GID: ${GID:-1000}
+    container_name: ml-pipeline-monitor-worker
+    environment:
+      <<: *common-env
+      PIPELINE_DB_DSN: ${PIPELINE_DB_DSN:?PIPELINE_DB_DSN must be set in .env}
+    volumes:
+      - ./artifacts:/app/artifacts
+      - ./data:/app/data
+      - ./logs:/app/logs
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    logging: *default-logging
+    healthcheck:
+      test: ["CMD", "python", "-c", "import os; os.kill(1, 0)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+  # ===========================================================================
+  # PostgreSQL Database
+  # ===========================================================================
+  postgres:
+    image: postgres:16-alpine
+    container_name: ml-pipeline-monitor-postgres
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:?POSTGRES_USER must be set in .env}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env}
+      - POSTGRES_DB=${POSTGRES_DB:-mlmonitor}
+      - POSTGRES_INITDB_ARGS=--auth-host=scram-sha-256
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./scripts/database/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+    command:
+      - postgres
+      - -c
+      - max_connections=100
+      - -c
+      - shared_buffers=256MB
+      - -c
+      - effective_cache_size=1GB
+      - -c
+      - maintenance_work_mem=64MB
+      - -c
+      - checkpoint_completion_target=0.9
+      - -c
+      - wal_buffers=16MB
+      - -c
+      - default_statistics_target=100
+      - -c
+      - random_page_cost=1.1
+      - -c
+      - effective_io_concurrency=200
+      - -c
+      - work_mem=4MB
+      - -c
+      - min_wal_size=1GB
+      - -c
+      - max_wal_size=4GB
+    restart: unless-stopped
+    logging: *default-logging
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB:-mlmonitor}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: '4'
+          memory: 4G
+        reservations:
+          cpus: '1'
+          memory: 1G
+
+  # ===========================================================================
+  # Redis (Cache, Session Store, Celery Broker)
+  # ===========================================================================
+  redis:
+    image: redis:7-alpine
+    container_name: ml-pipeline-monitor-redis
+    volumes:
+      - redisdata:/data
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --maxmemory
+      - 256mb
+      - --maxmemory-policy
+      - allkeys-lru
+      - --save
+      - "900 1"
+      - --save
+      - "300 10"
+      - --save
+      - "60 10000"
+    restart: unless-stopped
+    logging: *default-logging
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
     deploy:
       resources:
         limits:
@@ -108,21 +250,102 @@ services:
           cpus: '0.25'
           memory: 256M
 
-  nginx:
+  # ===========================================================================
+  # Prometheus Metrics Collection
+  # ===========================================================================
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    container_name: ml-pipeline-monitor-prometheus
+    volumes:
+      - ./deployment/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./deployment/prometheus/rules:/etc/prometheus/rules:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=30d'
+      - '--storage.tsdb.retention.size=10GB'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--web.enable-lifecycle'
+    restart: unless-stopped
+    logging: *default-logging
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:9090/-/healthy"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
     deploy:
-      replicas: 2
-      placement:
-        constraints:
-          - node.role == manager
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+  # ===========================================================================
+  # Grafana Visualization
+  # ===========================================================================
+  grafana:
+    image: grafana/grafana:11.1.0
+    container_name: ml-pipeline-monitor-grafana
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_USER:?GRAFANA_USER must be set in .env}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:?GRAFANA_PASSWORD must be set in .env}
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_INSTALL_PLUGINS=
+      - GF_SERVER_ROOT_URL=%(protocol)s://%(domain)s:%(http_port)s/grafana
+      - GF_SERVER_SERVE_FROM_SUB_PATH=true
+    volumes:
+      - ./deployment/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./deployment/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      prometheus:
+        condition: service_healthy
+    restart: unless-stopped
+    logging: *default-logging
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    deploy:
       resources:
         limits:
           cpus: '1'
-          memory: 256M
+          memory: 1G
         reservations:
-          cpus: '0.1'
-          memory: 64M
+          cpus: '0.25'
+          memory: 256M
 
-  alertmanager:
+  # ===========================================================================
+  # Nginx Reverse Proxy (Production)
+  # ===========================================================================
+  nginx:
+    image: nginx:alpine
+    container_name: ml-pipeline-monitor-nginx
+    ports:
+      - "80:80"
+    volumes:
+      - ./deployment/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./deployment/nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./deployment/nginx/ssl:/etc/nginx/ssl:ro
+      - ./deployment/nginx/certbot:/var/www/certbot:ro
+    depends_on:
+      - app
+      - api
+    restart: unless-stopped
+    logging: *default-logging
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
     deploy:
       resources:
         limits:
@@ -131,3 +354,51 @@ services:
         reservations:
           cpus: '0.1'
           memory: 64M
+
+  # ===========================================================================
+  # Alertmanager (for Prometheus alerts) - optional with monitoring profile
+  # ===========================================================================
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    container_name: ml-pipeline-monitor-alertmanager
+    volumes:
+      - ./deployment/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - alertmanager_data:/alertmanager
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
+      - '--storage.path=/alertmanager'
+      - '--web.external-url=http://localhost:9093'
+    restart: unless-stopped
+    logging: *default-logging
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:9093/-/healthy"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.1'
+          memory: 64M
+    profiles: ["monitoring"]
+
+volumes:
+  pgdata:
+    driver: local
+  redisdata:
+    driver: local
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local
+  alertmanager_data:
+    driver: local
+
+networks:
+  default:
+    name: ml-pipeline-monitor-network
+    driver: bridge

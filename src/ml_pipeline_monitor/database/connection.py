@@ -158,7 +158,7 @@ class PostgresBackend:
     def close_all(self) -> None:
         """Close all connections in the pool."""
         if self._pool is not None:
-            self._pool.closeall()
+            self._pool.close()
             self._pool = None
 
 

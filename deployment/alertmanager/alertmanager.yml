@@ -1,9 +1,5 @@
 global:
   resolve_timeout: 5m
-  smtp_smarthost: '${SMTP_HOST:-localhost}:${SMTP_PORT:-587}'
-  smtp_from: '${SMTP_FROM:-ml-pipeline-monitor@example.com}'
-  smtp_auth_username: '${SMTP_USER:-}'
-  smtp_auth_password: '${SMTP_PASSWORD:-}'
 
 route:
   group_by: ['alertname', 'job', 'severity']
@@ -22,31 +18,8 @@ route:
 
 receivers:
   - name: 'ml-pipeline-monitor'
-    email_configs:
-      - to: 'mlops-team@example.com'
-        from: 'ml-pipeline-monitor@example.com'
-        smarthost: '${SMTP_HOST:-localhost}:${SMTP_PORT:-587}'
-        subject: '{{ .GroupLabels.alertname }}: {{ .CommonAnnotations.summary }}'
-        body: |
-          {{ range .Alerts }}
-          Alert: {{ .Labels.alertname }}
-          Severity: {{ .Labels.severity }}
-          Summary: {{ .Annotations.summary }}
-          Description: {{ .Annotations.description }}
-          Start Time: {{ .StartsAt.Format "2006-01-02 15:04:05" }}
-          {{ end }}
-    slack_configs:
-      - api_url: '${SLACK_WEBHOOK}'
-        channel: '#ml-pipeline-monitor'
-        title: '{{ .GroupLabels.alertname }}'
-        text: |
-          {{ range .Alerts }}
-          *Alert:* {{ .Labels.alertname }}
-          *Severity:* {{ .Labels.severity }}
-          *Summary:* {{ .Annotations.summary }}
-          {{ end }}
     webhook_configs:
-      - url: 'http://app:8501/alert'
+      - url: 'http://api:8000/v1/alerts/webhook'
         send_resolved: true
         http_config:
           timeout: 5s

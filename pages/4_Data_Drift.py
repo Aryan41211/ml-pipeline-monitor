@@ -3,31 +3,26 @@ Data Drift Observability
 Redesigned with reusable enterprise components.
 """
 import pandas as pd
-import plotly.express as px
-import plotly.graph_objects as go
 import streamlit as st
 
+from ml_pipeline_monitor.core.auth import can_run_pipeline, current_role, render_auth_controls
 from ml_pipeline_monitor.services.app_service import initialize_application
 from ml_pipeline_monitor.services.drift_service import (
     get_dataset_options,
-    get_drift_preview_dataset,
-    get_monitoring_defaults,
     list_drift_reports,
     run_drift_and_persist,
 )
-from ml_pipeline_monitor.core.auth import can_run_pipeline, render_auth_controls, current_role
 from ml_pipeline_monitor.utils.ui_theme import (
     apply_ui_theme,
     component_alert_card,
     component_health_score,
     component_insight_panel,
     component_kpi_card,
-    render_loading_skeleton,
-    render_sidebar_nav,
-    render_top_navbar,
     render_section_title,
+    render_sidebar_nav,
     render_spacer,
     render_summary_table,
+    render_top_navbar,
     safe_render,
 )
 
@@ -67,10 +62,16 @@ def _render_page():
         noise = st.slider("Signal Noise", 0.0, 2.0, 0.5)
         shift = st.slider("Mean Offset", 0.0, 1.0, 0.0)
         alpha = st.select_slider("Confidence (α)", [0.01, 0.05, 0.10], 0.05)
-        
+
         if st.button("Run Drift Scan", type="primary", use_container_width=True, disabled=not can_run_pipeline()):
             with st.spinner("Analyzing distributions..."):
-                payload = run_drift_and_persist(dataset_label, dataset_key, noise, shift, alpha)
+                payload = run_drift_and_persist(
+                    dataset_label=dataset_label,
+                    dataset_key=dataset_key,
+                    noise_level=noise,
+                    mean_shift=shift,
+                    alpha=alpha,
+                )
                 st.session_state["active_drift"] = payload["report"]
                 st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
@@ -95,10 +96,10 @@ def _render_page():
         with k2: component_kpi_card("Drifted", str(report["features_drifted"]), "Flagged", icon="⚠️", tone="danger" if report["features_drifted"] > 0 else "success")
         with k3: component_kpi_card("Avg PSI", f"{report['average_psi']:.4f}", "Stability Index", icon="📊", tone="warning" if report["average_psi"] > 0.1 else "success")
         with k4: component_kpi_card("Severity", report["overall_severity"].upper(), "Platform Risk", icon="⚖️", tone="danger" if report["overall_severity"]=="critical" else "success")
-        
+
         render_spacer("md")
         t_feat, t_hist = st.tabs(["🧬 Feature Stability", "📜 Analysis History"])
-        
+
         with t_feat:
             col_list, col_insights = st.columns([2, 1], gap="medium")
             with col_list:
@@ -111,7 +112,7 @@ def _render_page():
                     "Retraining is recommended to align with distribution shift.",
                     "KS-tests confirm shape-level divergence."
                 ])
-        
+
         with t_hist:
             history = list_drift_reports(limit=15)
             if history:

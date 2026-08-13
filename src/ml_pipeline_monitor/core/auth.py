@@ -5,14 +5,12 @@ from __future__ import annotations
 import json
 import os
 import time
-from typing import Dict, Tuple
 
 import bcrypt
 import streamlit as st
 
 from ml_pipeline_monitor.core.config_loader import load_config
 from ml_pipeline_monitor.core.logger import get_app_logger
-
 
 ROLE_ORDER = {"viewer": 0, "operator": 1, "admin": 2}
 LOGGER = get_app_logger("auth")
@@ -47,7 +45,7 @@ def _is_bcrypt_hash(value: str) -> bool:
     return value.startswith("$2b$") or value.startswith("$2a$") or value.startswith("$2y$")
 
 
-def _auth_cfg() -> Dict[str, object]:
+def _auth_cfg() -> dict[str, object]:
     return load_config().get("auth", {})
 
 
@@ -88,7 +86,7 @@ def is_auth_enabled() -> bool:
     return bool(_credentials())
 
 
-def _users_from_env_json() -> Dict[str, Dict[str, str]]:
+def _users_from_env_json() -> dict[str, dict[str, str]]:
     """Load users from AUTH_USERS_JSON or MLMONITOR_AUTH_USERS_JSON."""
     raw = _env_value("AUTH_USERS_JSON", "MLMONITOR_AUTH_USERS_JSON").strip()
     if not raw:
@@ -99,7 +97,7 @@ def _users_from_env_json() -> Dict[str, Dict[str, str]]:
     except Exception:
         return {}
 
-    users: Dict[str, Dict[str, str]] = {}
+    users: dict[str, dict[str, str]] = {}
     if isinstance(payload, dict):
         for username, meta in payload.items():
             if not isinstance(meta, dict):
@@ -128,7 +126,7 @@ def _users_from_env_json() -> Dict[str, Dict[str, str]]:
     return users
 
 
-def _credentials() -> Dict[str, Dict[str, str]]:
+def _credentials() -> dict[str, dict[str, str]]:
     """Resolve credentials from environment only."""
     users = _users_from_env_json()
     if users:
@@ -232,11 +230,11 @@ def require_role(role: str, action_name: str) -> bool:
     return True
 
 
-def _check_login_attempts(username: str) -> Tuple[bool, str]:
+def _check_login_attempts(username: str) -> tuple[bool, str]:
     """Check if login attempts exceed limit and return lockout status."""
     attempts = st.session_state.get("login_attempts", 0)
     last_failed = st.session_state.get("last_failed_login", 0)
-    
+
     if attempts >= MAX_LOGIN_ATTEMPTS:
         if time.time() - last_failed < LOGIN_LOCKOUT_SECONDS:
             remaining = int(LOGIN_LOCKOUT_SECONDS - (time.time() - last_failed))
@@ -245,7 +243,7 @@ def _check_login_attempts(username: str) -> Tuple[bool, str]:
             # Reset attempts after lockout period
             st.session_state["login_attempts"] = 0
             st.session_state["last_failed_login"] = 0
-    
+
     return True, ""
 
 
@@ -265,7 +263,7 @@ def _record_successful_login(username: str) -> None:
     LOGGER.info("Successful login for user: %s", username)
 
 
-def _check_login(username: str, password: str) -> Tuple[bool, str]:
+def _check_login(username: str, password: str) -> tuple[bool, str]:
     creds = _credentials()
     if not creds:
         return False, _auth_env_help()
@@ -321,6 +319,17 @@ def render_auth_controls() -> bool:
             st.warning("Please log in to access the dashboard.")
             st.info("Authentication disabled by config (auth.enabled=false).")
             st.caption("Role: admin")
+            return True
+
+        # Credentials configured but auth disabled: still offer the login/logout
+        # UX so an authenticated session carries an identity (and can log out).
+        if st.session_state.get("authenticated", False):
+            user = str(st.session_state.get("auth_user", ""))
+            role = str(st.session_state.get("auth_role", "viewer"))
+            st.success(f"Signed in as {user} ({role})")
+            if st.button("Logout", use_container_width=True):
+                _logout_user()
+                st.rerun()
             return True
 
         st.warning("Please log in to access the dashboard.")

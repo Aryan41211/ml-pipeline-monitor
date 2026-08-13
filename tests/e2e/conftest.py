@@ -3,7 +3,18 @@
 import os
 
 import pytest
-from playwright.sync_api import sync_playwright
+from playwright.sync_api import expect, sync_playwright
+
+# Cold page loads (first streamlit script run imports heavy ML modules) can take
+# several seconds; give expect() assertions a generous default timeout.
+expect.set_options(timeout=45000)
+
+# Auth credentials must be set before the Streamlit server process starts so
+# every e2e run (including individual test files) can log in. setdefault keeps
+# any explicitly-provided values (e.g. CI overrides) intact.
+os.environ.setdefault("AUTH_USERNAME", "testadmin")
+os.environ.setdefault("AUTH_PASSWORD", "testpass123")
+os.environ.setdefault("AUTH_ROLE", "admin")
 
 
 @pytest.fixture(scope="session")
@@ -16,13 +27,14 @@ def browser():
 
 
 @pytest.fixture
-def page(browser):
+def page(browser, start_streamlit):
     """Create a new page for each test."""
     context = browser.new_context(
         viewport={"width": 1280, "height": 720},
-        base_url="http://localhost:8501",
+        base_url=f"http://localhost:{start_streamlit}",
     )
     page = context.new_page()
+    page.set_default_timeout(60000)
     yield page
     context.close()
 
@@ -31,14 +43,24 @@ def page(browser):
 def start_streamlit(request):
     """Start Streamlit app before e2e tests and stop after."""
     import subprocess
-    import time
-    import requests
-    from pathlib import Path
     import sys
+    import time
+    from pathlib import Path
+
+    import requests
 
     # Stabilize E2E tests by disabling Streamlit UI auth.
     # Auth logic is covered by unit tests; E2E should validate page flows without login flakiness.
     os.environ["MLMONITOR_AUTH_ENABLED"] = "false"
+
+    # Isolate e2e runs from any local database: point the Streamlit server at a
+    # fresh temporary SQLite DB so experiment/model pages deterministically show
+    # their empty states and pipeline runs never leak into developer data.
+    import shutil
+    import tempfile
+
+    _e2e_db_dir = Path(tempfile.mkdtemp(prefix="mlmonitor-e2e-"))
+    os.environ["PIPELINE_DB"] = str(_e2e_db_dir / "e2e.db")
 
     # Run Streamlit from the repository root irrespective of OS/path.
     # This keeps e2e tests working in CI and local environments.
@@ -47,6 +69,15 @@ def start_streamlit(request):
 
     if not app_py.exists():
         raise RuntimeError(f"app.py not found at expected location: {app_py}")
+
+    # Use a dynamic free port instead of a fixed one so stale/orphaned listeners
+    # (e.g. from interrupted local runs) never block the suite in CI.
+    import socket
+
+    _sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    _sock.bind(("127.0.0.1", 0))
+    port = _sock.getsockname()[1]
+    _sock.close()
 
     proc = subprocess.Popen(
         [
@@ -58,31 +89,40 @@ def start_streamlit(request):
             "--server.headless",
             "true",
             "--server.port",
-            "8501",
+            str(port),
             "--server.address",
             "0.0.0.0",
         ],
         cwd=str(repo_root),
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        # Redirect to files instead of PIPE: Streamlit logs a lot (file-watcher
+        # spam, per-run traces) and an undrained pipe buffer (~64KB) fills up,
+        # blocking the server on write and freezing the app mid-suite.
+        stdout=open(str(_e2e_db_dir / "streamlit.stdout.log"), "w", encoding="utf-8"),
+        stderr=open(str(_e2e_db_dir / "streamlit.stderr.log"), "w", encoding="utf-8"),
         text=False,
     )
 
     # Wait for Streamlit to start
-    health_url = "http://localhost:8501/_stcore/health"
-    root_url = "http://localhost:8501/"
+    health_url = f"http://localhost:{port}/_stcore/health"
+    root_url = f"http://localhost:{port}/"
     last_exc: str = ""
+
+    stdout_log = _e2e_db_dir / "streamlit.stdout.log"
+    stderr_log = _e2e_db_dir / "streamlit.stderr.log"
+
+    def _read_logs() -> tuple[str, str]:
+        try:
+            out_txt = stdout_log.read_text(encoding="utf-8", errors="ignore")
+            err_txt = stderr_log.read_text(encoding="utf-8", errors="ignore")
+        except Exception:
+            out_txt = "<failed to read streamlit stdout log>"
+            err_txt = "<failed to read streamlit stderr log>"
+        return out_txt, err_txt
 
     for _ in range(120):  # up to ~2 minutes
         # If the process already died, fail early with captured logs.
         if proc.poll() is not None:
-            try:
-                stdout, stderr = proc.communicate(timeout=1)
-                out_txt = (stdout or b"").decode(errors="ignore")
-                err_txt = (stderr or b"").decode(errors="ignore")
-            except Exception:
-                out_txt = "<failed to capture streamlit stdout>"
-                err_txt = "<failed to capture streamlit stderr>"
+            out_txt, err_txt = _read_logs()
 
             rc = proc.poll()
             raise RuntimeError(
@@ -112,13 +152,7 @@ def start_streamlit(request):
             time.sleep(1)
     else:
         # Capture logs to help debugging
-        try:
-            stdout, stderr = proc.communicate(timeout=2)
-            out_txt = (stdout or b"").decode(errors="ignore")
-            err_txt = (stderr or b"").decode(errors="ignore")
-        except Exception:
-            out_txt = "<failed to capture streamlit stdout>"
-            err_txt = "<failed to capture streamlit stderr>"
+        out_txt, err_txt = _read_logs()
 
         try:
             rc = proc.poll()
@@ -142,13 +176,7 @@ def start_streamlit(request):
     try:
         final_root = requests.get(root_url, timeout=2)
         if final_root.status_code >= 500:
-            try:
-                stdout, stderr = proc.communicate(timeout=2)
-                out_txt = (stdout or b"").decode(errors="ignore")
-                err_txt = (stderr or b"").decode(errors="ignore")
-            except Exception:
-                out_txt = "<failed to capture streamlit stdout>"
-                err_txt = "<failed to capture streamlit stderr>"
+            out_txt, err_txt = _read_logs()
 
             raise RuntimeError(
                 "Streamlit root endpoint returned error "
@@ -159,7 +187,11 @@ def start_streamlit(request):
             "Streamlit root endpoint not reachable after readiness.\n" + str(e)
         )
 
-    yield
+    yield port
 
     proc.terminate()
-    proc.wait(timeout=5)
+    try:
+        proc.wait(timeout=10)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+    shutil.rmtree(_e2e_db_dir, ignore_errors=True)

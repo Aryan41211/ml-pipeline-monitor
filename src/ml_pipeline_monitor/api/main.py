@@ -5,32 +5,28 @@ from __future__ import annotations
 import os
 import time
 from contextlib import asynccontextmanager
-from typing import Any, Dict, List, Optional, Union
+from typing import Any
 
 from fastapi import Depends, FastAPI, HTTPException, Request, Response, Security, status
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from fastapi.security import APIKeyHeader, HTTPAuthorizationCredentials, HTTPBearer
-from fastapi.exceptions import RequestValidationError
 from pydantic import BaseModel, Field
 
 try:
-    from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
+    from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 except ModuleNotFoundError:  # pragma: no cover
     generate_latest = None
     CONTENT_TYPE_LATEST = "text/plain; version=0.0.4"
-
-from slowapi import Limiter, _rate_limit_exceeded_handler
-from slowapi.errors import RateLimitExceeded
-from slowapi.util import get_remote_address
 
 import asyncio
 import signal
 import sys
 
-from ml_pipeline_monitor.services.model_service import predict_from_payload
-from ml_pipeline_monitor.services.telemetry_service import track_user_action
-from ml_pipeline_monitor.database import initialize_db
-from ml_pipeline_monitor.database.connection import get_backend
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
+
 from ml_pipeline_monitor.core.jwt_auth import (
     TokenPayload,
     create_access_token,
@@ -38,23 +34,27 @@ from ml_pipeline_monitor.core.jwt_auth import (
     verify_token,
 )
 from ml_pipeline_monitor.core.logger import (
+    ErrorCategory,
     get_app_logger,
     get_correlation_id,
-    set_correlation_id,
+    get_error_category,
     get_request_id,
+    set_correlation_id,
     set_request_id,
     set_service_context,
-    get_error_category,
-    ErrorCategory,
 )
 from ml_pipeline_monitor.core.metrics import (
-    registry,
-    record_api_request,
     record_api_error,
+    record_api_request,
     record_prediction,
+    registry,
     update_system_metrics,
 )
+from ml_pipeline_monitor.database import initialize_db
+from ml_pipeline_monitor.database.connection import get_backend
 from ml_pipeline_monitor.ml.model_cache import get_latest_production_model
+from ml_pipeline_monitor.services.model_service import predict_from_payload
+from ml_pipeline_monitor.services.telemetry_service import track_user_action
 
 LOGGER = get_app_logger("api")
 
@@ -77,11 +77,11 @@ class LoginRequest(BaseModel):
     refresh: bool = Field(False, description="Return refresh token as well")
 
 
-class TokenResponse(BaseModel):
+class LoginResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
     expires_in: int
-    refresh_token: Optional[str] = None
+    refresh_token: str | None = None
     role: str
 
 
@@ -90,13 +90,8 @@ class RefreshRequest(BaseModel):
 
 
 class PredictRequest(BaseModel):
-    features: Union[
-        Dict[str, float],
-        List[Dict[str, float]],
-        List[float],
-        List[List[float]],
-    ] = Field(..., description="Feature payload for one or many predictions")
-    dataset: Optional[str] = Field(
+    features: dict[str, float] | list[dict[str, float]] | list[float] | list[list[float]] = Field(..., description="Feature payload for one or many predictions")
+    dataset: str | None = Field(
         default=None,
         description="Optional dataset name to target production model selection",
     )
@@ -106,21 +101,21 @@ class PredictRequest(BaseModel):
 # Auth dependencies
 # ---------------------------------------------------------------------------
 
-async def _get_api_key(api_key: str = Security(API_KEY_HEADER)) -> Optional[str]:
+async def _get_api_key(api_key: str = Security(API_KEY_HEADER)) -> str | None:
     if api_key:
         return api_key
     return None
 
 
-async def _get_jwt_token(credentials: Optional[HTTPAuthorizationCredentials] = Security(JWT_SCHEME)) -> Optional[str]:
+async def _get_jwt_token(credentials: HTTPAuthorizationCredentials | None = Security(JWT_SCHEME)) -> str | None:
     if credentials and credentials.scheme.lower() == "bearer":
         return credentials.credentials
     return None
 
 
 async def _authenticate(
-    api_key: Optional[str] = Depends(_get_api_key),
-    jwt_token: Optional[str] = Depends(_get_jwt_token),
+    api_key: str | None = Depends(_get_api_key),
+    jwt_token: str | None = Depends(_get_jwt_token),
 ) -> TokenPayload:
     api_key_env = os.getenv("MLMONITOR_API_KEY", "")
     if api_key_env and api_key and api_key == api_key_env:
@@ -399,7 +394,7 @@ def _db_status() -> tuple[str, str]:
 
 
 @app.get("/health")
-def health() -> Dict[str, Any]:
+def health() -> dict[str, Any]:
     status, db_status = _db_status()
     return {
         "status": status,
@@ -409,12 +404,12 @@ def health() -> Dict[str, Any]:
 
 
 @app.get("/health/live")
-def health_live() -> Dict[str, str]:
+def health_live() -> dict[str, str]:
     return {"status": "alive"}
 
 
 @app.get("/health/ready")
-def health_ready() -> Dict[str, Any]:
+def health_ready() -> dict[str, Any]:
     status, db_status = _db_status()
     ready = status == "ok"
     return {
@@ -424,8 +419,8 @@ def health_ready() -> Dict[str, Any]:
 
 
 @app.get("/health/detailed")
-def health_detailed() -> Dict[str, Any]:
-    from ml_pipeline_monitor.core.system_monitor import get_system_metrics, get_process_metrics
+def health_detailed() -> dict[str, Any]:
+    from ml_pipeline_monitor.core.system_monitor import get_process_metrics, get_system_metrics
     status, db_status = _db_status()
     return {
         "status": status,
@@ -447,17 +442,9 @@ def metrics() -> Response:
 # V1 Auth endpoints
 # ---------------------------------------------------------------------------
 
-class LoginResponse(BaseModel):
-    access_token: str
-    token_type: str = "bearer"
-    expires_in: int
-    refresh_token: Optional[str] = None
-    role: str
-
-
 @app.post("/v1/auth/login", response_model=LoginResponse)
 async def login(body: LoginRequest):
-    from ml_pipeline_monitor.core.auth import _check_login, _resolve_user, _credentials
+    from ml_pipeline_monitor.core.auth import _check_login, _credentials, _resolve_user
     ok, err = _check_login(body.username, body.password)
     if not ok:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=err)
@@ -501,7 +488,7 @@ async def predict_v1(
     request: Request,
     body: PredictRequest,
     token: TokenPayload = Depends(_authenticate),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     correlation_id = get_correlation_id()
     request_id = get_request_id()
     start = time.time()
@@ -618,7 +605,7 @@ async def predict_v1(
 
 @app.post("/predict", deprecated=True)
 @limiter.limit(RATE_LIMIT)
-def predict_legacy(request: Request, request_body: PredictRequest, api_key: str = Depends(_get_api_key)) -> Dict[str, Any]:
+def predict_legacy(request: Request, request_body: PredictRequest, api_key: str = Depends(_get_api_key)) -> dict[str, Any]:
     if not api_key:
         raise HTTPException(status_code=401, detail="Legacy /predict requires X-API-Key. Use /v1/predict with JWT instead.")
     correlation_id = get_correlation_id()

@@ -3,30 +3,26 @@ Pipeline Runner — Visual Workflow Orchestration
 Redesigned with reusable enterprise components.
 """
 import time
-import json
-import pandas as pd
-import plotly.express as px
+
 import streamlit as st
 
+from ml_pipeline_monitor.core.auth import can_run_pipeline, current_role, render_auth_controls
+from ml_pipeline_monitor.ml.pipeline import DEFAULT_PARAMS
 from ml_pipeline_monitor.services.app_service import initialize_application
 from ml_pipeline_monitor.services.pipeline_service import (
     get_dataset_options,
-    get_dataset_preview,
     get_task_and_model_options,
     run_pipeline_and_persist,
 )
-from ml_pipeline_monitor.core.auth import can_run_pipeline, render_auth_controls, current_role
-from ml_pipeline_monitor.ml.pipeline import DEFAULT_PARAMS
 from ml_pipeline_monitor.utils.ui_theme import (
     apply_ui_theme,
     component_insight_panel,
     component_kpi_card,
     component_timeline,
-    render_loading_skeleton,
-    render_sidebar_nav,
-    render_top_navbar,
     render_section_title,
+    render_sidebar_nav,
     render_spacer,
+    render_top_navbar,
     safe_render,
 )
 
@@ -69,12 +65,12 @@ def _render_page():
             st.markdown('<div class="ui-card">', unsafe_allow_html=True)
             ds_label = st.selectbox("Target Dataset", list(DATASET_OPTIONS.keys()))
             ds_key = DATASET_OPTIONS[ds_label]
-            
+
             task_meta = get_task_and_model_options(ds_key)
             task = task_meta["task"]
             model = st.selectbox("Algorithm", task_meta["model_options"])
             st.markdown('</div>', unsafe_allow_html=True)
-        
+
         with c2:
             render_section_title("Execution Strategy")
             st.markdown('<div class="ui-card">', unsafe_allow_html=True)
@@ -82,7 +78,7 @@ def _render_page():
             cv_folds = st.slider("Cross-Validation Folds", 2, 10, 5)
             random_state = st.number_input("Random Seed", 0, 10000, 42, 1, help="Reproducibility seed for data splits and model training")
             st.markdown('</div>', unsafe_allow_html=True)
-            
+
             component_insight_panel([
                 f"Orchestrating {task} pipeline.",
                 f"Using {cv_folds}-fold Stratified CV.",
@@ -93,13 +89,14 @@ def _render_page():
         render_spacer("md")
         render_section_title("Hyperparameters")
         st.markdown('<div class="ui-card">', unsafe_allow_html=True)
-        
+
         default_params = DEFAULT_PARAMS.get(model, {})
         params = {}
-        
+
         if model == "Random Forest":
             params["n_estimators"] = st.number_input("n_estimators", 10, 500, default_params.get("n_estimators", 100), 10)
-            params["max_depth"] = st.number_input("max_depth (0=None)", 0, 50, default_params.get("max_depth", 0) or 0)
+            _max_depth = st.number_input("max_depth (0=None)", 0, 50, default_params.get("max_depth", 0) or 0)
+            params["max_depth"] = None if _max_depth == 0 else _max_depth
             params["min_samples_split"] = st.number_input("min_samples_split", 2, 20, default_params.get("min_samples_split", 2))
         elif model == "XGBoost":
             params["n_estimators"] = st.number_input("n_estimators", 10, 500, default_params.get("n_estimators", 100), 10)
@@ -116,7 +113,8 @@ def _render_page():
             params["C"] = st.number_input("C", 0.01, 10.0, default_params.get("C", 1.0), 0.01)
             params["kernel"] = st.selectbox("kernel", ["rbf", "linear", "poly", "sigmoid"], index=["rbf", "linear", "poly", "sigmoid"].index(default_params.get("kernel", "rbf")))
         elif model == "Decision Tree":
-            params["max_depth"] = st.number_input("max_depth (0=None)", 0, 50, default_params.get("max_depth", 0) or 0)
+            _max_depth = st.number_input("max_depth (0=None)", 0, 50, default_params.get("max_depth", 0) or 0)
+            params["max_depth"] = None if _max_depth == 0 else _max_depth
             params["min_samples_split"] = st.number_input("min_samples_split", 2, 20, default_params.get("min_samples_split", 2))
         elif model == "Ridge Regression":
             params["alpha"] = st.number_input("alpha", 0.01, 10.0, default_params.get("alpha", 1.0), 0.01)
@@ -124,11 +122,12 @@ def _render_page():
             params["C"] = st.number_input("C", 0.01, 10.0, default_params.get("C", 1.0), 0.01)
             params["kernel"] = st.selectbox("kernel", ["rbf", "linear", "poly", "sigmoid"], index=["rbf", "linear", "poly", "sigmoid"].index(default_params.get("kernel", "rbf")))
         elif model == "Decision Tree Regressor":
-            params["max_depth"] = st.number_input("max_depth (0=None)", 0, 50, default_params.get("max_depth", 0) or 0)
+            _max_depth = st.number_input("max_depth (0=None)", 0, 50, default_params.get("max_depth", 0) or 0)
+            params["max_depth"] = None if _max_depth == 0 else _max_depth
             params["min_samples_split"] = st.number_input("min_samples_split", 2, 20, default_params.get("min_samples_split", 2))
-        
+
         st.markdown('</div>', unsafe_allow_html=True)
-        
+
         if params:
             st.json(params)
 
@@ -137,7 +136,7 @@ def _render_page():
             prog = st.progress(0.0)
             status_box = st.empty()
             timeline_box = st.empty()
-            
+
             stages = []
             def _cb(stage, progress, msg):
                 prog.progress(progress)

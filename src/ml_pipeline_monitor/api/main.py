@@ -638,3 +638,39 @@ def _get_expiration_minutes() -> int:
         return int(os.getenv("JWT_EXPIRATION_MINUTES", 60))
     except Exception:
         return 60
+
+
+# ---------------------------------------------------------------------------
+# Alertmanager Webhook Receiver
+# ---------------------------------------------------------------------------
+
+@app.post("/v1/alerts/webhook")
+async def alertmanager_webhook(request: Request) -> dict[str, Any]:
+    """Receive alertmanager webhook notifications and log them."""
+    try:
+        body = await request.json()
+    except Exception:
+        return {"status": "error", "message": "Invalid JSON body"}
+
+    alerts = body.get("alerts", [])
+    status = body.get("status", "unknown")
+
+    for alert in alerts:
+        alert_name = alert.get("labels", {}).get("alertname", "unknown")
+        severity = alert.get("labels", {}).get("severity", "unknown")
+        summary = alert.get("annotations", {}).get("summary", "")
+        description = alert.get("annotations", {}).get("description", "")
+        alert_status = alert.get("status", status)
+
+        if alert_status == "resolved":
+            LOGGER.info(
+                "Alert resolved: %s (severity=%s) - %s",
+                alert_name, severity, summary,
+            )
+        else:
+            LOGGER.warning(
+                "Alert firing: %s (severity=%s) - %s | %s",
+                alert_name, severity, summary, description,
+            )
+
+    return {"status": "ok", "alerts_received": len(alerts)}

@@ -2,16 +2,35 @@
 
 from __future__ import annotations
 
-import json
+import os
+import tempfile
+from pathlib import Path
 
-from ml_pipeline_monitor.database import initialize_db, initialize_dataset_registry, initialize_prediction_registry, initialize_governance_registry
-from ml_pipeline_monitor.database import governance
-from ml_pipeline_monitor.database import predictions
-from ml_pipeline_monitor.database import lineage
+from ml_pipeline_monitor.database import (
+    governance,
+    initialize_dataset_registry,
+    initialize_db,
+    initialize_governance_registry,
+    initialize_prediction_registry,
+    lineage,
+    predictions,
+)
+
+
+def _use_isolated_db() -> None:
+    """Point the persistence layer at a fresh temp DB for the current test.
+
+    The persistence layer reads ``PIPELINE_DB`` on every backend connection,
+    so a unique file per test keeps CRUD tests deterministic and repeatable
+    (fixed request IDs / versions must not collide with previous runs).
+    """
+    tmpdir = tempfile.mkdtemp(prefix="mlmonitor-crud-test-")
+    os.environ["PIPELINE_DB"] = str(Path(tmpdir) / "test.db")
 
 
 class TestGovernance:
     def setup_method(self):
+        _use_isolated_db()
         initialize_db()
         initialize_governance_registry()
 
@@ -102,6 +121,7 @@ class TestGovernance:
 
 class TestPredictions:
     def setup_method(self):
+        _use_isolated_db()
         initialize_db()
         initialize_prediction_registry()
 
@@ -169,6 +189,7 @@ class TestPredictions:
 
 class TestLineage:
     def setup_method(self):
+        _use_isolated_db()
         initialize_db()
         initialize_dataset_registry()
 

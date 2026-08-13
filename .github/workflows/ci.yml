@@ -73,6 +73,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install -r requirements-dev.txt
+          pip install -e .
 
       - name: Install Playwright browsers
         run: |
@@ -144,13 +145,14 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install playwright pytest-playwright
+          pip install -e .
 
       - name: Install Playwright browsers
         run: playwright install --with-deps chromium
 
       - name: Run E2E tests
         run: |
-          npx playwright test --reporter=line
+          pytest -q tests/e2e --timeout=600 --no-cov
 
       - name: Upload Playwright report
         if: always()

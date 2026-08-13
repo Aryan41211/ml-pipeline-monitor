@@ -9,14 +9,13 @@ significance level or the PSI exceeds the moderate-change threshold.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict, List
+from typing import Any
 
 import numpy as np
 import pandas as pd
 from scipy import stats
 
 from ml_pipeline_monitor.core.config_loader import load_config
-
 
 # ---------------------------------------------------------------------------
 # PSI
@@ -118,7 +117,7 @@ def analyze_feature(
     ks_stat, p_value = stats.ks_2samp(ref_clean, cur_clean)
     psi = compute_psi(ref_clean, cur_clean)
 
-    drift_detected = (p_value < alpha) or (psi > moderate_threshold)
+    drift_detected = bool((p_value < alpha) or (psi > moderate_threshold))
     severity = _classify_severity(
         p_value,
         psi,
@@ -148,7 +147,7 @@ def run_drift_analysis(
     moderate_threshold: float = 0.10,
     significant_threshold: float = 0.25,
     feature_ratio_threshold: float = 0.20,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Compare two DataFrames column by column and return a drift report.
 
@@ -170,7 +169,7 @@ def run_drift_analysis(
     )
 
     common = [c for c in reference.columns if c in current.columns]
-    results: List[Dict[str, Any]] = []
+    results: list[dict[str, Any]] = []
 
     for col in common:
         r = analyze_feature(
@@ -192,10 +191,10 @@ def run_drift_analysis(
         )
 
     n_drifted = sum(1 for r in results if r["drift_detected"])
-    drift_ratio = n_drifted / len(results) if results else 0.0
+    drift_ratio = (n_drifted / len(results)) if results else 0.0
     avg_psi = float(np.mean([r["psi"] for r in results])) if results else 0.0
 
-    overall_drift = drift_ratio > feature_ratio_threshold
+    overall_drift = bool(drift_ratio > feature_ratio_threshold)
 
     if drift_ratio >= 0.50 or avg_psi >= significant_threshold:
         overall_severity = "critical"
@@ -207,7 +206,7 @@ def run_drift_analysis(
     return {
         "features_analyzed": len(results),
         "features_drifted": n_drifted,
-        "drift_ratio": round(drift_ratio, 4),
+        "drift_ratio": round(float(drift_ratio), 4),
         "overall_drift": overall_drift,
         "overall_severity": overall_severity,
         "average_psi": round(avg_psi, 5),

@@ -106,7 +106,7 @@ CMD ["streamlit", "run", "app.py", "--server.port=8501", "--server.address=0.0.0
 FROM production AS api
 
 # Override command for API service
-CMD ["uvicorn", "ml_pipeline_monitor.api.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4"]
+CMD ["uvicorn", "ml_pipeline_monitor.api.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]
 
 # =============================================================================
 # Stage 6: Worker image (for background jobs)

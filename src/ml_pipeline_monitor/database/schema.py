@@ -7,6 +7,7 @@ SQLite and PostgreSQL backends.
 
 from __future__ import annotations
 
+import time
 from contextlib import contextmanager
 from typing import Any, Iterator
 
@@ -15,6 +16,34 @@ from ml_pipeline_monitor.database.connection import get_backend
 
 def initialize_db() -> None:
     """Create tables, migrate schema, and create useful indexes."""
+    backend = _backend_name()
+
+    if backend == "postgres":
+        _initialize_db_postgres_with_retry()
+    else:
+        _initialize_db_sqlite()
+
+
+def _initialize_db_postgres_with_retry(max_retries: int = 5, base_delay: float = 1.0) -> None:
+    """Initialize PostgreSQL schema with retry logic for concurrent startup."""
+    last_exc: Exception | None = None
+    for attempt in range(max_retries):
+        try:
+            _do_initialize_db()
+            return
+        except Exception as exc:
+            last_exc = exc
+            delay = base_delay * (2 ** attempt)
+            time.sleep(delay)
+    raise last_exc  # type: ignore[misc]
+
+
+def _initialize_db_sqlite() -> None:
+    """Initialize SQLite schema (no retry needed)."""
+    _do_initialize_db()
+
+
+def _do_initialize_db() -> None:
     backend = _backend_name()
 
     sqlite_schema = """
@@ -222,7 +251,8 @@ def initialize_db() -> None:
                 conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
 
         ensure_column_exists("models", "dataset_name", "TEXT")
-        ensure_column_exists("models", "created_at", "TEXT DEFAULT CURRENT_TIMESTAMP")
+        ts_default = "CURRENT_TIMESTAMP" if backend == "sqlite" else "CURRENT_TIMESTAMP::text"
+        ensure_column_exists("models", "created_at", f"TEXT DEFAULT {ts_default}")
         ensure_column_exists("models", "params", "TEXT")
         ensure_column_exists("models", "confusion_matrix", "TEXT")
         ensure_column_exists("models", "feature_importances", "TEXT")
@@ -237,7 +267,7 @@ def initialize_db() -> None:
             "UPDATE models SET dataset_name = COALESCE(dataset_name, dataset)"
         )
         conn.execute(
-            "UPDATE models SET created_at = COALESCE(created_at, registered_at, CURRENT_TIMESTAMP)"
+            f"UPDATE models SET created_at = COALESCE(created_at, registered_at, {ts_default})"
         )
         conn.execute(
             "UPDATE models SET experiment_id = COALESCE(experiment_id, run_id)"
@@ -246,7 +276,7 @@ def initialize_db() -> None:
             "UPDATE model_stage_events SET dataset = COALESCE(dataset, '')"
         )
         conn.execute(
-            "UPDATE model_stage_events SET changed_at = COALESCE(changed_at, CURRENT_TIMESTAMP)"
+            f"UPDATE model_stage_events SET changed_at = COALESCE(changed_at, {ts_default})"
         )
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_stage_events_model_changed ON model_stage_events(model_id, changed_at DESC)"

@@ -2,7 +2,6 @@
 
 import os
 
-import pytest
 from playwright.sync_api import Page, expect
 
 # IMPORTANT: Streamlit is started once per test session in tests/e2e/conftest.py.
@@ -10,6 +9,14 @@ from playwright.sync_api import Page, expect
 os.environ.setdefault("AUTH_USERNAME", "testadmin")
 os.environ.setdefault("AUTH_PASSWORD", "testpass123")
 os.environ.setdefault("AUTH_ROLE", "admin")
+
+
+def _login(page: Page, username: str = "testadmin", password: str = "testpass123") -> None:
+    """Fill the sidebar login form and submit it."""
+    page.wait_for_selector("input[aria-label='Username']")
+    page.locator("input[aria-label='Username']").fill(username)
+    page.locator("input[aria-label='Password'][type='password']").fill(password)
+    page.click("button:has-text('Login')")
 
 
 def test_login_page_loads(page: Page):
@@ -29,14 +36,9 @@ def test_login_with_invalid_credentials(page: Page):
     page.goto("/")
     page.wait_for_load_state("networkidle")
 
-    page.wait_for_selector("input[type='text']")
-    page.wait_for_selector("input[type='password']")
+    _login(page, username="invalid_user", password="wrong_password")
 
-    page.fill("input[type='text']", "invalid_user")
-    page.fill("input[type='password']", "wrong_password")
-    page.click("button:has-text('Login')")
-
-    expect(page.locator("text=Invalid username or password")).to_be_visible()
+    expect(page.get_by_text("Invalid username or password")).to_be_visible()
 
 
 def test_login_with_valid_credentials(page: Page):
@@ -44,43 +46,30 @@ def test_login_with_valid_credentials(page: Page):
     page.goto("/")
     page.wait_for_load_state("networkidle")
 
-    page.wait_for_selector("input[type='text']")
-    page.wait_for_selector("input[type='password']")
+    _login(page)
 
-    page.fill("input[type='text']", "testadmin")
-    page.fill("input[type='password']", "testpass123")
-    page.click("button:has-text('Login')")
-
-    expect(page.locator("text=Signed in as testadmin")).to_be_visible()
+    expect(page.get_by_text("Signed in as testadmin")).to_be_visible()
 
 
 def test_logout(page: Page):
     """Test logout functionality."""
-    import os
-
-    os.environ["AUTH_USERNAME"] = "testadmin"
-    os.environ["AUTH_PASSWORD"] = "testpass123"
-    os.environ["AUTH_ROLE"] = "admin"
-
     page.goto("/")
     page.wait_for_load_state("networkidle")
 
-    page.locator("input[aria-label='Username']").fill("testadmin")
-    page.locator("input[aria-label='Password'][type='password']").fill("testpass123")
-    page.click("button:has-text('Login')")
+    _login(page)
 
-    expect(page.locator("text=Signed in as testadmin")).to_be_visible()
+    expect(page.get_by_text("Signed in as testadmin")).to_be_visible()
 
     page.click("button:has-text('Logout')")
     page.wait_for_load_state("networkidle")
 
-    expect(page.locator("text=Access")).to_be_visible()
+    expect(page.get_by_role("heading", name="Access")).to_be_visible()
 
 
 def test_navigation_requires_auth(page: Page):
-    """Test that navigation to protected pages requires authentication."""
-    page.goto("/pages/1_Pipeline_Runner.py")
+    """Test that protected pages expose the access gate when not logged in."""
+    page.goto("/Pipeline_Runner")
     page.wait_for_load_state("networkidle")
 
-    expect(page.locator("text=Access")).to_be_visible()
-    expect(page.locator("text=Please log in to access the dashboard")).to_be_visible()
+    expect(page.get_by_role("heading", name="Access")).to_be_visible()
+    expect(page.get_by_text("Please log in to access the dashboard")).to_be_visible()

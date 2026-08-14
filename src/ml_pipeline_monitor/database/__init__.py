@@ -53,6 +53,7 @@ from ml_pipeline_monitor.database.governance import (
     create_schedule,
     list_schedules,
     record_schedule_run,
+    update_schedule,
 )
 from ml_pipeline_monitor.database.lineage import (
     create_dataset,
@@ -103,6 +104,7 @@ __all__ = [
     "create_schedule",
     "list_schedules",
     "record_schedule_run",
+    "update_schedule",
     # Lineage
     "create_dataset",
     "create_dataset_version",

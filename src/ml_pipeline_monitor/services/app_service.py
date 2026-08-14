@@ -14,6 +14,7 @@ from ml_pipeline_monitor.database import (
     get_models,
     initialize_db,
     initialize_dataset_registry,
+    initialize_governance_registry,
     initialize_prediction_registry,
 )
 from ml_pipeline_monitor.core.system_monitor import get_system_metrics
@@ -24,6 +25,7 @@ def initialize_application() -> None:
     initialize_db()
     initialize_dataset_registry()
     initialize_prediction_registry()
+    initialize_governance_registry()
 
 
 def list_experiments(limit: int = 200) -> List[Dict[str, Any]]:

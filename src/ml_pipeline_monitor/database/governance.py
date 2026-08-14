@@ -187,3 +187,32 @@ def record_schedule_run(
             """,
             (schedule_id, status, error, json.dumps(metadata or {})),
         )
+
+
+def update_schedule(
+    *,
+    schedule_id: int,
+    enabled: bool | None = None,
+    next_run_at: str | None = None,
+    last_run_at: str | None = None,
+) -> None:
+    """Update schedule bookkeeping fields (enabled, next/last run timestamps)."""
+    updates: list[str] = []
+    params: list[Any] = []
+    if enabled is not None:
+        updates.append("enabled = ?")
+        params.append(1 if enabled else 0)
+    if next_run_at is not None:
+        updates.append("next_run_at = ?")
+        params.append(next_run_at)
+    if last_run_at is not None:
+        updates.append("last_run_at = ?")
+        params.append(last_run_at)
+    if not updates:
+        return
+    params.append(schedule_id)
+    with _get_connection() as conn:
+        conn.execute(
+            f"UPDATE schedules SET {', '.join(updates)}, updated_at=CURRENT_TIMESTAMP WHERE id = ?",
+            params,
+        )

@@ -607,8 +607,9 @@ async def predict_v1(
 @app.post("/predict", deprecated=True)
 @limiter.limit(RATE_LIMIT)
 def predict_legacy(request: Request, request_body: PredictRequest, api_key: str = Depends(_get_api_key)) -> dict[str, Any]:
-    if not api_key:
-        raise HTTPException(status_code=401, detail="Legacy /predict requires X-API-Key. Use /v1/predict with JWT instead.")
+    api_key_env = os.getenv("MLMONITOR_API_KEY", "")
+    if not api_key or (api_key_env and api_key != api_key_env):
+        raise HTTPException(status_code=401, detail="Legacy /predict requires a valid X-API-Key. Use /v1/predict with JWT instead.")
     correlation_id = get_correlation_id()
     request_id = get_request_id()
     start = time.time()

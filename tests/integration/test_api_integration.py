@@ -119,6 +119,10 @@ class TestLegacyPredict:
         r = client.post("/predict", json={"features": {"x": 1.0}})
         assert r.status_code == 401
 
+    def test_legacy_rejects_wrong_api_key(self):
+        r = client.post("/predict", json={"features": {"x": 1.0}}, headers={"X-API-Key": "wrong-key"})
+        assert r.status_code == 401
+
     def test_legacy_with_api_key(self):
         with patch("ml_pipeline_monitor.services.model_service.predict_from_payload", return_value={"model_id": "m1", "predictions": [1]}):
             r = client.post("/predict", json={"features": {"x": 1.0}}, headers={"X-API-Key": "test-api-key"})

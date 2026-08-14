@@ -11,6 +11,11 @@ via the /metrics endpoint on the FastAPI service.
 
 from __future__ import annotations
 
+import os
+import threading
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from typing import Optional
+
 from prometheus_client import Counter, Gauge, Histogram, CollectorRegistry
 
 # Create a custom registry for this application
@@ -441,3 +446,51 @@ def record_dataset_validation(
     dataset_validations_total.labels(dataset=dataset, status=status).inc()
     dataset_rows.labels(dataset=dataset).set(rows)
     dataset_columns.labels(dataset=dataset).set(columns)
+
+
+# ---------------------------------------------------------------------------
+# Metrics HTTP Exporter
+# ---------------------------------------------------------------------------
+
+_metrics_server_lock = threading.Lock()
+_metrics_server: Optional[ThreadingHTTPServer] = None
+
+
+def start_metrics_server(port: Optional[int] = None) -> None:
+    """Start a background HTTP server exposing ``/metrics`` on ``port``.
+
+    Serves the shared application registry via ``prometheus_client`` so the
+    Streamlit app process (which records pipeline/drift/system metrics) can be
+    scraped by Prometheus. Idempotent: only the first call in a process binds
+    the port; subsequent calls are no-ops. The port defaults to 8502 and can be
+    overridden with the ``MLMONITOR_METRICS_PORT`` environment variable.
+    """
+    global _metrics_server
+    with _metrics_server_lock:
+        if _metrics_server is not None:
+            return
+
+        from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
+
+        resolved_port = port if port is not None else int(os.getenv("MLMONITOR_METRICS_PORT", "8502"))
+
+        class _MetricsHandler(BaseHTTPRequestHandler):
+            def do_GET(self) -> None:  # noqa: N802
+                if self.path != "/metrics":
+                    self.send_error(404)
+                    return
+                update_system_metrics()
+                payload = generate_latest(registry)
+                self.send_response(200)
+                self.send_header("Content-Type", CONTENT_TYPE_LATEST)
+                self.send_header("Content-Length", str(len(payload)))
+                self.end_headers()
+                self.wfile.write(payload)
+
+            def log_message(self, format: str, *args: object) -> None:  # noqa: A002
+                """Suppress per-request access logging from the exporter."""
+
+        server = ThreadingHTTPServer(("0.0.0.0", resolved_port), _MetricsHandler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True, name="metrics-exporter")
+        thread.start()
+        _metrics_server = server

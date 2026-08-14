@@ -508,7 +508,7 @@ async def predict_v1(
             detail="No production model available. Train and promote a model first.",
         )
 
-    model, scaler, _ = cached
+    model, scaler, meta = cached
 
     try:
         result = predict_from_payload(
@@ -516,6 +516,7 @@ async def predict_v1(
             dataset=body.dataset,
             model=model,
             scaler=scaler,
+            model_meta=meta,
         )
         duration = time.time() - start
         track_user_action(page="api", action="prediction", metadata={"duration_ms": round(duration * 1000, 2)})

@@ -51,14 +51,18 @@ def get_model(run_id: str) -> Optional[Tuple[Any, Any, str]]:
         return None
 
 
-def get_latest_production_model(dataset: Optional[str] = None) -> Optional[Tuple[Any, Any, str]]:
+def get_latest_production_model(dataset: Optional[str] = None) -> Optional[Tuple[Any, Any, Dict[str, Any]]]:
     from ml_pipeline_monitor.database import get_latest_production_model
     record = get_latest_production_model(dataset=dataset)
     if record is None:
         return None
     artifact_path = record.get("artifact_path", "")
     run_id = Path(artifact_path).stem.replace("_model", "") if artifact_path else record.get("run_id", "")
-    return get_model(run_id) if run_id else None
+    loaded = get_model(run_id) if run_id else None
+    if loaded is None:
+        return None
+    model, scaler, _ = loaded
+    return model, scaler, record
 
 
 def invalidate(run_id: str) -> None:

@@ -183,6 +183,8 @@ def predict_from_payload(
     use_model, use_scaler, use_meta = model, scaler, model_meta
     if use_model is None:
         use_model, use_scaler, use_meta = load_production_artifacts(dataset=dataset)
+    if not isinstance(use_meta, dict):
+        use_meta = None
 
     X = _align_features(use_model, _to_dataframe(payload))
 

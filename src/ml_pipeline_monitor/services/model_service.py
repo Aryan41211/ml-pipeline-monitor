@@ -8,6 +8,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import joblib
 import pandas as pd
 
+from ml_pipeline_monitor.core.metrics import record_model_promotion
 from ml_pipeline_monitor.database import (
     get_latest_production_model,
     get_model_stage_events,
@@ -59,7 +60,17 @@ def set_model_stage(model_id: str, stage: str) -> None:
     """Promote/demote model lifecycle stage."""
     _validate_model_id(model_id)
     _validate_stage(stage)
+    records = get_models(limit=1000)
+    record = next((m for m in records if m.get("model_id") == model_id), None)
+    from_stage = str(record.get("stage", "unknown")) if record else "unknown"
     update_model_stage(model_id=model_id, stage=stage)
+    record_model_promotion(
+        dataset=str(record.get("dataset", "unknown")) if record else "unknown",
+        model_type=str(record.get("model_type", "unknown")) if record else "unknown",
+        from_stage=from_stage,
+        to_stage=stage,
+        status="success",
+    )
 
 
 def get_stage_timeline(model_id: str, limit: int = 50) -> List[Dict[str, Any]]:
@@ -92,6 +103,13 @@ def revert_to_previous_production(dataset: str) -> Dict[str, Any]:
 
     model_id = str(previous.get("model_id"))
     update_model_stage(model_id=model_id, stage="production")
+    record_model_promotion(
+        dataset=str(previous.get("dataset", "unknown")),
+        model_type=str(previous.get("model_type", "unknown")),
+        from_stage=str(previous.get("stage", "unknown")),
+        to_stage="production",
+        status="success",
+    )
     return previous
 
 

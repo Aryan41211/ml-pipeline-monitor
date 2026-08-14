@@ -43,22 +43,30 @@ def compute_psi(
     n_bins : int
         Number of histogram bins used for discretisation.
     """
-    ref = np.asarray(reference, dtype=float)
-    cur = np.asarray(current, dtype=float)
+    ref = np.asarray(reference, dtype=float).ravel()
+    cur = np.asarray(current, dtype=float).ravel()
 
-    lo = min(ref.min(), cur.min())
-    hi = max(ref.max(), cur.max())
+    if ref.size < 2 or cur.size < 2:
+        return 0.0
+
+    # Adapt bin count to the smaller sample so each bin stays meaningful;
+    # PSI on a 10-bin grid is unstable when a distribution has only tens of rows.
+    n_bins = max(2, min(n_bins, min(ref.size, cur.size) // 15))
+
+    lo = float(min(ref.min(), cur.min()))
+    hi = float(max(ref.max(), cur.max()))
+    if not (np.isfinite(lo) and np.isfinite(hi)) or hi <= lo:
+        return 0.0
+
     edges = np.linspace(lo, hi, n_bins + 1)
 
     ref_counts, _ = np.histogram(ref, bins=edges)
     cur_counts, _ = np.histogram(cur, bins=edges)
 
-    ref_pct = ref_counts / ref_counts.sum()
-    cur_pct = cur_counts / cur_counts.sum()
-
-    # Avoid log(0) or division by zero
-    ref_pct = np.where(ref_pct == 0, 1e-6, ref_pct)
-    cur_pct = np.where(cur_pct == 0, 1e-6, cur_pct)
+    # Laplace smoothing keeps PSI bounded when small samples leave bins empty
+    # (a raw 1e-6 epsilon blows up the log-ratio and flags drift on identical data).
+    ref_pct = (ref_counts + 1.0) / (ref_counts.sum() + n_bins)
+    cur_pct = (cur_counts + 1.0) / (cur_counts.sum() + n_bins)
 
     psi = float(np.sum((cur_pct - ref_pct) * np.log(cur_pct / ref_pct)))
     return round(psi, 5)

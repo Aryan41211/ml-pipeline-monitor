@@ -107,11 +107,18 @@ def _render_page():
                 feat_df.columns = [c.replace('_',' ').title() for c in feat_df.columns]
                 render_summary_table(feat_df, columns=["Feature", "Severity", "Psi", "P Value"], sort_by="Psi")
             with col_insights:
-                component_insight_panel([
-                    f"PSI > 0.25 detected in {len(feat_df[feat_df['Severity']=='significant'])} features.",
-                    "Retraining is recommended to align with distribution shift.",
-                    "KS-tests confirm shape-level divergence."
-                ])
+                significant = int((feat_df["Severity"] == "significant").sum())
+                moderate = int((feat_df["Severity"] == "moderate").sum())
+                insights = [
+                    f"{significant} feature(s) at significant severity, {moderate} at moderate.",
+                    f"Average PSI across {report['features_analyzed']} feature(s): {report['average_psi']:.4f}.",
+                ]
+                insights.append(
+                    "Drift exceeds the configured threshold — consider retraining."
+                    if report["overall_drift"]
+                    else "Drift is within the configured threshold; no action required."
+                )
+                component_insight_panel(insights)
 
         with t_hist:
             history = list_drift_reports(limit=15)

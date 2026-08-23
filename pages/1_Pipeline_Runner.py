@@ -7,6 +7,7 @@ import time
 import streamlit as st
 
 from ml_pipeline_monitor.core.auth import can_run_pipeline, current_role, render_auth_controls
+from ml_pipeline_monitor.ml.data_validation import DataQualityFailed
 from ml_pipeline_monitor.ml.pipeline import DEFAULT_PARAMS
 from ml_pipeline_monitor.services.app_service import initialize_application
 from ml_pipeline_monitor.services.pipeline_service import (
@@ -81,7 +82,7 @@ def _render_page():
 
             component_insight_panel([
                 f"Orchestrating {task} pipeline.",
-                f"Using {cv_folds}-fold Stratified CV.",
+                f"Using {cv_folds}-fold {'Stratified ' if task == 'classification' else ''}CV.",
                 "StandardScaler applied automatically."
             ])
 
@@ -152,7 +153,14 @@ def _render_page():
                 )
                 res = payload["result"]
                 st.success(f"Run {res.run_id} finished in {res.duration:.2f}s")
+                if res.validation is not None:
+                    st.caption(
+                        f"Data quality score: {res.validation.quality_score:.1f}/100 "
+                        f"({res.validation.status})"
+                    )
                 st.session_state["last_res"] = res
+            except DataQualityFailed as e:
+                st.error(f"Data quality gate blocked this run: {e}")
             except Exception as e:
                 st.error(f"Execution Failed: {e}")
 
@@ -162,9 +170,12 @@ def _render_page():
             render_spacer("md")
             render_section_title(f"Analysis: {last_res.run_id}")
             r1, r2, r3, r4 = st.columns(4)
-            for i, (k, v) in enumerate(list(last_res.metrics.items())[:4]):
+            scalar_metrics = [
+                (k, v) for k, v in last_res.metrics.items() if isinstance(v, (int, float))
+            ]
+            for i, (k, v) in enumerate(scalar_metrics[:4]):
                 with [r1, r2, r3, r4][i]:
-                    component_kpi_card(k.title(), f"{v:.4f}", "Primary metric", tone="success")
+                    component_kpi_card(k.replace("_", " ").title(), f"{v:.4f}", "Primary metric", tone="success")
 
     st.divider()
     st.caption("⚡ Workflow Engine v2.0-Componentized")

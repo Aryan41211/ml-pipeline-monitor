@@ -92,7 +92,7 @@ def _render_page():
     with c1: component_kpi_card("Total Models", str(len(df)), "Versions tracked", icon="📦")
     with c2: component_kpi_card("Production", str(len(df[df["stage"]=="production"])), "Active serving", icon="🚀", tone="success")
     with c3: component_kpi_card("Staging", str(len(df[df["stage"]=="staging"])), "Release testing", icon="🧪", tone="warning")
-    with c4: component_kpi_card("Promotion Rate", "4.2d", "Avg cycle time", icon="⚡", tone="info")
+    with c4: component_kpi_card("Development", str(len(df[df["stage"] == "development"])), "Unpromoted", icon="🧬", tone="info")
 
     render_spacer("md")
 
@@ -131,9 +131,14 @@ def _render_page():
         selected_id = st.session_state.get("active_model_id") or (df.iloc[0]["model_id"] if not df.empty else None)
         if selected_id:
             m_row = df[df["model_id"] == selected_id].iloc[0]
-            st.markdown(f'<div class="ui-card">', unsafe_allow_html=True)
+            st.markdown('<div class="ui-card">', unsafe_allow_html=True)
             st.markdown(f"**Target:** {m_row['name']} v{m_row['version']} on {m_row['dataset']}")
-            new_stage = st.selectbox("Update Stage", ["development", "staging", "production", "archived"], index=["development", "staging", "production", "archived"].index(m_row["stage"]))
+            stages = ["development", "staging", "production", "archived"]
+            # A stage outside the known set (legacy or hand-edited row) used to
+            # raise ValueError out of list.index() and blank the whole page.
+            current_stage = str(m_row["stage"])
+            stage_index = stages.index(current_stage) if current_stage in stages else 0
+            new_stage = st.selectbox("Update Stage", stages, index=stage_index)
             if st.button("Commit Transition", type="primary"):
                 if require_role("admin", "Update Stage"):
                     set_model_stage(selected_id, new_stage)

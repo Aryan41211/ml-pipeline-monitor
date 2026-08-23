@@ -1,12 +1,14 @@
 """
 Governance & Compliance — Audit & Policy Management
 """
+import json
+
 import pandas as pd
 import streamlit as st
 
 from ml_pipeline_monitor.services.app_service import initialize_application
-from ml_pipeline_monitor.services.model_service import list_lineage, list_models
-from ml_pipeline_monitor.core.auth import can_administer, render_auth_controls, require_role, current_role
+from ml_pipeline_monitor.services.model_service import get_stage_timeline, list_models
+from ml_pipeline_monitor.core.auth import current_role, render_auth_controls
 from ml_pipeline_monitor.utils.ui_theme import (
     apply_ui_theme,
     component_alert_card,
@@ -43,12 +45,32 @@ def _render_page():
     @st.cache_data(ttl=20)
     def _load_governance_data():
         models = list_models(limit=200)
-        lineage = list_lineage(limit=200)
-        return models, lineage
+        # The audit trail needs real stage transitions, which live in
+        # model_stage_events -- not in the model rows themselves. Reading
+        # from_stage/to_stage off a model row yielded "N/A" for every entry.
+        events = []
+        for model in models:
+            model_id = model.get("model_id")
+            if not model_id:
+                continue
+            for event in get_stage_timeline(str(model_id), limit=50):
+                events.append(
+                    {
+                        "Model": model.get("name", "Unknown"),
+                        "Version": model.get("version", "N/A"),
+                        "Dataset": event.get("dataset") or model.get("dataset", "N/A"),
+                        "From Stage": event.get("from_stage") or "-",
+                        "To Stage": event.get("to_stage", "N/A"),
+                        "Changed At": event.get("changed_at", "N/A"),
+                        "Note": event.get("note", ""),
+                    }
+                )
+        events.sort(key=lambda row: str(row["Changed At"]), reverse=True)
+        return models, events
 
     loading = st.empty()
     with loading.container(): render_loading_skeleton(lines=5)
-    models_raw, lineage_raw = _load_governance_data()
+    models_raw, audit_rows = _load_governance_data()
     loading.empty()
 
     if not models_raw:
@@ -56,7 +78,6 @@ def _render_page():
         st.stop()
 
     models_df = pd.DataFrame(models_raw)
-    lineage_df = pd.DataFrame(lineage_raw) if lineage_raw else pd.DataFrame()
 
     # ---------------------------------------------------------------------------
     # Header
@@ -84,34 +105,15 @@ def _render_page():
 
     with tab_audit:
         render_section_title("Model Stage Change History")
-        
-        if not lineage_df.empty and "model_id" in lineage_df.columns:
-            audit_rows = []
-            for _, row in models_df.iterrows():
-                model_id = row.get("model_id")
-                model_events = lineage_df[lineage_df.get("model_id") == model_id] if "model_id" in lineage_df.columns else pd.DataFrame()
-                for _, evt in model_events.iterrows():
-                    audit_rows.append({
-                        "Model": row.get("name", "Unknown"),
-                        "Version": row.get("version", "N/A"),
-                        "Dataset": row.get("dataset", "N/A"),
-                        "From Stage": evt.get("from_stage", "N/A"),
-                        "To Stage": evt.get("to_stage", "N/A"),
-                        "Changed At": evt.get("changed_at", "N/A"),
-                        "Note": evt.get("note", ""),
-                    })
-            
-            if audit_rows:
-                audit_df = pd.DataFrame(audit_rows)
-                render_summary_table(
-                    audit_df,
-                    columns=["Model", "Version", "Dataset", "From Stage", "To Stage", "Changed At", "Note"],
-                    filterable_columns=["Model", "Dataset", "To Stage"]
-                )
-            else:
-                st.info("No stage change events recorded.")
+
+        if audit_rows:
+            render_summary_table(
+                pd.DataFrame(audit_rows),
+                columns=["Model", "Version", "Dataset", "From Stage", "To Stage", "Changed At", "Note"],
+                filterable_columns=["Model", "Dataset", "To Stage"],
+            )
         else:
-            st.info("No lineage data available.")
+            st.info("No stage change events recorded yet.")
 
     with tab_policy:
         render_section_title("Promotion Policies")
@@ -129,14 +131,25 @@ def _render_page():
         
         col1, col2 = st.columns(2)
         with col1:
-            min_accuracy = st.number_input("Minimum Accuracy (Classification)", 0.0, 1.0, 0.80, 0.01)
-            min_f1 = st.number_input("Minimum F1 Score", 0.0, 1.0, 0.75, 0.01)
+            min_accuracy = st.number_input(
+                "Minimum Accuracy (Classification)", 0.0, 1.0,
+                float(st.session_state.get("policy_min_accuracy", 0.80)), 0.01,
+            )
+            min_f1 = st.number_input(
+                "Minimum F1 Score", 0.0, 1.0,
+                float(st.session_state.get("policy_min_f1", 0.75)), 0.01,
+            )
         with col2:
-            max_psi = st.number_input("Maximum PSI for Production", 0.0, 1.0, 0.10, 0.01)
-            require_approval = st.checkbox("Require Admin Approval for Production", value=True)
+            st.number_input("Maximum PSI for Production", 0.0, 1.0, 0.10, 0.01, key="policy_max_psi")
+            st.checkbox("Require Admin Approval for Production", value=True, key="policy_require_approval")
         
-        if st.button("Save Policy", type="primary"):
-            st.success("Policy thresholds saved (stored in session). Persist to config.yaml for permanence.")
+        if st.button("Apply Thresholds", type="primary"):
+            st.session_state["policy_min_accuracy"] = min_accuracy
+            st.session_state["policy_min_f1"] = min_f1
+            st.success(
+                "Thresholds applied to the compliance report below for this session. "
+                "Edit config/config.prod.yaml to make them permanent."
+            )
 
     with tab_compliance:
         render_section_title("Compliance Status")
@@ -148,13 +161,12 @@ def _render_page():
         for _, row in prod_models.iterrows():
             metrics = row.get("metrics", {})
             if isinstance(metrics, str):
-                import json
                 metrics = json.loads(metrics)
             
             accuracy = metrics.get("accuracy", 0)
             f1 = metrics.get("f1_score", 0)
             
-            compliant = accuracy >= 0.80 and f1 >= 0.75
+            compliant = accuracy >= min_accuracy and f1 >= min_f1
             compliance_rows.append({
                 "Model": row.get("name", "Unknown"),
                 "Version": row.get("version", "N/A"),
@@ -175,10 +187,13 @@ def _render_page():
             st.info("No production models to audit.")
 
     render_spacer("md")
+    non_compliant = sum(1 for row in compliance_rows if "non_compliant" in str(row["Status"]))
     component_insight_panel([
-        "All production models undergo automated compliance checks.",
-        "Audit trail is immutable and timestamped.",
-        "Policy violations trigger alerts to administrators."
+        f"{len(prod_models)} production model(s) checked against the current thresholds.",
+        f"{non_compliant} model(s) below the accuracy/F1 policy."
+        if non_compliant
+        else "All production models meet the current accuracy/F1 policy.",
+        f"{len(audit_rows)} stage transition(s) recorded in the audit trail.",
     ])
 
     st.divider()

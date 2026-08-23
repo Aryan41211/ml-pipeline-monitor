@@ -97,8 +97,8 @@ with col_action:
 
 # KPI Row
 c1, c2, c3, c4 = st.columns(4)
-with c1: component_kpi_card("Experiments", f"{len(exp_df)}", "All-time runs", icon="📊", trend="+4")
-with c2: component_kpi_card("Models", f"{len(mdl_df)}", "In Registry", icon="🧠", trend="+1")
+with c1: component_kpi_card("Experiments", f"{len(exp_df)}", "All-time runs", icon="📊")
+with c2: component_kpi_card("Models", f"{len(mdl_df)}", "In Registry", icon="🧠")
 # Guard against missing 'stage' column when registry is empty/uninitialized.
 _production_count = 0
 if not mdl_df.empty and "stage" in mdl_df.columns:
@@ -119,7 +119,7 @@ m_left, m_mid, m_right = st.columns([2, 1, 1], gap="medium")
 with m_left:
     render_section_title("Production Throughput")
     if not exp_df.empty:
-        exp_df["ts"] = pd.to_datetime(exp_df["created_at"])
+        exp_df["ts"] = pd.to_datetime(exp_df["created_at"], errors="coerce", format="mixed")
         fig = px.area(exp_df.sort_values("ts"), x="ts", y="duration_seconds", color_discrete_sequence=["#6366F1"])
         fig.update_layout(height=280, margin=dict(l=0,r=0,t=0,b=0))
         st.plotly_chart(fig, use_container_width=True)
@@ -132,13 +132,22 @@ with m_mid:
 
 with m_right:
     render_section_title("AI Context")
+    # Every line here must be derived from the data on screen; the panel used
+    # to assert fixed model-comparison and latency claims that nothing measured.
     insights = []
     if not exp_df.empty:
-        insights.append(f"Success rate stable at {success_rate:.1f}%.")
-        insights.append("XGBoost yields 12% higher F1 than Linear models.")
+        insights.append(f"Completion rate: {success_rate:.1f}% across {len(exp_df)} run(s).")
+        if "model_type" in exp_df.columns and not exp_df["model_type"].empty:
+            top_model = exp_df["model_type"].value_counts().idxmax()
+            insights.append(f"Most-used estimator: {top_model}.")
+        insights.append(f"Best recorded accuracy: {best_acc:.3f}.")
     else:
         insights.append("Run experiments to generate insights.")
-    insights.append("System latency is within P99 bounds.")
+
+    cpu = sys_snapshot.get("cpu_percent")
+    mem = sys_snapshot.get("memory_percent")
+    if cpu is not None and mem is not None:
+        insights.append(f"Host load: {cpu:.0f}% CPU, {mem:.0f}% memory.")
     component_insight_panel(insights)
 
 render_spacer("md")

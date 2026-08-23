@@ -7,12 +7,12 @@ whose ``next_run_at`` timestamp is due, recording each execution in the
 
 from __future__ import annotations
 
+import contextlib
 import signal
 import threading
-import time
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Set
+from datetime import UTC, datetime, timedelta
+from typing import Any
 
 from ml_pipeline_monitor.core.config_loader import load_config
 from ml_pipeline_monitor.core.logger import get_app_logger
@@ -35,12 +35,12 @@ _FIELD_SPECS = (
 )
 
 
-def _parse_cron_field(field: str, lo: int, hi: int) -> Set[int]:
+def _parse_cron_field(field: str, lo: int, hi: int) -> set[int]:
     """Parse a single cron field into the set of allowed values.
 
     Supports ``*``, ``*/n``, ``n``, ``n-m``, ``n-m/s`` and comma lists.
     """
-    allowed: Set[int] = set()
+    allowed: set[int] = set()
 
     def _expand(token: str) -> None:
         token = token.strip()
@@ -58,8 +58,8 @@ def _parse_cron_field(field: str, lo: int, hi: int) -> Set[int]:
             return
         allowed.update(_expand_range(token, 1))
 
-    def _expand_range(token: str, step: int) -> Set[int]:
-        values: Set[int] = set()
+    def _expand_range(token: str, step: int) -> set[int]:
+        values: set[int] = set()
         if "-" in token:
             start_s, end_s = token.split("-", 1)
             start, end = int(start_s), int(end_s)
@@ -113,7 +113,7 @@ def _parse_dt(value: Any) -> datetime | None:
         return None
 
 
-def _build_task_config(schedule: Dict[str, Any]) -> Dict[str, Any]:
+def _build_task_config(schedule: dict[str, Any]) -> dict[str, Any]:
     """Translate a schedule row into the worker task configuration."""
     from ml_pipeline_monitor.services.pipeline_service import get_task_and_model_options
 
@@ -137,10 +137,10 @@ def _build_task_config(schedule: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def _claim_due_schedules(now: datetime | None = None) -> List[Dict[str, Any]]:
+def _claim_due_schedules(now: datetime | None = None) -> list[dict[str, Any]]:
     """Return enabled schedules due now, advancing their next_run_at to avoid double-fire."""
-    now = now or datetime.now(timezone.utc)
-    due: List[Dict[str, Any]] = []
+    now = now or datetime.now(UTC)
+    due: list[dict[str, Any]] = []
     for schedule in list_schedules(limit=1000):
         if not schedule.get("enabled"):
             continue
@@ -150,9 +150,7 @@ def _claim_due_schedules(now: datetime | None = None) -> List[Dict[str, Any]]:
             if next_run and next_run > now:
                 continue
         try:
-            next_ts = _next_run_from_cron(
-                str(schedule.get("cron_expression", "* * * * *")), now
-            )
+            next_ts = _next_run_from_cron(str(schedule.get("cron_expression", "* * * * *")), now)
         except ValueError:
             LOGGER.warning(
                 "Skipping schedule %s: invalid cron %r",
@@ -169,13 +167,11 @@ def _claim_due_schedules(now: datetime | None = None) -> List[Dict[str, Any]]:
     return due
 
 
-def _run_schedule(schedule: Dict[str, Any]) -> None:
+def _run_schedule(schedule: dict[str, Any]) -> None:
     """Execute a single due schedule and record its outcome."""
     schedule_id = int(schedule["id"])
     schedule_name = schedule.get("schedule_name", schedule_id)
-    LOGGER.info(
-        "Running schedule %s (%s)", schedule_name, schedule.get("schedule_type")
-    )
+    LOGGER.info("Running schedule %s (%s)", schedule_name, schedule.get("schedule_type"))
     try:
         _execute_scheduled_task(_build_task_config(schedule))
         record_schedule_run(schedule_id=schedule_id, status="success")
@@ -185,7 +181,7 @@ def _run_schedule(schedule: Dict[str, Any]) -> None:
         record_schedule_run(schedule_id=schedule_id, status="failed", error=str(exc))
 
 
-def _execute_scheduled_task(task_config: Dict[str, Any]) -> None:
+def _execute_scheduled_task(task_config: dict[str, Any]) -> None:
     task_type = task_config.get("type", "pipeline_run")
     LOGGER.info("Executing scheduled task: %s", task_type)
 
@@ -232,10 +228,9 @@ def _install_signal_handlers() -> None:
         request_shutdown()
 
     for sig in (signal.SIGTERM, signal.SIGINT):
-        try:
+        # Raises when not on the main thread, or when the platform lacks the signal.
+        with contextlib.suppress(OSError, ValueError):
             signal.signal(sig, _handler)
-        except (OSError, ValueError):  # not on the main thread, or unsupported
-            pass
 
 
 def run_worker_loop(concurrency: int = 4, poll_interval: float = 5.0) -> None:

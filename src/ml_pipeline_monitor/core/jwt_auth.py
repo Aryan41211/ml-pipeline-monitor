@@ -10,7 +10,6 @@ import os
 import time
 import uuid
 from dataclasses import dataclass
-from typing import Optional
 
 from ml_pipeline_monitor.core.config_loader import load_config
 from ml_pipeline_monitor.core.logger import get_app_logger
@@ -48,14 +47,24 @@ def _get_algorithm() -> str:
 
 def _get_expiration_minutes() -> int:
     try:
-        return int(os.getenv("JWT_EXPIRATION_MINUTES", load_config().get("api", {}).get("jwt_expiration_minutes", DEFAULT_EXPIRATION_MINUTES)))
+        return int(
+            os.getenv(
+                "JWT_EXPIRATION_MINUTES",
+                load_config().get("api", {}).get("jwt_expiration_minutes", DEFAULT_EXPIRATION_MINUTES),
+            )
+        )
     except Exception:
         return DEFAULT_EXPIRATION_MINUTES
 
 
 def _get_refresh_expiration_days() -> int:
     try:
-        return int(os.getenv("JWT_REFRESH_EXPIRATION_DAYS", load_config().get("api", {}).get("jwt_refresh_expiration_days", DEFAULT_REFRESH_EXPIRATION_DAYS)))
+        return int(
+            os.getenv(
+                "JWT_REFRESH_EXPIRATION_DAYS",
+                load_config().get("api", {}).get("jwt_refresh_expiration_days", DEFAULT_REFRESH_EXPIRATION_DAYS),
+            )
+        )
     except Exception:
         return DEFAULT_REFRESH_EXPIRATION_DAYS
 
@@ -85,8 +94,8 @@ def _sign(payload_b64: str, secret: str, algorithm: str) -> str:
 def create_access_token(
     sub: str,
     role: str = "viewer",
-    expires_delta: Optional[int] = None,
-    jti: Optional[str] = None,
+    expires_delta: int | None = None,
+    jti: str | None = None,
 ) -> str:
     now = int(time.time())
     exp = now + (expires_delta or _get_expiration_minutes() * 60)
@@ -108,8 +117,8 @@ def create_access_token(
 def create_refresh_token(
     sub: str,
     role: str = "viewer",
-    expires_delta: Optional[int] = None,
-    jti: Optional[str] = None,
+    expires_delta: int | None = None,
+    jti: str | None = None,
 ) -> str:
     now = int(time.time())
     exp = now + (expires_delta or _get_refresh_expiration_days() * 86400)

@@ -4,17 +4,18 @@ Dataset loading and splitting utilities.
 Wraps scikit-learn's bundled datasets and supports synthetic generation
 so the application works without external data files.
 """
+
 from __future__ import annotations
+
+from typing import Any
 
 import pandas as pd
 from sklearn import datasets
 from sklearn.model_selection import train_test_split
-from typing import Any, Dict
 
 from ml_pipeline_monitor.core.config_loader import load_config
 
-
-DEFAULT_DATASET_OPTIONS: Dict[str, str] = {
+DEFAULT_DATASET_OPTIONS: dict[str, str] = {
     "Breast Cancer Wisconsin": "breast_cancer",
     "Wine Recognition": "wine",
     "Iris Species": "iris",
@@ -24,12 +25,12 @@ DEFAULT_DATASET_OPTIONS: Dict[str, str] = {
 }
 
 
-def _dataset_options_from_config() -> Dict[str, str]:
+def _dataset_options_from_config() -> dict[str, str]:
     cfg_datasets = load_config().get("datasets", {})
     if not isinstance(cfg_datasets, dict) or not cfg_datasets:
         return DEFAULT_DATASET_OPTIONS
 
-    options: Dict[str, str] = {}
+    options: dict[str, str] = {}
     for key, value in cfg_datasets.items():
         if not isinstance(value, dict):
             continue
@@ -40,17 +41,15 @@ def _dataset_options_from_config() -> Dict[str, str]:
 
 
 # Human-readable labels -> internal key used in config.yaml
-DATASET_OPTIONS: Dict[str, str] = _dataset_options_from_config()
+DATASET_OPTIONS: dict[str, str] = _dataset_options_from_config()
 
 
-def _make_sklearn_bundle(loader_fn, **kwargs) -> Dict[str, Any]:
+def _make_sklearn_bundle(loader_fn, **kwargs) -> dict[str, Any]:
     """Return a normalised dict from a sklearn dataset loader."""
     data = loader_fn(as_frame=True, **kwargs)
     X = data.data if isinstance(data.data, pd.DataFrame) else pd.DataFrame(data.data)
     y = data.target
-    target_names = (
-        list(data.target_names) if hasattr(data, "target_names") else None
-    )
+    target_names = list(data.target_names) if hasattr(data, "target_names") else None
     return {"X": X, "y": y, "target_names": target_names}
 
 
@@ -58,7 +57,7 @@ def load_dataset(
     key: str,
     test_size: float = 0.20,
     random_state: int = 42,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Load a dataset by its internal key and return train/test splits.
 
@@ -154,8 +153,8 @@ def _compute_stats(
     X_train: pd.DataFrame,
     X_test: pd.DataFrame,
     task: str,
-) -> Dict[str, Any]:
-    stats: Dict[str, Any] = {
+) -> dict[str, Any]:
+    stats: dict[str, Any] = {
         "n_samples": len(X),
         "n_features": X.shape[1],
         "train_size": len(X_train),

@@ -2,17 +2,22 @@
 
 from __future__ import annotations
 
-import json
-
 import hashlib
-from datetime import datetime, timedelta, timezone
-from typing import Any, Callable, Dict, Optional
+import json
+from collections.abc import Callable
+from datetime import UTC, datetime, timedelta
+from typing import Any
 
 import joblib
 
 from ml_pipeline_monitor.core.alerts import emit_console_alert, emit_email_alert
 from ml_pipeline_monitor.core.config_loader import get_artifact_dirs, load_config
-from ml_pipeline_monitor.ml.data_loader import DATASET_OPTIONS, get_feature_statistics, load_dataset
+from ml_pipeline_monitor.core.logger import get_app_logger
+from ml_pipeline_monitor.core.metrics import (
+    record_experiment,
+    record_model_registration,
+    record_pipeline_run,
+)
 from ml_pipeline_monitor.database import (
     create_dataset,
     create_dataset_version,
@@ -23,27 +28,21 @@ from ml_pipeline_monitor.database import (
     save_model,
     save_schema_snapshot,
 )
+from ml_pipeline_monitor.ml.data_loader import DATASET_OPTIONS, get_feature_statistics, load_dataset
 from ml_pipeline_monitor.ml.feature_store import load_cached_splits, make_feature_key, save_cached_splits
-from ml_pipeline_monitor.core.logger import get_app_logger
-from ml_pipeline_monitor.core.metrics import (
-    record_experiment,
-    record_model_registration,
-    record_pipeline_run,
-)
 from ml_pipeline_monitor.ml.mlflow_tracker import log_pipeline_run
-from ml_pipeline_monitor.ml.pipeline import CLF_REGISTRY, MLPipeline, PipelineResult, REG_REGISTRY
-
+from ml_pipeline_monitor.ml.pipeline import CLF_REGISTRY, REG_REGISTRY, MLPipeline, PipelineResult
 
 ProgressCallback = Callable[[str, float, str], None]
 LOGGER = get_app_logger("pipeline_service")
 
 
-def list_experiments(limit: int = 200) -> list[Dict[str, Any]]:
+def list_experiments(limit: int = 200) -> list[dict[str, Any]]:
     """Return persisted experiments for analytics views."""
     return get_experiments(limit=limit)
 
 
-def get_pipeline_defaults() -> Dict[str, Any]:
+def get_pipeline_defaults() -> dict[str, Any]:
     """Return default pipeline controls from config."""
     cfg = load_config().get("pipeline", {})
     return {
@@ -54,7 +53,7 @@ def get_pipeline_defaults() -> Dict[str, Any]:
     }
 
 
-def get_quality_gate_settings() -> Dict[str, Any]:
+def get_quality_gate_settings() -> dict[str, Any]:
     """Return data-quality gate settings from the monitoring config block."""
     cfg = load_config().get("monitoring", {}).get("data_quality", {}) or {}
     return {
@@ -63,12 +62,12 @@ def get_quality_gate_settings() -> Dict[str, Any]:
     }
 
 
-def get_dataset_options() -> Dict[str, str]:
+def get_dataset_options() -> dict[str, str]:
     """Expose dataset options to UI without direct core imports."""
     return dict(DATASET_OPTIONS)
 
 
-def get_task_and_model_options(dataset_key: str) -> Dict[str, Any]:
+def get_task_and_model_options(dataset_key: str) -> dict[str, Any]:
     """Resolve task type and available model choices for a dataset key."""
     app_cfg = load_config()
     ds_cfg = app_cfg.get("datasets", {})
@@ -83,14 +82,14 @@ def get_task_and_model_options(dataset_key: str) -> Dict[str, Any]:
     }
 
 
-def get_dataset_preview(dataset_key: str, *, test_size: float, random_state: int) -> Dict[str, Any]:
+def get_dataset_preview(dataset_key: str, *, test_size: float, random_state: int) -> dict[str, Any]:
     """Load dataset preview and feature statistics for UI pages."""
     ds = load_dataset(dataset_key, test_size=float(test_size), random_state=int(random_state))
     feat_stats = get_feature_statistics(ds["X_train"])
     return {"dataset": ds, "feature_stats": feat_stats}
 
 
-def _persist_artifacts(run_id: str, model: object, scaler: object) -> Dict[str, str]:
+def _persist_artifacts(run_id: str, model: object, scaler: object) -> dict[str, str]:
     """Persist model and scaler using canonical artifact layout."""
     dirs = get_artifact_dirs()
     model_path = dirs["models"] / f"{run_id}_model.joblib"
@@ -138,12 +137,12 @@ def run_pipeline_and_persist(
     dataset_key: str,
     model_type: str,
     task: str,
-    params: Dict[str, Any],
+    params: dict[str, Any],
     test_size: float,
     cv_folds: int,
     random_state: int,
-    progress_callback: Optional[ProgressCallback] = None,
-) -> Dict[str, Any]:
+    progress_callback: ProgressCallback | None = None,
+) -> dict[str, Any]:
     """Execute pipeline run end-to-end and persist experiment/model artifacts."""
     _validate_pipeline_inputs(dataset_label, dataset_key, model_type, task, test_size, cv_folds, random_state)
 
@@ -286,19 +285,19 @@ def run_pipeline_and_persist(
 
 def compute_next_run_ts(interval_minutes: int) -> datetime:
     """Return next scheduled run timestamp from now."""
-    return datetime.now(timezone.utc) + timedelta(minutes=max(1, int(interval_minutes)))
+    return datetime.now(UTC) + timedelta(minutes=max(1, int(interval_minutes)))
 
 
 def should_trigger_scheduled_run(
     enabled: bool,
-    next_run_at: Optional[datetime],
-    now: Optional[datetime] = None,
+    next_run_at: datetime | None,
+    now: datetime | None = None,
 ) -> bool:
     """Determine if the simulated cron run should trigger now."""
     if not enabled or next_run_at is None:
         return False
 
-    now = now or datetime.now(timezone.utc)
+    now = now or datetime.now(UTC)
     return now >= next_run_at
 
 
@@ -315,19 +314,15 @@ def _record_lineage(*, dataset_key: str, dataset_label: str, run_id: str, frame:
         next_version = int(existing[0]["version"]) + 1 if existing else 1
 
         column_signature = "|".join(f"{col}:{frame[col].dtype}" for col in frame.columns)
-        checksum = hashlib.sha256(
-            f"{dataset_key}|{len(frame)}|{column_signature}".encode("utf-8")
-        ).hexdigest()[:32]
+        checksum = hashlib.sha256(f"{dataset_key}|{len(frame)}|{column_signature}".encode()).hexdigest()[:32]
 
         version_id = create_dataset_version(
             dataset_id=dataset_key,
             version=next_version,
-            hash=checksum,
+            content_hash=checksum,
             row_count=int(len(frame)),
             column_count=int(frame.shape[1]),
-            missing_values_summary=json.dumps(
-                {str(col): int(frame[col].isna().sum()) for col in frame.columns}
-            ),
+            missing_values_summary=json.dumps({str(col): int(frame[col].isna().sum()) for col in frame.columns}),
         )
 
         for column in frame.columns:

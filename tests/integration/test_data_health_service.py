@@ -1,7 +1,6 @@
 from pathlib import Path
 
 import pandas as pd
-import pytest
 
 from ml_pipeline_monitor.services import data_health_service
 

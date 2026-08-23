@@ -45,9 +45,7 @@ class TestGovernance:
 
     def test_create_user(self):
         team_id = governance.create_team("user-team")
-        user_id = governance.create_user(
-            username="alice", password_hash="hash123", role="admin", team_id=team_id
-        )
+        user_id = governance.create_user(username="alice", password_hash="hash123", role="admin", team_id=team_id)
         assert user_id > 0
 
     def test_create_user_update(self):
@@ -143,9 +141,16 @@ class TestPredictions:
 
     def test_get_prediction_history_by_request_id(self):
         predictions.save_prediction_request(
-            request_id="req-002", correlation_id=None, model_id="m-001",
-            dataset=None, input_type="json", input_hash=None,
-            num_predictions=3, status="success", duration_ms=5.0, error=None,
+            request_id="req-002",
+            correlation_id=None,
+            model_id="m-001",
+            dataset=None,
+            input_type="json",
+            input_hash=None,
+            num_predictions=3,
+            status="success",
+            duration_ms=5.0,
+            error=None,
         )
         result = predictions.get_prediction_history_by_request_id("req-002")
         assert result is not None
@@ -157,12 +162,20 @@ class TestPredictions:
 
     def test_save_predictions_for_request(self):
         predictions.save_prediction_request(
-            request_id="req-cov-003", correlation_id=None, model_id="m-cov-001",
-            dataset=None, input_type="json", input_hash=None,
-            num_predictions=3, status="success", duration_ms=5.0, error=None,
+            request_id="req-cov-003",
+            correlation_id=None,
+            model_id="m-cov-001",
+            dataset=None,
+            input_type="json",
+            input_hash=None,
+            num_predictions=3,
+            status="success",
+            duration_ms=5.0,
+            error=None,
         )
         predictions.save_predictions_for_request(
-            request_id="req-cov-003", predictions=["setosa", "versicolor", "virginica"],
+            request_id="req-cov-003",
+            predictions=["setosa", "versicolor", "virginica"],
             probabilities=[0.9, 0.7, 0.6],
         )
         result = predictions.get_prediction_history_by_request_id("req-cov-003")
@@ -171,12 +184,20 @@ class TestPredictions:
 
     def test_save_predictions_for_request_no_probs(self):
         predictions.save_prediction_request(
-            request_id="req-cov-004", correlation_id=None, model_id="m-cov-001",
-            dataset=None, input_type="json", input_hash=None,
-            num_predictions=2, status="success", duration_ms=5.0, error=None,
+            request_id="req-cov-004",
+            correlation_id=None,
+            model_id="m-cov-001",
+            dataset=None,
+            input_type="json",
+            input_hash=None,
+            num_predictions=2,
+            status="success",
+            duration_ms=5.0,
+            error=None,
         )
         predictions.save_predictions_for_request(
-            request_id="req-cov-004", predictions=["cat", "dog"],
+            request_id="req-cov-004",
+            predictions=["cat", "dog"],
         )
         result = predictions.get_prediction_history_by_request_id("req-cov-004")
         assert result is not None
@@ -235,8 +256,10 @@ class TestLineage:
         lineage.create_dataset("lds-to", "To")
         edge_id = lineage.create_lineage_edge(
             edge_type="transform",
-            from_dataset_id="lds-from", from_version=1,
-            to_dataset_id="lds-to", to_version=1,
+            from_dataset_id="lds-from",
+            from_version=1,
+            to_dataset_id="lds-to",
+            to_version=1,
             note="cleaned",
         )
         assert edge_id > 0

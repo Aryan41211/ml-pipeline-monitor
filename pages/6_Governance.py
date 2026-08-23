@@ -1,14 +1,15 @@
 """
 Governance & Compliance — Audit & Policy Management
 """
+
 import json
 
 import pandas as pd
 import streamlit as st
 
+from ml_pipeline_monitor.core.auth import current_role, render_auth_controls
 from ml_pipeline_monitor.services.app_service import initialize_application
 from ml_pipeline_monitor.services.model_service import get_stage_timeline, list_models
-from ml_pipeline_monitor.core.auth import current_role, render_auth_controls
 from ml_pipeline_monitor.utils.ui_theme import (
     apply_ui_theme,
     component_alert_card,
@@ -16,11 +17,11 @@ from ml_pipeline_monitor.utils.ui_theme import (
     component_kpi_card,
     hp_status_badge,
     render_loading_skeleton,
-    render_sidebar_nav,
-    render_top_navbar,
     render_section_title,
+    render_sidebar_nav,
     render_spacer,
     render_summary_table,
+    render_top_navbar,
     safe_render,
 )
 
@@ -37,6 +38,7 @@ with st.sidebar:
     render_sidebar_nav()
     st.divider()
     render_auth_controls()
+
 
 def _render_page():
     # ---------------------------------------------------------------------------
@@ -69,7 +71,8 @@ def _render_page():
         return models, events
 
     loading = st.empty()
-    with loading.container(): render_loading_skeleton(lines=5)
+    with loading.container():
+        render_loading_skeleton(lines=5)
     models_raw, audit_rows = _load_governance_data()
     loading.empty()
 
@@ -84,17 +87,39 @@ def _render_page():
     # ---------------------------------------------------------------------------
     col_title, col_actions = st.columns([4, 1])
     with col_title:
-        st.markdown('<div class="ui-fade-in"><h1 style="margin:0; font-family:\'Poppins\', sans-serif;">Governance & Compliance</h1><p style="color:var(--color-text-tertiary);">Model audit trails, policy enforcement, and regulatory compliance.</p></div>', unsafe_allow_html=True)
+        st.markdown(
+            '<div class="ui-fade-in"><h1 style="margin:0; font-family:\'Poppins\', sans-serif;">Governance & Compliance</h1><p style="color:var(--color-text-tertiary);">Model audit trails, policy enforcement, and regulatory compliance.</p></div>',
+            unsafe_allow_html=True,
+        )
     with col_actions:
         st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
-        if st.button("Refresh", type="primary", use_container_width=True): st.rerun()
+        if st.button("Refresh", type="primary", use_container_width=True):
+            st.rerun()
 
     # KPI Row
     c1, c2, c3, c4 = st.columns(4)
-    with c1: component_kpi_card("Total Models", f"{len(models_df)}", "Registered", icon="📦")
-    with c2: component_kpi_card("Production", f"{len(models_df[models_df.get('stage')=='production'])}", "Active serving", icon="🚀", tone="success")
-    with c3: component_kpi_card("Staging", f"{len(models_df[models_df.get('stage')=='staging'])}", "Pending approval", icon="🧪", tone="warning")
-    with c4: component_kpi_card("Archived", f"{len(models_df[models_df.get('stage')=='archived'])}", "Retired", icon="📦", tone="neutral")
+    with c1:
+        component_kpi_card("Total Models", f"{len(models_df)}", "Registered", icon="📦")
+    with c2:
+        component_kpi_card(
+            "Production",
+            f"{len(models_df[models_df.get('stage')=='production'])}",
+            "Active serving",
+            icon="🚀",
+            tone="success",
+        )
+    with c3:
+        component_kpi_card(
+            "Staging",
+            f"{len(models_df[models_df.get('stage')=='staging'])}",
+            "Pending approval",
+            icon="🧪",
+            tone="warning",
+        )
+    with c4:
+        component_kpi_card(
+            "Archived", f"{len(models_df[models_df.get('stage')=='archived'])}", "Retired", icon="📦", tone="neutral"
+        )
 
     render_spacer("md")
 
@@ -117,7 +142,7 @@ def _render_page():
 
     with tab_policy:
         render_section_title("Promotion Policies")
-        
+
         st.markdown("**Current Promotion Rules**")
         st.markdown("""
         - **Development → Staging**: Requires passing all pipeline stages (CV, evaluation, feature importance)
@@ -125,24 +150,30 @@ def _render_page():
         - **Production → Archived**: Automatic when new model promoted to production
         - **Rollback**: Admin-only, promotes previous production model
         """)
-        
+
         render_spacer("md")
         render_section_title("Configure Policy Thresholds")
-        
+
         col1, col2 = st.columns(2)
         with col1:
             min_accuracy = st.number_input(
-                "Minimum Accuracy (Classification)", 0.0, 1.0,
-                float(st.session_state.get("policy_min_accuracy", 0.80)), 0.01,
+                "Minimum Accuracy (Classification)",
+                0.0,
+                1.0,
+                float(st.session_state.get("policy_min_accuracy", 0.80)),
+                0.01,
             )
             min_f1 = st.number_input(
-                "Minimum F1 Score", 0.0, 1.0,
-                float(st.session_state.get("policy_min_f1", 0.75)), 0.01,
+                "Minimum F1 Score",
+                0.0,
+                1.0,
+                float(st.session_state.get("policy_min_f1", 0.75)),
+                0.01,
             )
         with col2:
             st.number_input("Maximum PSI for Production", 0.0, 1.0, 0.10, 0.01, key="policy_max_psi")
             st.checkbox("Require Admin Approval for Production", value=True, key="policy_require_approval")
-        
+
         if st.button("Apply Thresholds", type="primary"):
             st.session_state["policy_min_accuracy"] = min_accuracy
             st.session_state["policy_min_f1"] = min_f1
@@ -153,50 +184,57 @@ def _render_page():
 
     with tab_compliance:
         render_section_title("Compliance Status")
-        
+
         # Check each production model
         prod_models = models_df[models_df.get("stage") == "production"]
         compliance_rows = []
-        
+
         for _, row in prod_models.iterrows():
             metrics = row.get("metrics", {})
             if isinstance(metrics, str):
                 metrics = json.loads(metrics)
-            
+
             accuracy = metrics.get("accuracy", 0)
             f1 = metrics.get("f1_score", 0)
-            
+
             compliant = accuracy >= min_accuracy and f1 >= min_f1
-            compliance_rows.append({
-                "Model": row.get("name", "Unknown"),
-                "Version": row.get("version", "N/A"),
-                "Dataset": row.get("dataset", "N/A"),
-                "Accuracy": f"{accuracy:.4f}",
-                "F1 Score": f"{f1:.4f}",
-                "Status": hp_status_badge("compliant" if compliant else "non_compliant"),
-            })
-        
+            compliance_rows.append(
+                {
+                    "Model": row.get("name", "Unknown"),
+                    "Version": row.get("version", "N/A"),
+                    "Dataset": row.get("dataset", "N/A"),
+                    "Accuracy": f"{accuracy:.4f}",
+                    "F1 Score": f"{f1:.4f}",
+                    "Status": hp_status_badge("compliant" if compliant else "non_compliant"),
+                }
+            )
+
         if compliance_rows:
             comp_df = pd.DataFrame(compliance_rows)
             render_summary_table(
                 comp_df,
                 columns=["Model", "Version", "Dataset", "Accuracy", "F1 Score", "Status"],
-                filterable_columns=["Model", "Dataset"]
+                filterable_columns=["Model", "Dataset"],
             )
         else:
             st.info("No production models to audit.")
 
     render_spacer("md")
     non_compliant = sum(1 for row in compliance_rows if "non_compliant" in str(row["Status"]))
-    component_insight_panel([
-        f"{len(prod_models)} production model(s) checked against the current thresholds.",
-        f"{non_compliant} model(s) below the accuracy/F1 policy."
-        if non_compliant
-        else "All production models meet the current accuracy/F1 policy.",
-        f"{len(audit_rows)} stage transition(s) recorded in the audit trail.",
-    ])
+    component_insight_panel(
+        [
+            f"{len(prod_models)} production model(s) checked against the current thresholds.",
+            (
+                f"{non_compliant} model(s) below the accuracy/F1 policy."
+                if non_compliant
+                else "All production models meet the current accuracy/F1 policy."
+            ),
+            f"{len(audit_rows)} stage transition(s) recorded in the audit trail.",
+        ]
+    )
 
     st.divider()
     st.caption("⚖️ Governance Core v2.0-Componentized")
+
 
 safe_render("Governance", _render_page)

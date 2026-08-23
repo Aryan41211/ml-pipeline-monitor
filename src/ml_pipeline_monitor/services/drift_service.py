@@ -4,33 +4,33 @@ from __future__ import annotations
 
 import time
 import uuid
-from typing import Any, Dict
+from typing import Any
 
 import numpy as np
 import pandas as pd
 
 from ml_pipeline_monitor.core.alerts import emit_console_alert, emit_email_alert
 from ml_pipeline_monitor.core.config_loader import load_config
-from ml_pipeline_monitor.ml.data_loader import DATASET_OPTIONS, load_dataset
-from ml_pipeline_monitor.database import get_drift_reports, get_drift_reference, save_drift_reference, save_drift_report
-from ml_pipeline_monitor.ml.drift_detector import run_drift_analysis
 from ml_pipeline_monitor.core.logger import get_app_logger
 from ml_pipeline_monitor.core.metrics import record_drift_detection
+from ml_pipeline_monitor.database import get_drift_reference, get_drift_reports, save_drift_reference, save_drift_report
+from ml_pipeline_monitor.ml.data_loader import DATASET_OPTIONS, load_dataset
+from ml_pipeline_monitor.ml.drift_detector import run_drift_analysis
 
 LOGGER = get_app_logger("drift_service")
 
 
-def get_dataset_options() -> Dict[str, str]:
+def get_dataset_options() -> dict[str, str]:
     """Expose dataset options to UI via service layer."""
     return dict(DATASET_OPTIONS)
 
 
-def list_drift_reports(limit: int = 50) -> list[Dict[str, Any]]:
+def list_drift_reports(limit: int = 50) -> list[dict[str, Any]]:
     """Return persisted drift reports."""
     return get_drift_reports(limit=limit)
 
 
-def get_drift_preview_dataset(dataset_key: str) -> Dict[str, Any]:
+def get_drift_preview_dataset(dataset_key: str) -> dict[str, Any]:
     """Return baseline dataset preview used in drift UI."""
     cfg = load_config()
     pipeline_cfg = cfg.get("pipeline", {})
@@ -41,7 +41,7 @@ def get_drift_preview_dataset(dataset_key: str) -> Dict[str, Any]:
     )
 
 
-def get_monitoring_defaults() -> Dict[str, Any]:
+def get_monitoring_defaults() -> dict[str, Any]:
     """Return monitoring/drift threshold defaults from config."""
     cfg = load_config().get("monitoring", {})
     return {
@@ -99,7 +99,7 @@ def run_drift_and_persist(
     noise_level: float,
     mean_shift: float,
     alpha: float,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Run drift analysis and persist report in one service call.
 
     Compares current production data against stored reference distribution

@@ -4,10 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from ml_pipeline_monitor.core.system_monitor import (
-    _get_cpu_temperature_c,
     get_host_process_count,
     get_process_metrics,
     get_system_metrics,
@@ -48,9 +45,13 @@ def test_get_system_metrics():
     with patch("ml_pipeline_monitor.core.system_monitor.psutil.cpu_percent", return_value=25.5):
         with patch("ml_pipeline_monitor.core.system_monitor.psutil.cpu_count", side_effect=[8, 4]):
             with patch("ml_pipeline_monitor.core.system_monitor.psutil.virtual_memory") as mock_mem:
-                mock_mem.return_value = MagicMock(total=16 * 1024**3, used=8 * 1024**3, available=8 * 1024**3, percent=50.0)
+                mock_mem.return_value = MagicMock(
+                    total=16 * 1024**3, used=8 * 1024**3, available=8 * 1024**3, percent=50.0
+                )
                 with patch("ml_pipeline_monitor.core.system_monitor.psutil.disk_usage") as mock_disk:
-                    mock_disk.return_value = MagicMock(total=500 * 1024**3, used=200 * 1024**3, free=300 * 1024**3, percent=40.0)
+                    mock_disk.return_value = MagicMock(
+                        total=500 * 1024**3, used=200 * 1024**3, free=300 * 1024**3, percent=40.0
+                    )
                     with patch("ml_pipeline_monitor.core.system_monitor._get_cpu_temperature_c", return_value=None):
                         metrics = get_system_metrics()
     assert metrics["cpu_percent"] == 25.5

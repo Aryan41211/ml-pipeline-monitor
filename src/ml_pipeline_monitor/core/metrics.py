@@ -8,12 +8,12 @@ FastAPI service and via start_metrics_server() in the Streamlit process.
 
 from __future__ import annotations
 
+import math
 import os
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from typing import Optional
 
-from prometheus_client import Counter, Gauge, Histogram, CollectorRegistry
+from prometheus_client import CollectorRegistry, Counter, Gauge, Histogram
 
 # Create a custom registry for this application
 registry = CollectorRegistry()
@@ -266,6 +266,7 @@ dataset_columns = Gauge(
 # Helper Functions
 # ---------------------------------------------------------------------------
 
+
 def update_system_metrics() -> None:
     """Update all system-level metrics from psutil.
 
@@ -289,7 +290,7 @@ def update_system_metrics() -> None:
                         if entry.current is not None:
                             cpu_temp_c = float(entry.current)
                             break
-                    if not (cpu_temp_c != cpu_temp_c):  # not-NaN
+                    if not math.isnan(cpu_temp_c):
                         break
         except Exception:
             cpu_temp_c = float("nan")
@@ -344,9 +345,9 @@ def record_pipeline_stage(
     duration_seconds: float,
 ) -> None:
     """Record a pipeline stage completion."""
-    pipeline_stage_duration_seconds.labels(
-        stage=stage, dataset=dataset, model_type=model_type
-    ).observe(duration_seconds)
+    pipeline_stage_duration_seconds.labels(stage=stage, dataset=dataset, model_type=model_type).observe(
+        duration_seconds
+    )
 
 
 def record_api_request(
@@ -452,10 +453,10 @@ def record_dataset_validation(
 # ---------------------------------------------------------------------------
 
 _metrics_server_lock = threading.Lock()
-_metrics_server: Optional[ThreadingHTTPServer] = None
+_metrics_server: ThreadingHTTPServer | None = None
 
 
-def start_metrics_server(port: Optional[int] = None) -> None:
+def start_metrics_server(port: int | None = None) -> None:
     """Start a background HTTP server exposing ``/metrics`` on ``port``.
 
     Serves the shared application registry via ``prometheus_client`` so the

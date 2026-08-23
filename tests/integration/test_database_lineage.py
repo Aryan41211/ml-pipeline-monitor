@@ -1,12 +1,12 @@
 from ml_pipeline_monitor.database import (
+    get_latest_production_model,
+    get_model_lineage,
+    get_model_stage_events,
+    get_models,
     initialize_db,
     save_experiment,
     save_model,
     update_model_stage,
-    get_models,
-    get_latest_production_model,
-    get_model_lineage,
-    get_model_stage_events,
 )
 
 

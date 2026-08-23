@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any
 
 from ml_pipeline_monitor.core.logger import log_user_action
 
@@ -10,7 +10,7 @@ from ml_pipeline_monitor.core.logger import log_user_action
 def track_user_action(
     action: str,
     page: str | None = None,
-    metadata: Dict[str, Any] | None = None,
+    metadata: dict[str, Any] | None = None,
 ) -> None:
     """Record a structured user event without exposing logging internals to UI."""
     resolved_page = page or "unknown"

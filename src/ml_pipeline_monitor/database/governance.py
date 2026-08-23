@@ -61,7 +61,9 @@ def create_workspace(*, workspace_name: str, team_id: int) -> int:
         return int(row["id"])
 
 
-def log_user_activity(*, user_id: int, workspace_id: int | None, action: str, metadata: dict[str, Any] | None = None) -> None:
+def log_user_activity(
+    *, user_id: int, workspace_id: int | None, action: str, metadata: dict[str, Any] | None = None
+) -> None:
     """Log user activity for audit trail."""
     with _get_connection() as conn:
         conn.execute(
@@ -134,7 +136,8 @@ def create_schedule(
         row = conn.execute(
             """
             INSERT INTO schedules
-                (workspace_id, schedule_name, schedule_type, cron_expression, timezone, enabled, next_run_at, pipeline_dataset, pipeline_model_type)
+                (workspace_id, schedule_name, schedule_type, cron_expression, timezone,
+                 enabled, next_run_at, pipeline_dataset, pipeline_model_type)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             RETURNING id
             """,

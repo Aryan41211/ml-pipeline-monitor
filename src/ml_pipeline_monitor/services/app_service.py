@@ -6,18 +6,18 @@ initialization and read operations used by Streamlit pages.
 
 from __future__ import annotations
 
-from typing import Any, Dict, List
+from typing import Any
 
 from ml_pipeline_monitor.core.config_loader import load_config
+from ml_pipeline_monitor.core.system_monitor import get_system_metrics
 from ml_pipeline_monitor.database import (
     get_experiments,
     get_models,
-    initialize_db,
     initialize_dataset_registry,
+    initialize_db,
     initialize_governance_registry,
     initialize_prediction_registry,
 )
-from ml_pipeline_monitor.core.system_monitor import get_system_metrics
 
 
 def initialize_application() -> None:
@@ -28,15 +28,15 @@ def initialize_application() -> None:
     initialize_governance_registry()
 
 
-def list_experiments(limit: int = 200) -> List[Dict[str, Any]]:
+def list_experiments(limit: int = 200) -> list[dict[str, Any]]:
     return get_experiments(limit=limit)
 
 
-def list_models(limit: int = 100) -> List[Dict[str, Any]]:
+def list_models(limit: int = 100) -> list[dict[str, Any]]:
     return get_models(limit=limit)
 
 
-def get_dashboard_snapshot(limit: int = 200) -> Dict[str, Any]:
+def get_dashboard_snapshot(limit: int = 200) -> dict[str, Any]:
     """Return dashboard data in one service call for robust page loading."""
     return {
         "experiments": list_experiments(limit=limit),
@@ -45,6 +45,6 @@ def get_dashboard_snapshot(limit: int = 200) -> Dict[str, Any]:
     }
 
 
-def get_ui_settings() -> Dict[str, Any]:
+def get_ui_settings() -> dict[str, Any]:
     """Return UI settings from config via service layer."""
     return load_config().get("ui", {})

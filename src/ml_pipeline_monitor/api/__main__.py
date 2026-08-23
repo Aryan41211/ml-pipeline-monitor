@@ -5,7 +5,6 @@ from __future__ import annotations
 import uvicorn
 
 
-
 def run() -> None:
     """Run local dev server."""
     uvicorn.run("ml_pipeline_monitor.api.main:app", host="0.0.0.0", port=8000, reload=False)

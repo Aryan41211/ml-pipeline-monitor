@@ -6,7 +6,7 @@ import os
 import threading
 from collections import OrderedDict
 from pathlib import Path
-from typing import Any, Optional, Tuple
+from typing import Any
 
 import joblib
 
@@ -20,10 +20,10 @@ LOGGER = get_app_logger("model_cache")
 MAX_CACHED_MODELS = max(1, int(os.getenv("MLMONITOR_MODEL_CACHE_SIZE", "8")))
 
 _lock = threading.Lock()
-_cache: "OrderedDict[str, Tuple[Any, Any, str]]" = OrderedDict()
+_cache: OrderedDict[str, tuple[Any, Any, str]] = OrderedDict()
 
 
-def _resolve_artifact(run_id: str) -> Tuple[Optional[Path], Optional[Path]]:
+def _resolve_artifact(run_id: str) -> tuple[Path | None, Path | None]:
     dirs = get_artifact_dirs()
     model_path = dirs["models"] / f"{run_id}_model.joblib"
     scaler_path = dirs["scalers"] / f"{run_id}_scaler.joblib"
@@ -32,7 +32,7 @@ def _resolve_artifact(run_id: str) -> Tuple[Optional[Path], Optional[Path]]:
     return model_path, scaler_path if scaler_path.exists() else None
 
 
-def get_model(run_id: str) -> Optional[Tuple[Any, Any, str]]:
+def get_model(run_id: str) -> tuple[Any, Any, str] | None:
     key = run_id.strip()
     if not key:
         return None
@@ -62,8 +62,9 @@ def get_model(run_id: str) -> Optional[Tuple[Any, Any, str]]:
         return None
 
 
-def get_latest_production_model(dataset: Optional[str] = None) -> Optional[Tuple[Any, Any, dict]]:
+def get_latest_production_model(dataset: str | None = None) -> tuple[Any, Any, dict] | None:
     from ml_pipeline_monitor.database import get_latest_production_model
+
     record = get_latest_production_model(dataset=dataset)
     if record is None:
         return None

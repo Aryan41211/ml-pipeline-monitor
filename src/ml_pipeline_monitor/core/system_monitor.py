@@ -4,15 +4,16 @@ System resource snapshot using psutil.
 Collected metrics are displayed on the home dashboard so operators
 can correlate pipeline latency with host resource pressure.
 """
+
 from __future__ import annotations
 
 import os
-from typing import Any, Dict, Optional
+from typing import Any
 
 import psutil
 
 
-def _get_cpu_temperature_c() -> Optional[float]:
+def _get_cpu_temperature_c() -> float | None:
     """Best-effort CPU temperature in Celsius.
 
     Returns None if sensors are not available on the host.
@@ -33,7 +34,7 @@ def _get_cpu_temperature_c() -> Optional[float]:
     return None
 
 
-def get_system_metrics() -> Dict[str, Any]:
+def get_system_metrics() -> dict[str, Any]:
     """Return current CPU, memory, disk, and host temperature (if available)."""
     # Non-blocking: interval=0.3 stalled every dashboard render and every
     # /health/detailed call for 300ms to sample a number that is refreshed
@@ -58,7 +59,7 @@ def get_system_metrics() -> Dict[str, Any]:
     }
 
 
-def get_process_metrics() -> Dict[str, Any]:
+def get_process_metrics() -> dict[str, Any]:
     """Return resource usage for the current Python process."""
     proc = psutil.Process(os.getpid())
     mem_info = proc.memory_info()

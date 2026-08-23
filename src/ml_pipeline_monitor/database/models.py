@@ -8,8 +8,8 @@ and production model queries.
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from datetime import UTC, datetime
+from typing import Any
 
 import numpy as np
 
@@ -23,17 +23,17 @@ def save_model(
     dataset: str,
     model_type: str,
     task: str,
-    metrics: Dict[str, float],
+    metrics: dict[str, float],
     artifact_path: str,
-    params: Optional[Dict[str, Any]] = None,
-    experiment_id: Optional[str] = None,
-    parent_model_id: Optional[str] = None,
-    version: Optional[int] = None,
-    confusion_matrix: Optional[np.ndarray] = None,
-    feature_importances: Optional[Any] = None,
-) -> Dict[str, Any]:
+    params: dict[str, Any] | None = None,
+    experiment_id: str | None = None,
+    parent_model_id: str | None = None,
+    version: int | None = None,
+    confusion_matrix: np.ndarray | None = None,
+    feature_importances: Any | None = None,
+) -> dict[str, Any]:
     """Register a new model or update existing model metadata."""
-    now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    now = datetime.now(UTC).isoformat(timespec="seconds")
     with _get_connection() as conn:
         prev_model = conn.execute(
             """
@@ -54,11 +54,11 @@ def save_model(
 
         effective_experiment_id = experiment_id or run_id
 
-        confusion_json: Optional[str] = None
+        confusion_json: str | None = None
         if confusion_matrix is not None:
             confusion_json = json.dumps(np.asarray(confusion_matrix).tolist())
 
-        feature_importances_json: Optional[str] = None
+        feature_importances_json: str | None = None
         if feature_importances is not None:
             try:
                 if hasattr(feature_importances, "to_dict"):
@@ -76,7 +76,7 @@ def save_model(
                 (model_id, run_id, name, version, dataset, dataset_name, model_type, task,
                  metrics, params, confusion_matrix, feature_importances,
                  experiment_id, parent_model_id, artifact_path, stage, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                     COALESCE((SELECT stage FROM models WHERE model_id = ?), 'development'), ?)
             ON CONFLICT(model_id) DO UPDATE SET
                 run_id=excluded.run_id,
@@ -139,7 +139,7 @@ def save_model(
     }
 
 
-def get_models(limit: int = 100) -> List[Dict[str, Any]]:
+def get_models(limit: int = 100) -> list[dict[str, Any]]:
     """Retrieve all models, ordered by creation date."""
     with _get_connection() as conn:
         rows = conn.execute(
@@ -149,7 +149,7 @@ def get_models(limit: int = 100) -> List[Dict[str, Any]]:
     return [dict(r) for r in rows]
 
 
-def get_latest_production_model(dataset: Optional[str] = None) -> Optional[Dict[str, Any]]:
+def get_latest_production_model(dataset: str | None = None) -> dict[str, Any] | None:
     """Get the latest production model, optionally filtered by dataset."""
     with _get_connection() as conn:
         if dataset:
@@ -163,18 +163,16 @@ def get_latest_production_model(dataset: Optional[str] = None) -> Optional[Dict[
                 (dataset,),
             ).fetchone()
         else:
-            row = conn.execute(
-                """
+            row = conn.execute("""
                 SELECT * FROM models
                 WHERE stage = 'production'
                 ORDER BY created_at DESC, version DESC
                 LIMIT 1
-                """
-            ).fetchone()
+                """).fetchone()
     return dict(row) if row else None
 
 
-def get_recent_production_models(dataset: str, limit: int = 2) -> List[Dict[str, Any]]:
+def get_recent_production_models(dataset: str, limit: int = 2) -> list[dict[str, Any]]:
     """Get recent production models for rollback scenarios."""
     with _get_connection() as conn:
         rows = conn.execute(
@@ -189,7 +187,7 @@ def get_recent_production_models(dataset: str, limit: int = 2) -> List[Dict[str,
     return [dict(r) for r in rows]
 
 
-def get_model_stage_events(model_id: str, limit: int = 50) -> List[Dict[str, Any]]:
+def get_model_stage_events(model_id: str, limit: int = 50) -> list[dict[str, Any]]:
     """Get stage change history for a model."""
     with _get_connection() as conn:
         rows = conn.execute(
@@ -205,7 +203,7 @@ def get_model_stage_events(model_id: str, limit: int = 50) -> List[Dict[str, Any
     return [dict(r) for r in rows]
 
 
-def get_model_lineage(limit: int = 200, dataset: Optional[str] = None) -> List[Dict[str, Any]]:
+def get_model_lineage(limit: int = 200, dataset: str | None = None) -> list[dict[str, Any]]:
     """Get model lineage with optional dataset filter."""
     with _get_connection() as conn:
         if dataset:
@@ -266,7 +264,7 @@ def update_model_stage(model_id: str, stage: str) -> None:
     if stage not in valid:
         raise ValueError(f"Stage must be one of {valid}")
 
-    now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    now = datetime.now(UTC).isoformat(timespec="seconds")
     with _get_connection() as conn:
         row = conn.execute(
             "SELECT model_id, dataset, stage FROM models WHERE model_id = ?",
@@ -376,7 +374,7 @@ def _refresh_drift_reference(dataset: str) -> None:
         logger.warning("Failed to persist drift baseline for %s: %s", dataset, exc)
 
 
-def get_model_by_id(model_id: str) -> Optional[Dict[str, Any]]:
+def get_model_by_id(model_id: str) -> dict[str, Any] | None:
     """Fetch a single model record by its model_id."""
     with _get_connection() as conn:
         row = conn.execute(

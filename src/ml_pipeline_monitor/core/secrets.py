@@ -2,32 +2,33 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any
 
 
 class SecretsManager:
     """Unified interface for loading secrets from multiple sources.
-    
+
     Priority order (highest first):
     1. Environment variables
     2. Secret files (Docker secrets, Kubernetes secrets)
     3. Local .secrets.json file (development only)
     """
 
-    def __init__(self, secrets_dir: Optional[str] = None) -> None:
+    def __init__(self, secrets_dir: str | None = None) -> None:
         self.secrets_dir = Path(secrets_dir) if secrets_dir else Path("/run/secrets")
-        self._cache: Dict[str, str] = {}
+        self._cache: dict[str, str] = {}
 
     def get(self, key: str, default: Any = None) -> Any:
         """Get a secret value by key.
-        
+
         Args:
             key: Secret key (e.g., "database_password", "api_key")
             default: Default value if secret not found
-            
+
         Returns:
             Secret value or default
         """
@@ -73,26 +74,24 @@ class SecretsManager:
             raise ValueError(f"Required secret '{key}' not found in any source")
         return value
 
-    def load_all(self, prefix: str = "") -> Dict[str, str]:
+    def load_all(self, prefix: str = "") -> dict[str, str]:
         """Load all secrets with optional prefix filter."""
         result = {}
-        
+
         # From environment
         for k, v in os.environ.items():
             if not prefix or k.startswith(prefix.upper()):
                 result[k.lower()] = v
-        
+
         # From secret files
         if self.secrets_dir.exists():
             for secret_file in self.secrets_dir.iterdir():
                 if secret_file.is_file():
                     key = secret_file.name
                     if not prefix or key.startswith(prefix):
-                        try:
+                        with contextlib.suppress(Exception):
                             result[key] = secret_file.read_text(encoding="utf-8").strip()
-                        except Exception:
-                            pass
-        
+
         # From local .secrets.json
         local_secrets = Path(".secrets.json")
         if local_secrets.exists():
@@ -103,12 +102,12 @@ class SecretsManager:
                         result[k] = v
             except Exception:
                 pass
-        
+
         return result
 
 
 # Global instance for convenience
-_secrets_manager: Optional[SecretsManager] = None
+_secrets_manager: SecretsManager | None = None
 
 
 def get_secrets_manager() -> SecretsManager:

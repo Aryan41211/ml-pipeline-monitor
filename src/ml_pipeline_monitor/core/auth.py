@@ -301,7 +301,7 @@ def _resolve_user(username: str) -> str:
     user = (username or "").strip()
     if user in creds:
         return user
-    lowered = {k.lower(): k for k in creds.keys()}
+    lowered = {k.lower(): k for k in creds}
     return lowered.get(user.lower(), user)
 
 

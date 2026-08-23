@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import os
-import time
 
 import pytest
 
@@ -11,10 +10,7 @@ from ml_pipeline_monitor.core.jwt_auth import (
     TokenPayload,
     create_access_token,
     create_refresh_token,
-    decode_token,
     verify_token,
-    _get_algorithm,
-    ALGORITHM,
 )
 
 

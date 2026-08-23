@@ -2,15 +2,17 @@
 ML Pipeline Monitor — Executive Command Center
 Redesigned with reusable enterprise components.
 """
+
 import json
+
 import pandas as pd
 import plotly.express as px
 import streamlit as st
 
+from ml_pipeline_monitor.core.auth import current_role, is_authenticated, render_auth_controls
+from ml_pipeline_monitor.core.metrics import start_metrics_server
 from ml_pipeline_monitor.services.app_service import get_dashboard_snapshot, initialize_application
 from ml_pipeline_monitor.services.telemetry_service import track_user_action
-from ml_pipeline_monitor.core.auth import current_role, render_auth_controls, is_authenticated, is_auth_enabled
-from ml_pipeline_monitor.core.metrics import start_metrics_server
 from ml_pipeline_monitor.utils.ui_theme import (
     apply_ui_theme,
     component_alert_card,
@@ -19,10 +21,10 @@ from ml_pipeline_monitor.utils.ui_theme import (
     component_kpi_card,
     component_timeline,
     render_loading_skeleton,
-    render_sidebar_nav,
-    render_top_navbar,
     render_section_title,
+    render_sidebar_nav,
     render_spacer,
+    render_top_navbar,
 )
 
 # ---------------------------------------------------------------------------
@@ -48,6 +50,7 @@ if not is_authenticated():
 # Track page view
 track_user_action("page_view", page="dashboard")
 
+
 # ---------------------------------------------------------------------------
 # Data Logic
 # ---------------------------------------------------------------------------
@@ -55,8 +58,9 @@ track_user_action("page_view", page="dashboard")
 def _load_dashboard():
     return get_dashboard_snapshot(limit=100)
 
+
 loading = st.empty()
-with loading.container(): 
+with loading.container():
     render_loading_skeleton(lines=5)
 
 try:
@@ -76,10 +80,13 @@ except Exception as e:
 best_acc = 0.0
 success_rate = 100.0
 if not exp_df.empty:
-    def _p(m): return json.loads(m) if isinstance(m, str) else (m or {})
+
+    def _p(m):
+        return json.loads(m) if isinstance(m, str) else (m or {})
+
     accs = [float(_p(m).get("accuracy", 0)) for m in exp_df["metrics"]]
     best_acc = max(accs) if accs else 0.0
-    success_rate = (len(exp_df[exp_df["status"]=="completed"]) / len(exp_df)) * 100
+    success_rate = (len(exp_df[exp_df["status"] == "completed"]) / len(exp_df)) * 100
 
 health_score = int((success_rate * 0.5) + (min(best_acc * 100, 100) * 0.5))
 
@@ -88,24 +95,31 @@ health_score = int((success_rate * 0.5) + (min(best_acc * 100, 100) * 0.5))
 # ---------------------------------------------------------------------------
 col_head, col_action = st.columns([4, 1])
 with col_head:
-    st.markdown('<div class="ui-fade-in"><h1 style="margin:0; font-family:\'Poppins\', sans-serif;">Command Center</h1><p style="color:var(--color-text-tertiary);">Real-time MLOps orchestration and fleet observability.</p></div>', unsafe_allow_html=True)
+    st.markdown(
+        '<div class="ui-fade-in"><h1 style="margin:0; font-family:\'Poppins\', sans-serif;">Command Center</h1><p style="color:var(--color-text-tertiary);">Real-time MLOps orchestration and fleet observability.</p></div>',
+        unsafe_allow_html=True,
+    )
 with col_action:
     st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
-    if st.button("Sync Platform", type="primary", use_container_width=True): 
+    if st.button("Sync Platform", type="primary", use_container_width=True):
         track_user_action("sync_platform", page="dashboard")
         st.rerun()
 
 # KPI Row
 c1, c2, c3, c4 = st.columns(4)
-with c1: component_kpi_card("Experiments", f"{len(exp_df)}", "All-time runs", icon="📊")
-with c2: component_kpi_card("Models", f"{len(mdl_df)}", "In Registry", icon="🧠")
+with c1:
+    component_kpi_card("Experiments", f"{len(exp_df)}", "All-time runs", icon="📊")
+with c2:
+    component_kpi_card("Models", f"{len(mdl_df)}", "In Registry", icon="🧠")
 # Guard against missing 'stage' column when registry is empty/uninitialized.
 _production_count = 0
 if not mdl_df.empty and "stage" in mdl_df.columns:
     _production_count = len(mdl_df[mdl_df["stage"] == "production"])
 
-with c3: component_kpi_card("Serving", str(_production_count), "Production", icon="🚀", tone="success")
-with c4: component_kpi_card("Accuracy", f"{best_acc:.3f}", "Best Result", icon="🏆", tone="success")
+with c3:
+    component_kpi_card("Serving", str(_production_count), "Production", icon="🚀", tone="success")
+with c4:
+    component_kpi_card("Accuracy", f"{best_acc:.3f}", "Best Result", icon="🏆", tone="success")
 
 render_spacer("md")
 
@@ -121,7 +135,7 @@ with m_left:
     if not exp_df.empty:
         exp_df["ts"] = pd.to_datetime(exp_df["created_at"], errors="coerce", format="mixed")
         fig = px.area(exp_df.sort_values("ts"), x="ts", y="duration_seconds", color_discrete_sequence=["#6366F1"])
-        fig.update_layout(height=280, margin=dict(l=0,r=0,t=0,b=0))
+        fig.update_layout(height=280, margin=dict(l=0, r=0, t=0, b=0))
         st.plotly_chart(fig, use_container_width=True)
     else:
         component_alert_card("No experiment data available for throughput chart.", tone="info")
@@ -160,11 +174,13 @@ with b_left:
     if not exp_df.empty:
         events = []
         for _, r in exp_df.head(6).iterrows():
-            events.append({
-                "time": str(r["created_at"])[11:16],
-                "label": f"{r['model_type']} on {r['dataset']}",
-                "status": r["status"]
-            })
+            events.append(
+                {
+                    "time": str(r["created_at"])[11:16],
+                    "label": f"{r['model_type']} on {r['dataset']}",
+                    "status": r["status"],
+                }
+            )
         component_timeline(events)
     else:
         component_alert_card("No recent activity.", tone="info")
@@ -173,7 +189,7 @@ with b_right:
     render_section_title("Registry Fleet")
     if not mdl_df.empty:
         fig_pie = px.pie(mdl_df, names="stage", hole=0.7, color_discrete_sequence=px.colors.qualitative.Set2)
-        fig_pie.update_layout(height=240, margin=dict(l=0,r=0,t=0,b=0), showlegend=False)
+        fig_pie.update_layout(height=240, margin=dict(l=0, r=0, t=0, b=0), showlegend=False)
         st.plotly_chart(fig_pie, use_container_width=True)
     else:
         component_alert_card("No models in registry.", tone="info")

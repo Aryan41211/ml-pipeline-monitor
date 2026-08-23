@@ -6,32 +6,33 @@ import contextvars
 import json
 import logging
 import sys
-import uuid
 import threading
+import uuid
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from ml_pipeline_monitor.core.config_loader import ROOT_DIR, load_config
 
 # Context variable for correlation ID propagation across async boundaries
-correlation_id_var: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar("correlation_id", default=None)
+correlation_id_var: contextvars.ContextVar[str | None] = contextvars.ContextVar("correlation_id", default=None)
 
 # Context variable for request ID (unique per HTTP request)
-request_id_var: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar("request_id", default=None)
+request_id_var: contextvars.ContextVar[str | None] = contextvars.ContextVar("request_id", default=None)
 
 # Context variable for operation context (e.g., "pipeline_run", "drift_detection")
-operation_context_var: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar("operation_context", default=None)
+operation_context_var: contextvars.ContextVar[str | None] = contextvars.ContextVar("operation_context", default=None)
 
 # Context variable for user/actor context
-actor_context_var: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar("actor_context", default=None)
+actor_context_var: contextvars.ContextVar[str | None] = contextvars.ContextVar("actor_context", default=None)
 
 # Context variable for service/component context (e.g., "api", "pipeline", "streamlit")
-service_context_var: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar("service_context", default=None)
+service_context_var: contextvars.ContextVar[str | None] = contextvars.ContextVar("service_context", default=None)
 
 
 class LogLevel:
     """Standard log levels with numeric values."""
+
     DEBUG = logging.DEBUG
     INFO = logging.INFO
     WARNING = logging.WARNING
@@ -41,6 +42,7 @@ class LogLevel:
 
 class ErrorCategory:
     """Error categorization for structured error handling."""
+
     VALIDATION = "validation_error"
     CONFIGURATION = "configuration_error"
     DATABASE = "database_error"
@@ -92,7 +94,7 @@ def clear_request_id() -> None:
     request_id_var.set(None)
 
 
-def get_operation_context() -> Optional[str]:
+def get_operation_context() -> str | None:
     """Get current operation context."""
     return operation_context_var.get()
 
@@ -107,7 +109,7 @@ def clear_operation_context() -> None:
     operation_context_var.set(None)
 
 
-def get_actor_context() -> Optional[str]:
+def get_actor_context() -> str | None:
     """Get current actor/user context."""
     return actor_context_var.get()
 
@@ -122,7 +124,7 @@ def clear_actor_context() -> None:
     actor_context_var.set(None)
 
 
-def get_service_context() -> Optional[str]:
+def get_service_context() -> str | None:
     """Get current service context."""
     return service_context_var.get()
 
@@ -143,9 +145,10 @@ class JsonFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
         # Use datetime for microsecond precision since time.strftime doesn't support %f
         from datetime import datetime
+
         timestamp = datetime.fromtimestamp(record.created).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
 
-        payload: Dict[str, Any] = {
+        payload: dict[str, Any] = {
             "timestamp": timestamp,
             "level": record.levelname,
             "logger": record.name,
@@ -162,10 +165,33 @@ class JsonFormatter(logging.Formatter):
         # Include any extra fields from the log record
         # Skip reserved LogRecord attributes to avoid KeyError
         reserved = {
-            "name", "msg", "args", "created", "filename", "funcName", "levelname", "levelno", "lineno",
-            "module", "msecs", "message", "pathname", "process", "processName", "relativeCreated",
-            "thread", "threadName", "exc_info", "exc_text", "stack_info", "correlation_id",
-            "request_id", "operation", "actor", "service", "error_category"
+            "name",
+            "msg",
+            "args",
+            "created",
+            "filename",
+            "funcName",
+            "levelname",
+            "levelno",
+            "lineno",
+            "module",
+            "msecs",
+            "message",
+            "pathname",
+            "process",
+            "processName",
+            "relativeCreated",
+            "thread",
+            "threadName",
+            "exc_info",
+            "exc_text",
+            "stack_info",
+            "correlation_id",
+            "request_id",
+            "operation",
+            "actor",
+            "service",
+            "error_category",
         }
         for key, value in record.__dict__.items():
             if key not in reserved:
@@ -177,11 +203,11 @@ class ConsoleFormatter(logging.Formatter):
     """Human-readable console formatter with color support."""
 
     COLORS = {
-        "DEBUG": "\033[36m",      # Cyan
-        "INFO": "\033[32m",       # Green
-        "WARNING": "\033[33m",    # Yellow
-        "ERROR": "\033[31m",      # Red
-        "CRITICAL": "\033[35m",   # Magenta
+        "DEBUG": "\033[36m",  # Cyan
+        "INFO": "\033[32m",  # Green
+        "WARNING": "\033[33m",  # Yellow
+        "ERROR": "\033[31m",  # Red
+        "CRITICAL": "\033[35m",  # Magenta
     }
     RESET = "\033[0m"
 
@@ -286,7 +312,7 @@ def get_app_logger(name: str = "ml_monitor") -> logging.Logger:
     return logging.getLogger(f"{_ROOT_LOGGER_NAME}.{name}")
 
 
-def log_user_action(action: str, *, page: str, metadata: Dict[str, Any] | None = None) -> None:
+def log_user_action(action: str, *, page: str, metadata: dict[str, Any] | None = None) -> None:
     """Emit structured user action logs for UI observability."""
     logger = get_app_logger("user_actions")
     payload = {
@@ -302,18 +328,19 @@ def log_user_action(action: str, *, page: str, metadata: Dict[str, Any] | None =
 # Structured logging helpers for major operations
 # ============================================================
 
+
 def log_dataset_upload(
     dataset_name: str,
     *,
     status: str,
     rows: int,
     columns: int,
-    file_size_bytes: Optional[int] = None,
-    error: Optional[str] = None,
-    correlation_id: Optional[str] = None,
-    request_id: Optional[str] = None,
-    actor: Optional[str] = None,
-    service: Optional[str] = None,
+    file_size_bytes: int | None = None,
+    error: str | None = None,
+    correlation_id: str | None = None,
+    request_id: str | None = None,
+    actor: str | None = None,
+    service: str | None = None,
 ) -> None:
     """Log dataset upload operation."""
     logger = get_app_logger("dataset_upload")
@@ -348,14 +375,14 @@ def log_pipeline_run(
     model_type: str,
     *,
     status: str,
-    duration_seconds: Optional[float] = None,
-    metrics: Optional[Dict[str, float]] = None,
-    error: Optional[str] = None,
-    stage: Optional[str] = None,
-    correlation_id: Optional[str] = None,
-    request_id: Optional[str] = None,
-    actor: Optional[str] = None,
-    service: Optional[str] = None,
+    duration_seconds: float | None = None,
+    metrics: dict[str, float] | None = None,
+    error: str | None = None,
+    stage: str | None = None,
+    correlation_id: str | None = None,
+    request_id: str | None = None,
+    actor: str | None = None,
+    service: str | None = None,
 ) -> None:
     """Log pipeline run operation."""
     logger = get_app_logger("pipeline_run")
@@ -377,7 +404,8 @@ def log_pipeline_run(
     _log_with_context(
         logger,
         level=logging.INFO if status in ("started", "completed", "stage_completed") else logging.ERROR,
-        message=f"Pipeline {status}: run_id={run_id} dataset={dataset} model={model_type}" + (f" stage={stage}" if stage else ""),
+        message=f"Pipeline {status}: run_id={run_id} dataset={dataset} model={model_type}"
+        + (f" stage={stage}" if stage else ""),
         extra=extra,
         correlation_id=correlation_id,
         request_id=request_id,
@@ -394,13 +422,13 @@ def log_experiment_creation(
     model_type: str,
     *,
     status: str,
-    metrics: Optional[Dict[str, float]] = None,
-    duration_seconds: Optional[float] = None,
-    error: Optional[str] = None,
-    correlation_id: Optional[str] = None,
-    request_id: Optional[str] = None,
-    actor: Optional[str] = None,
-    service: Optional[str] = None,
+    metrics: dict[str, float] | None = None,
+    duration_seconds: float | None = None,
+    error: str | None = None,
+    correlation_id: str | None = None,
+    request_id: str | None = None,
+    actor: str | None = None,
+    service: str | None = None,
 ) -> None:
     """Log experiment creation operation."""
     logger = get_app_logger("experiment")
@@ -439,12 +467,12 @@ def log_model_registration(
     stage: str,
     *,
     status: str,
-    metrics: Optional[Dict[str, float]] = None,
-    error: Optional[str] = None,
-    correlation_id: Optional[str] = None,
-    request_id: Optional[str] = None,
-    actor: Optional[str] = None,
-    service: Optional[str] = None,
+    metrics: dict[str, float] | None = None,
+    error: str | None = None,
+    correlation_id: str | None = None,
+    request_id: str | None = None,
+    actor: str | None = None,
+    service: str | None = None,
 ) -> None:
     """Log model registration operation."""
     logger = get_app_logger("model_registry")
@@ -482,13 +510,13 @@ def log_drift_detection(
     *,
     status: str,
     drift_detected: bool,
-    drift_score: Optional[float] = None,
-    features_drifted: Optional[int] = None,
-    error: Optional[str] = None,
-    correlation_id: Optional[str] = None,
-    request_id: Optional[str] = None,
-    actor: Optional[str] = None,
-    service: Optional[str] = None,
+    drift_score: float | None = None,
+    features_drifted: int | None = None,
+    error: str | None = None,
+    correlation_id: str | None = None,
+    request_id: str | None = None,
+    actor: str | None = None,
+    service: str | None = None,
 ) -> None:
     """Log drift detection operation."""
     logger = get_app_logger("drift_detection")
@@ -525,12 +553,12 @@ def log_prediction_request(
     *,
     status: str,
     num_predictions: int,
-    duration_ms: Optional[float] = None,
-    error: Optional[str] = None,
-    correlation_id: Optional[str] = None,
-    request_id: Optional[str] = None,
-    actor: Optional[str] = None,
-    service: Optional[str] = None,
+    duration_ms: float | None = None,
+    error: str | None = None,
+    correlation_id: str | None = None,
+    request_id: str | None = None,
+    actor: str | None = None,
+    service: str | None = None,
 ) -> None:
     """Log prediction request operation."""
     logger = get_app_logger("prediction")
@@ -549,7 +577,10 @@ def log_prediction_request(
     _log_with_context(
         logger,
         level=logging.INFO if status == "success" else logging.ERROR,
-        message=f"Prediction {status}: model={model_id} dataset={dataset} count={num_predictions} duration_ms={duration_ms}",
+        message=(
+            f"Prediction {status}: model={model_id} dataset={dataset} "
+            f"count={num_predictions} duration_ms={duration_ms}"
+        ),
         extra=extra,
         correlation_id=correlation_id,
         request_id=request_id,
@@ -567,11 +598,11 @@ def log_model_promotion(
     to_stage: str,
     *,
     status: str,
-    error: Optional[str] = None,
-    correlation_id: Optional[str] = None,
-    request_id: Optional[str] = None,
-    actor: Optional[str] = None,
-    service: Optional[str] = None,
+    error: str | None = None,
+    correlation_id: str | None = None,
+    request_id: str | None = None,
+    actor: str | None = None,
+    service: str | None = None,
 ) -> None:
     """Log model promotion/demotion operation."""
     logger = get_app_logger("model_promotion")
@@ -607,12 +638,12 @@ def log_governance_action(
     entity_id: str,
     *,
     status: str,
-    details: Optional[Dict[str, Any]] = None,
-    error: Optional[str] = None,
-    correlation_id: Optional[str] = None,
-    request_id: Optional[str] = None,
-    actor: Optional[str] = None,
-    service: Optional[str] = None,
+    details: dict[str, Any] | None = None,
+    error: str | None = None,
+    correlation_id: str | None = None,
+    request_id: str | None = None,
+    actor: str | None = None,
+    service: str | None = None,
 ) -> None:
     """Log governance action (approval, audit, compliance check, etc.)."""
     logger = get_app_logger("governance")
@@ -647,12 +678,12 @@ def log_dataset_validation(
     status: str,
     rows: int,
     columns: int,
-    issues: Optional[List[str]] = None,
-    error: Optional[str] = None,
-    correlation_id: Optional[str] = None,
-    request_id: Optional[str] = None,
-    actor: Optional[str] = None,
-    service: Optional[str] = None,
+    issues: list[str] | None = None,
+    error: str | None = None,
+    correlation_id: str | None = None,
+    request_id: str | None = None,
+    actor: str | None = None,
+    service: str | None = None,
 ) -> None:
     """Log dataset validation operation."""
     logger = get_app_logger("dataset_validation")
@@ -685,12 +716,12 @@ def _log_with_context(
     logger: logging.Logger,
     level: int,
     message: str,
-    extra: Dict[str, Any],
-    correlation_id: Optional[str] = None,
-    request_id: Optional[str] = None,
-    operation: Optional[str] = None,
-    actor: Optional[str] = None,
-    service: Optional[str] = None,
+    extra: dict[str, Any],
+    correlation_id: str | None = None,
+    request_id: str | None = None,
+    operation: str | None = None,
+    actor: str | None = None,
+    service: str | None = None,
 ) -> None:
     """Internal helper to log with context variables set."""
     # Temporarily set context vars for this log call
@@ -725,11 +756,11 @@ class LogContext:
 
     def __init__(
         self,
-        correlation_id: Optional[str] = None,
-        request_id: Optional[str] = None,
-        operation: Optional[str] = None,
-        actor: Optional[str] = None,
-        service: Optional[str] = None,
+        correlation_id: str | None = None,
+        request_id: str | None = None,
+        operation: str | None = None,
+        actor: str | None = None,
+        service: str | None = None,
     ):
         self.correlation_id = correlation_id or str(uuid.uuid4())[:8]
         self.request_id = request_id or str(uuid.uuid4())[:8]
@@ -742,7 +773,7 @@ class LogContext:
         self._actor_token = None
         self._svc_token = None
 
-    def __enter__(self) -> "LogContext":
+    def __enter__(self) -> LogContext:
         self._cid_token = correlation_id_var.set(self.correlation_id)
         self._rid_token = request_id_var.set(self.request_id)
         if self.operation:
@@ -770,7 +801,6 @@ class LogContext:
 
 def get_error_category(error: Exception) -> str:
     """Categorize an exception into an error category."""
-    error_type = type(error).__name__
     error_msg = str(error).lower()
 
     if isinstance(error, (ValueError, KeyError, TypeError)):

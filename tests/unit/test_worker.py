@@ -1,6 +1,6 @@
 """Unit tests for the background worker's schedule polling and cron parsing."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -34,32 +34,32 @@ class TestParseCronField:
 
 class TestNextRunFromCron:
     def test_every_minute(self):
-        base = datetime(2026, 8, 14, 10, 0, 0, tzinfo=timezone.utc)
+        base = datetime(2026, 8, 14, 10, 0, 0, tzinfo=UTC)
         assert _next_run_from_cron("* * * * *", base) == base + timedelta(minutes=1)
 
     def test_specific_minute(self):
-        base = datetime(2026, 8, 14, 10, 0, 0, tzinfo=timezone.utc)
-        assert _next_run_from_cron("30 * * * *", base) == datetime(2026, 8, 14, 10, 30, tzinfo=timezone.utc)
+        base = datetime(2026, 8, 14, 10, 0, 0, tzinfo=UTC)
+        assert _next_run_from_cron("30 * * * *", base) == datetime(2026, 8, 14, 10, 30, tzinfo=UTC)
 
     def test_nightly_at_0200(self):
-        base = datetime(2026, 8, 14, 9, 0, 0, tzinfo=timezone.utc)
-        assert _next_run_from_cron("0 2 * * *", base) == datetime(2026, 8, 15, 2, 0, tzinfo=timezone.utc)
+        base = datetime(2026, 8, 14, 9, 0, 0, tzinfo=UTC)
+        assert _next_run_from_cron("0 2 * * *", base) == datetime(2026, 8, 15, 2, 0, tzinfo=UTC)
 
     def test_hourly(self):
-        base = datetime(2026, 8, 14, 9, 30, 0, tzinfo=timezone.utc)
-        assert _next_run_from_cron("0 * * * *", base) == datetime(2026, 8, 14, 10, 0, tzinfo=timezone.utc)
+        base = datetime(2026, 8, 14, 9, 30, 0, tzinfo=UTC)
+        assert _next_run_from_cron("0 * * * *", base) == datetime(2026, 8, 14, 10, 0, tzinfo=UTC)
 
     def test_weekday_sunday_cron_zero(self):
         # 2026-08-16 is a Sunday (Python weekday 6). Cron 0 == Sunday.
-        base = datetime(2026, 8, 14, 10, 0, 0, tzinfo=timezone.utc)
-        assert _next_run_from_cron("0 0 * * 0", base) == datetime(2026, 8, 16, 0, 0, tzinfo=timezone.utc)
+        base = datetime(2026, 8, 14, 10, 0, 0, tzinfo=UTC)
+        assert _next_run_from_cron("0 0 * * 0", base) == datetime(2026, 8, 16, 0, 0, tzinfo=UTC)
 
     def test_weekday_sunday_cron_seven(self):
-        base = datetime(2026, 8, 14, 10, 0, 0, tzinfo=timezone.utc)
-        assert _next_run_from_cron("0 0 * * 7", base) == datetime(2026, 8, 16, 0, 0, tzinfo=timezone.utc)
+        base = datetime(2026, 8, 14, 10, 0, 0, tzinfo=UTC)
+        assert _next_run_from_cron("0 0 * * 7", base) == datetime(2026, 8, 16, 0, 0, tzinfo=UTC)
 
     def test_invalid_field_count_raises(self):
-        base = datetime(2026, 8, 14, 10, 0, 0, tzinfo=timezone.utc)
+        base = datetime(2026, 8, 14, 10, 0, 0, tzinfo=UTC)
         with pytest.raises(ValueError):
             _next_run_from_cron("0 2 * *", base)
 
@@ -85,11 +85,11 @@ class TestBuildTaskConfig:
 class TestParseDt:
     def test_iso_with_offset(self):
         dt = _parse_dt("2026-08-14T10:00:00+00:00")
-        assert dt == datetime(2026, 8, 14, 10, 0, 0, tzinfo=timezone.utc)
+        assert dt == datetime(2026, 8, 14, 10, 0, 0, tzinfo=UTC)
 
     def test_iso_with_z(self):
         dt = _parse_dt("2026-08-14T10:00:00Z")
-        assert dt == datetime(2026, 8, 14, 10, 0, 0, tzinfo=timezone.utc)
+        assert dt == datetime(2026, 8, 14, 10, 0, 0, tzinfo=UTC)
 
     def test_invalid_returns_none(self):
         assert _parse_dt("not-a-date") is None

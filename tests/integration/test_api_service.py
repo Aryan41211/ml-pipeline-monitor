@@ -19,7 +19,9 @@ def test_predict_endpoint_success(monkeypatch):
         "predictions": [1],
     }
 
-    monkeypatch.setattr("ml_pipeline_monitor.services.model_service.predict_from_payload", lambda payload, dataset=None: expected)
+    monkeypatch.setattr(
+        "ml_pipeline_monitor.services.model_service.predict_from_payload", lambda payload, dataset=None: expected
+    )
     monkeypatch.setenv("MLMONITOR_API_KEY", "test-api-key")
 
     client = TestClient(app)

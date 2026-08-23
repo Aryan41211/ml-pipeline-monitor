@@ -5,12 +5,10 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import patch
 
-import pytest
 import yaml
 
 from ml_pipeline_monitor.core.config_loader import (
     DEFAULT_CONFIG,
-    ROOT_DIR,
     _deep_merge,
     _parse_env_line,
     get_artifact_dirs,
@@ -91,10 +89,7 @@ class TestEnvLineParsing:
     def test_hash_without_leading_space_is_kept(self):
         """A '#' inside a URL fragment or password is not a comment."""
         assert _parse_env_line("PW=has#hash") == "PW=has#hash"
-        assert (
-            _parse_env_line("URL=postgresql://u:p@h:5432/db?x=1#frag")
-            == "URL=postgresql://u:p@h:5432/db?x=1#frag"
-        )
+        assert _parse_env_line("URL=postgresql://u:p@h:5432/db?x=1#frag") == "URL=postgresql://u:p@h:5432/db?x=1#frag"
 
     def test_export_prefix_is_accepted(self):
         assert _parse_env_line("export FOO=bar") == "FOO=bar"

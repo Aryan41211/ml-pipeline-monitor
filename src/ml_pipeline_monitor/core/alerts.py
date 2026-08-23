@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 from ml_pipeline_monitor.core.config_loader import ROOT_DIR, load_config
 from ml_pipeline_monitor.core.logger import get_app_logger
@@ -30,7 +30,7 @@ def _persist_alert_event(
     severity: str,
     alert_type: str,
     message: str,
-    metadata: Dict[str, Any] | None = None,
+    metadata: dict[str, Any] | None = None,
 ) -> None:
     """Record the alert in the ``alert_events`` table for the governance view.
 
@@ -51,7 +51,7 @@ def _persist_alert_event(
         LOGGER.debug("Could not persist alert event: %s", exc)
 
 
-def emit_console_alert(severity: str, message: str) -> Dict[str, str]:
+def emit_console_alert(severity: str, message: str) -> dict[str, str]:
     """Emit a console/file alert event and return the normalized payload."""
     sev = _normalize_severity(severity)
     if sev == "critical":
@@ -78,12 +78,12 @@ def emit_email_alert(
     subject: str,
     message: str,
     *,
-    metadata: Dict[str, Any] | None = None,
-) -> Dict[str, str]:
+    metadata: dict[str, Any] | None = None,
+) -> dict[str, str]:
     """Simulate an email alert by appending a JSON record to the local sink file."""
     sev = _normalize_severity(severity)
     payload = {
-        "time": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "time": datetime.now(UTC).isoformat(timespec="seconds"),
         "severity": sev,
         "subject": str(subject),
         "message": str(message),

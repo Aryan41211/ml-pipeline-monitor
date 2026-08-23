@@ -8,7 +8,7 @@ for data drift monitoring.
 from __future__ import annotations
 
 import json
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import numpy as np
 
@@ -23,7 +23,7 @@ def save_drift_report(
     drift_detected: bool,
     drift_score: float,
     features_drifted: int,
-    feature_results: Dict[str, Any],
+    feature_results: dict[str, Any],
 ) -> None:
     """Save a drift detection report."""
     with _get_connection() as conn:
@@ -55,7 +55,7 @@ def save_drift_report(
         )
 
 
-def get_drift_reports(limit: int = 50) -> List[Dict[str, Any]]:
+def get_drift_reports(limit: int = 50) -> list[dict[str, Any]]:
     """Retrieve recent drift reports, ordered by creation date."""
     with _get_connection() as conn:
         rows = conn.execute(
@@ -65,7 +65,7 @@ def get_drift_reports(limit: int = 50) -> List[Dict[str, Any]]:
     return [dict(r) for r in rows]
 
 
-def save_drift_reference(dataset: str, feature_names: List[str], reference_data: np.ndarray) -> None:
+def save_drift_reference(dataset: str, feature_names: list[str], reference_data: np.ndarray) -> None:
     """Store reference distribution for a dataset."""
     with _get_connection() as conn:
         conn.execute(
@@ -80,7 +80,7 @@ def save_drift_reference(dataset: str, feature_names: List[str], reference_data:
         )
 
 
-def get_drift_reference(dataset: str) -> Optional[Dict[str, Any]]:
+def get_drift_reference(dataset: str) -> dict[str, Any] | None:
     """Retrieve stored reference distribution for a dataset."""
     with _get_connection() as conn:
         row = conn.execute(

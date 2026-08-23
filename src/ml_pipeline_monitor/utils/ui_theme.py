@@ -6,7 +6,7 @@ Clean minimal aesthetic with subtle animations and modern interactions.
 
 from __future__ import annotations
 
-from typing import Dict, List, Optional, Sequence
+from collections.abc import Sequence
 
 import pandas as pd
 import streamlit as st
@@ -134,11 +134,13 @@ COLORS = {
         "error_soft": "#EF444415",
         "border": "#E5E5E5",
         "border_strong": "#CCCCCC",
-    }
+    },
 }
+
 
 def get_color(theme: str = "dark", key: str = "background") -> str:
     return COLORS.get(theme, DARK).get(key, "")
+
 
 # ===========================================================================
 # Premium Typography
@@ -254,7 +256,7 @@ PLOTLY_COLORWAY = ["#3B82F6", "#06B6D4", "#8B5CF6", "#10B981", "#F59E0B", "#EF44
 # Status Mappings
 # ===========================================================================
 
-STATUS_TO_TONE: Dict[str, str] = {
+STATUS_TO_TONE: dict[str, str] = {
     "completed": "success",
     "success": "success",
     "done": "success",
@@ -275,6 +277,7 @@ STATUS_TO_TONE: Dict[str, str] = {
 # ===========================================================================
 # Plotly Theming — Premium Dark / Light Templates
 # ===========================================================================
+
 
 def apply_plotly_defaults(theme: str = "dark") -> None:
     import plotly.graph_objects as go
@@ -333,9 +336,11 @@ def apply_plotly_defaults(theme: str = "dark") -> None:
         )
     pio.templates.default = template_name
 
+
 # ===========================================================================
 # Reusable UI Components
 # ===========================================================================
+
 
 def section_header(title: str, subtitle: str = "", icon: str = "", theme: str = "dark") -> None:
     import streamlit as st
@@ -352,7 +357,7 @@ def section_header(title: str, subtitle: str = "", icon: str = "", theme: str = 
     st.markdown(html, unsafe_allow_html=True)
 
 
-def status_badge(status: str, label: Optional[str] = None) -> str:
+def status_badge(status: str, label: str | None = None) -> str:
     tone = STATUS_TO_TONE.get(status.lower(), "neutral")
     tokens = DARK
     color_map = {
@@ -377,11 +382,13 @@ def status_badge(status: str, label: Optional[str] = None) -> str:
         f'padding:4px 12px;border-radius:{BORDER_RADIUS["lg"]};'
         f'font-size:{TYPOGRAPHY["caption"]["size"]};font-weight:{TYPOGRAPHY["caption"]["weight"]};'
         f'background:{bg};color:{text_color};border:1px solid transparent;">'
-        f'{display}</span>'
+        f"{display}</span>"
     )
 
 
-def metric_card(title: str, value: str, subtitle: str = "", tone: str = "info", icon: str = "", theme: str = "dark") -> None:
+def metric_card(
+    title: str, value: str, subtitle: str = "", tone: str = "info", icon: str = "", theme: str = "dark"
+) -> None:
     import streamlit as st
 
     tokens = DARK if theme == "dark" else LIGHT
@@ -393,7 +400,8 @@ def metric_card(title: str, value: str, subtitle: str = "", tone: str = "info", 
     }
     accent = tone_colors.get(tone, tokens["accent"])
 
-    st.markdown(f"""
+    st.markdown(
+        f"""
         <div style="background:{tokens['card']}; border-radius:{BORDER_RADIUS['xl']}; padding:24px;
                     box-shadow:{SHADOWS['soft']}; border:1px solid {tokens['border']}; margin-bottom:16px;">
             <div style="display:flex; justify-content:space-between; align-items:flex-start;">
@@ -409,31 +417,48 @@ def metric_card(title: str, value: str, subtitle: str = "", tone: str = "info", 
                 </div>
             </div>
         </div>
-    """, unsafe_allow_html=True)
+    """,
+        unsafe_allow_html=True,
+    )
 
 
-def glass_container(content_html: str, title: Optional[str] = None, theme: str = "dark") -> None:
+def glass_container(content_html: str, title: str | None = None, theme: str = "dark") -> None:
     import streamlit as st
 
     tokens = DARK if theme == "dark" else LIGHT
-    header_html = f'<div style="font-size:14px; font-weight:600; color:{tokens["text_primary"]}; margin-bottom:12px;">{title}</div>' if title else ""
-    st.markdown(f"""
+    header_html = (
+        f'<div style="font-size:14px; font-weight:600; color:{tokens["text_primary"]}; margin-bottom:12px;">{title}</div>'
+        if title
+        else ""
+    )
+    st.markdown(
+        f"""
         <div style="background:{tokens['glass']}; border-radius:{BORDER_RADIUS['xl']};
                     backdrop-filter: blur(12px); border:1px solid {tokens['glass_border']};
                     padding:24px; margin-bottom:16px;">
             {header_html}
             {content_html}
         </div>
-    """, unsafe_allow_html=True)
+    """,
+        unsafe_allow_html=True,
+    )
 
 
-def kpi_card(title: str, value: str, change: Optional[str] = None, icon: Optional[str] = None, is_positive: bool = True, theme: str = "dark") -> None:
+def kpi_card(
+    title: str,
+    value: str,
+    change: str | None = None,
+    icon: str | None = None,
+    is_positive: bool = True,
+    theme: str = "dark",
+) -> None:
     import streamlit as st
 
     tokens = DARK if theme == "dark" else LIGHT
     change_color = tokens["success"] if is_positive else tokens["error"]
 
-    st.markdown(f"""
+    st.markdown(
+        f"""
         <div style="background:{tokens['card']}; border-radius:{BORDER_RADIUS['md']};
                     padding:{SPACING['lg']}; box-shadow:{SHADOWS['card']};
                     margin-bottom:{SPACING['md']}; transition:all {ANIMATION['normal']};">
@@ -452,17 +477,22 @@ def kpi_card(title: str, value: str, change: Optional[str] = None, icon: Optiona
                 {f'<div style="font-size:24px;">{icon}</div>' if icon else ''}
             </div>
         </div>
-    """, unsafe_allow_html=True)
+    """,
+        unsafe_allow_html=True,
+    )
+
 
 # ===========================================================================
 # HP CSS Injection
 # ===========================================================================
 
+
 def apply_ui_theme() -> None:
-    st.markdown(f"""
+    st.markdown(
+        f"""
         <style>
             @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
-            
+
             :root {{
                 --hp-primary: {DARK["accent"]};
                 --hp-primary-bright: {DARK["accent_bright"]};
@@ -486,35 +516,35 @@ def apply_ui_theme() -> None:
                 --hp-shadow-soft: {SHADOWS["soft"]};
                 --font-family: {TYPOGRAPHY["font_family"]};
             }}
-            
+
             /* === Base Reset === */
-            html, body, [class*="css"] {{ 
-                font-family: var(--font-family); 
-                color: var(--hp-ink); 
+            html, body, [class*="css"] {{
+                font-family: var(--font-family);
+                color: var(--hp-ink);
                 font-size: 15px;
                 font-weight: 400;
                 line-height: 1.38;
             }}
-            
-            .stApp {{ 
-                background: var(--hp-canvas); 
+
+            .stApp {{
+                background: var(--hp-canvas);
             }}
-            
-            .block-container {{ 
-                padding-top: 0.5rem; 
+
+            .block-container {{
+                padding-top: 0.5rem;
                 max-width: 1366px;
                 margin: 0 auto;
             }}
-            
+
             /* === Sidebar === */
-            [data-testid="stSidebar"] {{ 
-                background: var(--hp-canvas); 
-                border-right: 1px solid var(--hp-hairline); 
+            [data-testid="stSidebar"] {{
+                background: var(--hp-canvas);
+                border-right: 1px solid var(--hp-hairline);
                 min-width: 220px;
             }}
-            
+
             [data-testid="stSidebarNav"] {{ display: none; }}
-            
+
             /* === Typography === */
             h1, h2, h3, h4, h5, h6 {{
                 font-family: var(--font-family);
@@ -522,13 +552,13 @@ def apply_ui_theme() -> None:
                 color: var(--hp-ink);
                 letter-spacing: 0;
             }}
-            
+
             h1 {{ font-size: 32px; line-height: 1.0; margin-bottom: 8px; }}
             h2 {{ font-size: 24px; line-height: 1.17; margin-bottom: 6px; }}
             h3 {{ font-size: 20px; line-height: 1.0; margin-bottom: 4px; }}
-            
+
             p, li {{ color: var(--hp-charcoal); font-size: 15px; line-height: 1.38; }}
-            
+
             /* === HP Cards === */
             .hp-card {{
                 background: var(--hp-canvas);
@@ -538,11 +568,11 @@ def apply_ui_theme() -> None:
                 box-shadow: var(--hp-shadow-soft);
                 border: none;
             }}
-            
+
             .hp-card:hover {{
                 box-shadow: 0 4px 12px rgba(26, 26, 26, 0.1);
             }}
-            
+
             .hp-card-cloud {{
                 background: var(--hp-cloud);
                 border-radius: var(--hp-radius-xl);
@@ -550,7 +580,7 @@ def apply_ui_theme() -> None:
                 margin-bottom: 20px;
                 border: none;
             }}
-            
+
             /* === HP Badges === */
             .hp-badge {{
                 display: inline-flex;
@@ -567,7 +597,7 @@ def apply_ui_theme() -> None:
             .hp-badge.danger {{ background: transparent; color: {DARK["bloom_deep"]}; border-color: {DARK["bloom_rose"]}; }}
             .hp-badge.info {{ background: transparent; color: {DARK["accent"]}; border-color: {DARK["accent_soft"]}; }}
             .hp-badge.neutral {{ background: transparent; color: {DARK["graphite"]}; border-color: var(--hp-hairline); }}
-            
+
             /* === HP Buttons === */
             .stButton > button {{
                 font-family: var(--font-family);
@@ -580,31 +610,31 @@ def apply_ui_theme() -> None:
                 padding: 0 20px;
                 transition: all 0.15s ease;
             }}
-            
+
             .stButton > button[data-testid="baseButton-primary"] {{
                 background: {DARK["accent"]} !important;
                 color: white !important;
                 border: none !important;
             }}
-            
+
             .stButton > button[data-testid="baseButton-primary"]:hover {{
                 background: {DARK["accent_deep"]} !important;
                 box-shadow: none;
             }}
-            
+
             .stButton > button[kind="secondary"] {{
                 background: white !important;
                 color: {DARK["ink"]} !important;
                 border: 1px solid var(--hp-hairline) !important;
             }}
-            
+
             /* === HP Section Bands === */
             .hp-section-cloud {{
                 background: var(--hp-cloud);
                 padding: 40px 24px;
                 margin: 32px -24px;
             }}
-            
+
             .hp-section-ink {{
                 background: var(--hp-ink);
                 color: white;
@@ -612,11 +642,11 @@ def apply_ui_theme() -> None:
                 margin: 32px -24px;
                 border-radius: var(--hp-radius-xl);
             }}
-            
-            .hp-section-ink h2, 
-            .hp-section-ink h3, 
+
+            .hp-section-ink h2,
+            .hp-section-ink h3,
             .hp-section-ink p {{ color: white; }}
-            
+
             /* === HP Chevron Decoration === */
             .hp-chevron {{
                 display: inline-block;
@@ -627,13 +657,13 @@ def apply_ui_theme() -> None:
                 margin: 0 2px;
                 border-radius: 0;
             }}
-            
+
             .hp-chevron-pair {{
                 display: flex;
                 gap: 4px;
                 margin-bottom: 12px;
             }}
-            
+
             /* === HP KPI Metric === */
             .hp-metric {{
                 padding: 16px 0;
@@ -657,7 +687,7 @@ def apply_ui_theme() -> None:
                 color: var(--hp-charcoal);
                 margin-top: 2px;
             }}
-            
+
             /* === HP Timeline === */
             .hp-timeline-item {{
                 display: flex;
@@ -666,7 +696,7 @@ def apply_ui_theme() -> None:
                 border-bottom: 1px solid var(--hp-hairline);
             }}
             .hp-timeline-item:last-child {{ border-bottom: none; }}
-            
+
             /* === HP Section Divider === */
             .hp-divider {{
                 height: 1px;
@@ -674,7 +704,7 @@ def apply_ui_theme() -> None:
                 margin: 24px 0;
                 border: none;
             }}
-            
+
             /* === HP Table === */
             .hp-table {{
                 width: 100%;
@@ -697,7 +727,7 @@ def apply_ui_theme() -> None:
                 color: var(--hp-ink);
                 border-bottom: 1px solid var(--hp-hairline);
             }}
-            
+
             /* === HP Tags === */
             .hp-tag {{
                 display: inline-block;
@@ -708,7 +738,7 @@ def apply_ui_theme() -> None:
             }}
             .hp-tag-blue {{ background: {DARK["accent_soft"]}; color: {DARK["accent"]}; }}
             .hp-tag-ink {{ background: var(--hp-ink); color: white; }}
-            
+
             /* === HP Empty State === */
             .hp-empty {{
                 text-align: center;
@@ -717,11 +747,11 @@ def apply_ui_theme() -> None:
             .hp-empty-icon {{ font-size: 40px; margin-bottom: 12px; opacity: 0.4; }}
             .hp-empty-title {{ font-size: 20px; font-weight: 500; color: var(--hp-ink); margin-bottom: 8px; }}
             .hp-empty-desc {{ font-size: 14px; color: var(--hp-charcoal); max-width: 360px; margin: 0 auto 24px; }}
-            
+
             /* === Animations === */
             .hp-fade-in {{ animation: hpFadeIn 0.35s ease-out; }}
             @keyframes hpFadeIn {{ from {{ opacity: 0; transform: translateY(4px); }} to {{ opacity: 1; transform: translateY(0); }} }}
-            
+
             /* === Streamlit overrides === */
             .stTabs [data-baseweb="tab-list"] {{
                 gap: 0;
@@ -739,7 +769,7 @@ def apply_ui_theme() -> None:
                 color: {DARK["accent"]} !important;
                 border-bottom: 2px solid {DARK["accent"]} !important;
             }}
-            
+
             /* Metrics */
             [data-testid="stMetricValue"] {{
                 font-size: 28px;
@@ -753,7 +783,7 @@ def apply_ui_theme() -> None:
                 text-transform: uppercase;
                 letter-spacing: 0.3px;
             }}
-            
+
             /* Expander */
             .streamlit-expanderHeader {{
                 font-weight: 500;
@@ -763,12 +793,16 @@ def apply_ui_theme() -> None:
                 border-radius: var(--hp-radius-lg);
             }}
         </style>
-    """, unsafe_allow_html=True)
+    """,
+        unsafe_allow_html=True,
+    )
     apply_plotly_defaults()
+
 
 # ===========================================================================
 # HP UI Components
 # ===========================================================================
+
 
 def hp_chevron_header(title: str, subtitle: str = "") -> None:
     """Render an HP-style section header with chevron decoration."""
@@ -787,7 +821,8 @@ def hp_chevron_header(title: str, subtitle: str = "") -> None:
 
 def hp_kpi_card(title: str, value: str, subtitle: str = "", tone: str = "info", icon: str = "") -> None:
     """HP-style KPI metric card — clean, minimal, no borders."""
-    st.markdown(f"""
+    st.markdown(
+        f"""
         <div class="hp-fade-in" style="padding: 8px 0;">
             <div style="font-size:12px; font-weight:500; color:#636363; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:4px;">
                 {icon} {title}
@@ -797,29 +832,42 @@ def hp_kpi_card(title: str, value: str, subtitle: str = "", tone: str = "info", 
             </div>
             {f'<div style="font-size:13px; color:#3d3d3d; margin-top:2px;">{subtitle}</div>' if subtitle else ''}
         </div>
-    """, unsafe_allow_html=True)
+    """,
+        unsafe_allow_html=True,
+    )
 
 
-def hp_alert_card(message: str, tone: str = "info", title: Optional[str] = None) -> None:
+def hp_alert_card(message: str, tone: str = "info", title: str | None = None) -> None:
     """HP-style alert — minimal, blue-tinted."""
     border = "#024ad8" if tone in ("info", "success") else "#b8860b" if tone == "warning" else "#b3262b"
-    bg = "#c9e0fc" if tone == "info" else "#d4edda" if tone == "success" else "#fff3cd" if tone == "warning" else "#f9d4d2"
+    bg = (
+        "#c9e0fc"
+        if tone == "info"
+        else "#d4edda" if tone == "success" else "#fff3cd" if tone == "warning" else "#f9d4d2"
+    )
     text = "#0e3191" if tone in ("info", "success") else "#856404" if tone == "warning" else "#b3262b"
-    
-    st.markdown(f"""
+
+    st.markdown(
+        f"""
         <div style="padding:12px 16px; border-left:3px solid {border}; background:{bg}; border-radius:4px; margin-bottom:16px;">
             {f'<div style="font-weight:600; color:{text}; margin-bottom:2px;">{title}</div>' if title else ''}
             <div style="font-size:14px; color:{text};">{message}</div>
         </div>
-    """, unsafe_allow_html=True)
+    """,
+        unsafe_allow_html=True,
+    )
 
 
-def hp_timeline(events: List[Dict[str, str]]) -> None:
+def hp_timeline(events: list[dict[str, str]]) -> None:
     """HP-style activity timeline — clean rows with left accent."""
     html = ['<div class="hp-card" style="padding:0;">']
     for ev in events:
         tone = ev.get("status", "neutral")
-        dot = "#10b981" if tone == "success" else "#024ad8" if tone == "info" else "#ff5050" if tone == "danger" else "#c2c2c2"
+        dot = (
+            "#10b981"
+            if tone == "success"
+            else "#024ad8" if tone == "info" else "#ff5050" if tone == "danger" else "#c2c2c2"
+        )
         label = tone.upper()
         html.append(f"""
             <div class="hp-timeline-item" style="padding:12px 16px;">
@@ -829,16 +877,23 @@ def hp_timeline(events: List[Dict[str, str]]) -> None:
                 <span style="font-size:10px; font-weight:600; color:{dot}; background:{dot}15; padding:2px 8px; border-radius:8px;">{label}</span>
             </div>
         """)
-    html.append('</div>')
+    html.append("</div>")
     st.markdown("".join(html), unsafe_allow_html=True)
 
 
 def hp_status_badge(status: str) -> str:
     """HP-style status badge HTML."""
     tone_map = {
-        "completed": "success", "success": "success", "done": "success",
-        "warning": "warning", "failed": "danger", "error": "danger", "critical": "danger",
-        "running": "info", "pending": "info", "queued": "neutral",
+        "completed": "success",
+        "success": "success",
+        "done": "success",
+        "warning": "warning",
+        "failed": "danger",
+        "error": "danger",
+        "critical": "danger",
+        "running": "info",
+        "pending": "info",
+        "queued": "neutral",
     }
     tone = tone_map.get(status.lower(), "neutral")
     return f'<span class="hp-badge {tone}">{status.upper()}</span>'
@@ -847,52 +902,75 @@ def hp_status_badge(status: str) -> str:
 def hp_health_score(score: int, label: str = "HEALTHY") -> None:
     """HP-style health score — large, clean, emoji-free."""
     color = "#10b981" if score > 80 else "#b8860b" if score > 60 else "#b3262b"
-    st.markdown(f"""
+    st.markdown(
+        f"""
         <div class="hp-fade-in" style="text-align:center; padding:24px 16px;">
             <div style="font-size:11px; color:#636363; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:8px;">Composite Health</div>
             <div style="font-size:56px; font-weight:500; color:{color}; line-height:1;">{score}</div>
             <div style="font-size:14px; font-weight:500; color:{color}; margin-top:4px;">{label}</div>
         </div>
-    """, unsafe_allow_html=True)
+    """,
+        unsafe_allow_html=True,
+    )
 
 
-def hp_empty_state(title: str, message: str, action_label: Optional[str] = None, page_link: Optional[str] = None) -> None:
+def hp_empty_state(title: str, message: str, action_label: str | None = None, page_link: str | None = None) -> None:
     """HP-style empty state — centered, clean, with CTA."""
-    st.markdown(f"""
+    st.markdown(
+        f"""
         <div class="hp-empty hp-fade-in">
             <div class="hp-empty-icon">&#9744;</div>
             <div class="hp-empty-title">{title}</div>
             <div class="hp-empty-desc">{message}</div>
         </div>
-    """, unsafe_allow_html=True)
+    """,
+        unsafe_allow_html=True,
+    )
     if action_label and page_link:
         st.page_link(page_link, label=action_label)
 
 
-def hp_insight_panel(insights: List[str]) -> None:
+def hp_insight_panel(insights: list[str]) -> None:
     """HP-style insight panel — blue left border accent."""
-    items = "".join([f'<div style="font-size:14px; color:#1a1a1a; margin-bottom:8px; display:flex; gap:8px;"><span style="color:#024ad8;">&rarr;</span><span>{ins}</span></div>' for ins in insights])
-    st.markdown(f"""
+    items = "".join(
+        [
+            f'<div style="font-size:14px; color:#1a1a1a; margin-bottom:8px; display:flex; gap:8px;"><span style="color:#024ad8;">&rarr;</span><span>{ins}</span></div>'
+            for ins in insights
+        ]
+    )
+    st.markdown(
+        f"""
         <div class="hp-fade-in" style="padding:16px; border-left:3px solid #024ad8; background:#f7f7f7; border-radius:4px; margin-top:8px;">
             <div style="font-size:11px; font-weight:600; color:#636363; text-transform:uppercase; letter-spacing:0.3px; margin-bottom:8px;">Insights</div>
             {items}
         </div>
-    """, unsafe_allow_html=True)
+    """,
+        unsafe_allow_html=True,
+    )
 
 
-def hp_registry_card(name: str, version: str, stage: str, dataset: str, metrics: Dict[str, float], model_id: str) -> bool:
+def hp_registry_card(
+    name: str, version: str, stage: str, dataset: str, metrics: dict[str, float], model_id: str
+) -> bool:
     """HP-style registry card — product tile layout."""
-    tone = "success" if stage.lower() == "production" else "warning" if stage.lower() == "staging" else "info" if stage.lower() == "development" else "neutral"
+    tone = (
+        "success"
+        if stage.lower() == "production"
+        else "warning" if stage.lower() == "staging" else "info" if stage.lower() == "development" else "neutral"
+    )
+    # This colour was computed and then dropped: every card rendered the same
+    # blue badge, so production/staging/development were visually identical.
     stage_color = "#10b981" if tone == "success" else "#b8860b" if tone == "warning" else "#024ad8"
-    
-    st.markdown(f"""
+
+    st.markdown(
+        f"""
         <div class="hp-card hp-fade-in" style="border-top: none;">
             <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:8px;">
                 <div>
                     <div style="font-size:16px; font-weight:500; color:#1a1a1a;">{name}</div>
                     <div style="font-size:12px; color:#636363;">v{version} &middot; {dataset}</div>
                 </div>
-                <span class="hp-tag hp-tag-blue">{stage.upper()}</span>
+                <span class="hp-tag" style="background:{stage_color}1a; color:{stage_color};">{stage.upper()}</span>
             </div>
             <div style="display:flex; gap:16px; margin:12px 0; font-size:13px; color:#3d3d3d;">
                 <span>Acc: {metrics.get('accuracy', 0):.4f}</span>
@@ -900,57 +978,65 @@ def hp_registry_card(name: str, version: str, stage: str, dataset: str, metrics:
             </div>
             <div style="font-size:11px; color:#636363;">ID: {model_id[:12]}...</div>
         </div>
-    """, unsafe_allow_html=True)
+    """,
+        unsafe_allow_html=True,
+    )
     return st.button("Configure Lifecycle", key=f"btn_{model_id}", use_container_width=True)
+
 
 # ===========================================================================
 # Global Shell — HP-style Top Nav & Sidebar
 # ===========================================================================
 
+
 def render_top_navbar(user_role: str = "Admin") -> None:
-    st.markdown(f"""
+    st.markdown(
+        """
         <style>
-            .hp-topnav {{
+            .hp-topnav {
                 display:flex; align-items:center; justify-content:space-between;
                 height:56px; padding:0 24px;
                 background:white; border-bottom:1px solid #e8e8e8;
                 margin:-0.5rem -1rem 0 -1rem;
-            }}
-            .hp-logo {{
+            }
+            .hp-logo {
                 font-weight:600; font-size:16px; color:#1a1a1a;
                 display:flex; align-items:center; gap:10px;
-            }}
-            .hp-logo-mark {{
+            }
+            .hp-logo-mark {
                 display:inline-block;
                 width:20px; height:20px;
                 background:#024ad8;
                 border-radius:4px;
                 position:relative;
-            }}
-            .hp-logo-mark::after {{
+            }
+            .hp-logo-mark::after {
                 content:'';
                 position:absolute;
                 top:2px; left:2px; right:2px; bottom:2px;
                 background:white;
                 border-radius:2px;
-            }}
-            .hp-nav-search {{
+            }
+            .hp-nav-search {
                 display:flex; align-items:center;
                 background:#f7f7f7; border:1px solid #e8e8e8;
                 border-radius:4px; padding:4px 12px;
                 width:260px; height:34px;
-            }}
-            .hp-nav-search input {{
+            }
+            .hp-nav-search input {
                 background:transparent; border:none; color:#1a1a1a;
                 font-size:13px; width:100%; outline:none;
                 font-family:Inter, sans-serif;
-            }}
+            }
         </style>
-    """, unsafe_allow_html=True)
-    
+    """,
+        unsafe_allow_html=True,
+    )
+
     col_nav, col_actions = st.columns([2, 1])
     with col_nav:
-        st.markdown("""
+        st.markdown(
+            """
             <div class="hp-topnav" style="justify-content:flex-start; gap:24px;">
                 <div class="hp-logo">
                     <span class="hp-logo-mark"></span>
@@ -962,30 +1048,40 @@ def render_top_navbar(user_role: str = "Admin") -> None:
                     <input type="text" placeholder="Search experiments..." />
                 </div>
             </div>
-        """, unsafe_allow_html=True)
-    
+        """,
+            unsafe_allow_html=True,
+        )
+
     with col_actions:
         st.markdown('<div class="hp-topnav" style="justify-content:flex-end; gap:12px;">', unsafe_allow_html=True)
         c1, c2, c3 = st.columns([1, 1, 2])
-        with c1: 
-            with st.popover("&#128276;"): st.markdown("**Notifications**"); st.divider(); st.caption("System Healthy")
-        with c2: 
-            with st.popover("&#9889;"): st.markdown("**Quick Actions**"); st.page_link("pages/1_Pipeline_Runner.py", label="Run Pipeline"); st.page_link("pages/0_Dataset_Management.py", label="Import Dataset")
+        with c1, st.popover("&#128276;"):
+            st.markdown("**Notifications**")
+            st.divider()
+            st.caption("System Healthy")
+        with c2, st.popover("&#9889;"):
+            st.markdown("**Quick Actions**")
+            st.page_link("pages/1_Pipeline_Runner.py", label="Run Pipeline")
+            st.page_link("pages/0_Dataset_Management.py", label="Import Dataset")
         with c3:
-            st.markdown(f'<div style="display:flex; align-items:center; gap:8px; height:38px;"><div style="width:28px; height:28px; border-radius:50%; background:#024ad8; display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:600; color:white;">{user_role[0]}</div><span style="font-size:13px; font-weight:500; color:#1a1a1a;">{user_role}</span></div>', unsafe_allow_html=True)
-        st.markdown('</div>', unsafe_allow_html=True)
+            st.markdown(
+                f'<div style="display:flex; align-items:center; gap:8px; height:38px;"><div style="width:28px; height:28px; border-radius:50%; background:#024ad8; display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:600; color:white;">{user_role[0]}</div><span style="font-size:13px; font-weight:500; color:#1a1a1a;">{user_role}</span></div>',
+                unsafe_allow_html=True,
+            )
+        st.markdown("</div>", unsafe_allow_html=True)
     st.markdown('<div style="height:1rem;"></div>', unsafe_allow_html=True)
 
 
 def render_sidebar_nav() -> None:
-    st.markdown(f"""
+    st.markdown(
+        """
         <style>
-            .hp-nav-section {{
+            .hp-nav-section {
                 font-size:10px; font-weight:600; color:#636363;
                 text-transform:uppercase; letter-spacing:0.5px;
                 padding:12px 16px 4px;
-            }}
-            .hp-nav-item {{
+            }
+            .hp-nav-item {
                 display:flex; align-items:center; gap:10px;
                 padding:8px 16px;
                 border-radius:4px;
@@ -994,15 +1090,17 @@ def render_sidebar_nav() -> None:
                 font-size:13px; font-weight:500;
                 margin-bottom:2px;
                 transition:all 0.1s ease;
-            }}
-            .hp-nav-item:hover {{
+            }
+            .hp-nav-item:hover {
                 background:#f7f7f7;
-            }}
+            }
         </style>
-    """, unsafe_allow_html=True)
-    
+    """,
+        unsafe_allow_html=True,
+    )
+
     st.markdown('<div class="hp-nav-section">Platform</div>', unsafe_allow_html=True)
-    
+
     nav_items = [
         ("🏠", "Dashboard", "app.py"),
         ("🗂️", "Dataset Hub", "pages/0_Dataset_Management.py"),
@@ -1010,18 +1108,18 @@ def render_sidebar_nav() -> None:
         ("📊", "Experiment Tracking", "pages/2_Experiment_Tracking.py"),
         ("📦", "Model Registry", "pages/3_Model_Registry.py"),
     ]
-    
+
     for icon, label, page in nav_items:
         st.page_link(page, label=f"{icon} {label}")
-    
+
     st.markdown('<div class="hp-nav-section" style="margin-top:16px;">Observability</div>', unsafe_allow_html=True)
-    
+
     obs_items = [
         ("📈", "Data Drift", "pages/4_Data_Drift.py"),
         ("🖥️", "System Health", "pages/5_Data_Health.py"),
         ("⚖️", "Governance", "pages/6_Governance.py"),
     ]
-    
+
     for icon, label, page in obs_items:
         st.page_link(page, label=f"{icon} {label}")
 
@@ -1030,10 +1128,19 @@ def render_sidebar_nav() -> None:
 # Compatibility stubs — map old names to HP versions
 # ===========================================================================
 
+
 # Legacy aliases
-def component_kpi_card(title: str, value: str, subtitle: Optional[str] = None, tone: str = "info", icon: Optional[str] = None, trend: Optional[str] = None) -> None:
+def component_kpi_card(
+    title: str,
+    value: str,
+    subtitle: str | None = None,
+    tone: str = "info",
+    icon: str | None = None,
+    trend: str | None = None,
+) -> None:
     hp_kpi_card(title, value, subtitle or "", tone, icon or "")
-    
+
+
 component_alert_card = hp_alert_card
 component_timeline = hp_timeline
 component_status_badge = hp_status_badge
@@ -1042,33 +1149,59 @@ component_empty_state = hp_empty_state
 component_insight_panel = hp_insight_panel
 component_registry_card = hp_registry_card
 
+
 def component_metric_badge(label: str, value: str, tone: str = "info") -> str:
     return f'<span class="hp-tag hp-tag-blue">{label}: {value}</span>'
 
+
 def render_kpi_row(items: Sequence[dict]) -> None:
-    if not items: return
+    if not items:
+        return
     cols = st.columns(len(items))
-    for col, item in zip(cols, items):
-        with col: hp_kpi_card(title=item.get("title", ""), value=item.get("value", "—"), subtitle=item.get("subtitle", ""), tone=item.get("tone", "info"), icon=item.get("icon", ""))
+    for col, item in zip(cols, items, strict=False):
+        with col:
+            hp_kpi_card(
+                title=item.get("title", ""),
+                value=item.get("value", "—"),
+                subtitle=item.get("subtitle", ""),
+                tone=item.get("tone", "info"),
+                icon=item.get("icon", ""),
+            )
+
 
 def render_section_title(title: str, margin_top_px: int = 0) -> None:
     st.markdown(f'<h2 style="margin-top:{margin_top_px}px;">{title}</h2>', unsafe_allow_html=True)
+
 
 def render_spacer(size: str = "md") -> None:
     px_map = {"xs": 8, "sm": 16, "md": 24, "lg": 32, "xl": 40}
     st.markdown(f"<div style='height:{px_map.get(size, 24)}px'></div>", unsafe_allow_html=True)
 
+
 def render_loading_skeleton(lines: int = 4, key: str = "skeleton") -> None:
-    blocks = "".join([f'<div style="height:10px; border-radius:4px; background:#f0f0f0; margin-bottom:8px; width:{70-(i%3)*10}%"></div>' for i in range(lines)])
+    blocks = "".join(
+        [
+            f'<div style="height:10px; border-radius:4px; background:#f0f0f0; margin-bottom:8px; width:{70-(i%3)*10}%"></div>'
+            for i in range(lines)
+        ]
+    )
     st.markdown(f'<div class="hp-card">{blocks}</div>', unsafe_allow_html=True)
 
-def status_badge_html(status: str) -> str: return hp_status_badge(status)
-def stage_badge_html(stage: str) -> str: return f'<span class="hp-tag hp-tag-blue">{stage.upper()}</span>'
+
+def status_badge_html(status: str) -> str:
+    return hp_status_badge(status)
+
+
+def stage_badge_html(stage: str) -> str:
+    return f'<span class="hp-tag hp-tag-blue">{stage.upper()}</span>'
+
 
 def render_summary_table(df: pd.DataFrame, *, columns: Sequence[str], **kwargs) -> pd.DataFrame:
-    if df.empty: st.info("No data available."); return df
+    if df.empty:
+        st.info("No data available.")
+        return df
     show_cols = [c for c in columns if c in df.columns]
-    header_html = "".join([f'<th>{c}</th>' for c in show_cols])
+    header_html = "".join([f"<th>{c}</th>" for c in show_cols])
     rows_html = []
     for _, row in df.iterrows():
         cells = []
@@ -1076,21 +1209,29 @@ def render_summary_table(df: pd.DataFrame, *, columns: Sequence[str], **kwargs) 
             val = str(row[c])
             if c.lower() in ["status", "stage", "severity", "drift"]:
                 val = hp_status_badge(val) if c.lower() != "stage" else stage_badge_html(val)
-            cells.append(f'<td>{val}</td>')
+            cells.append(f"<td>{val}</td>")
         rows_html.append(f"<tr>{''.join(cells)}</tr>")
-    st.markdown(f'<table class="hp-table"><thead><tr>{header_html}</tr></thead><tbody>{"".join(rows_html)}</tbody></table>', unsafe_allow_html=True)
+    st.markdown(
+        f'<table class="hp-table"><thead><tr>{header_html}</tr></thead><tbody>{"".join(rows_html)}</tbody></table>',
+        unsafe_allow_html=True,
+    )
     return df
 
-def render_expandable_rows(df: pd.DataFrame, *, title_col: str, detail_cols: Sequence[str], badge_col: Optional[str] = None, **kwargs) -> None:
+
+def render_expandable_rows(
+    df: pd.DataFrame, *, title_col: str, detail_cols: Sequence[str], badge_col: str | None = None, **kwargs
+) -> None:
     for _, row in df.iterrows():
         badge = hp_status_badge(str(row[badge_col])) if badge_col else ""
         with st.expander(f"{row[title_col]} {badge}"):
-            for c in detail_cols: st.markdown(f"**{c}:** {row[c]}")
+            for c in detail_cols:
+                st.markdown(f"**{c}:** {row[c]}")
 
 
 def render_error_boundary(error: Exception, page_name: str = "page") -> None:
     """Render a user-friendly error boundary for page-level exceptions."""
     import traceback
+
     st.error(f"An error occurred in {page_name}")
     with st.expander("Error Details (for debugging)"):
         st.code("".join(traceback.format_exception(type(error), error, error.__traceback__)))

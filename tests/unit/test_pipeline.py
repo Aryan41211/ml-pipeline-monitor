@@ -3,26 +3,25 @@ Unit tests for the core pipeline and supporting utilities.
 
 Run with: pytest tests/ -v
 """
+
 import numpy as np
 import pandas as pd
 import pytest
 from sklearn.datasets import make_classification, make_regression
 from sklearn.model_selection import train_test_split
 
+from ml_pipeline_monitor.ml.data_loader import load_dataset
 from ml_pipeline_monitor.ml.drift_detector import compute_psi, run_drift_analysis
 from ml_pipeline_monitor.ml.pipeline import MLPipeline
-from ml_pipeline_monitor.ml.data_loader import load_dataset, DATASET_OPTIONS
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture(scope="module")
 def clf_splits():
-    X, y = make_classification(
-        n_samples=400, n_features=10, n_informative=6, random_state=0
-    )
+    X, y = make_classification(n_samples=400, n_features=10, n_informative=6, random_state=0)
     cols = [f"f{i}" for i in range(X.shape[1])]
     df = pd.DataFrame(X, columns=cols)
     target = pd.Series(y, name="target")
@@ -43,6 +42,7 @@ def reg_splits():
 # ---------------------------------------------------------------------------
 # Pipeline tests
 # ---------------------------------------------------------------------------
+
 
 class TestMLPipeline:
     @pytest.mark.parametrize("model_type", ["Random Forest", "Logistic Regression"])
@@ -113,7 +113,11 @@ class TestMLPipeline:
             calls.append((stage, progress))
 
         pipeline = MLPipeline(
-            "test", "Decision Tree", "classification", {}, cv_folds=2,
+            "test",
+            "Decision Tree",
+            "classification",
+            {},
+            cv_folds=2,
             progress_callback=cb,
         )
         pipeline.run(X_train, X_test, y_train, y_test)
@@ -124,6 +128,7 @@ class TestMLPipeline:
 # ---------------------------------------------------------------------------
 # Drift detector tests
 # ---------------------------------------------------------------------------
+
 
 class TestDriftDetector:
     def test_psi_identical_distributions_is_zero(self):
@@ -167,6 +172,7 @@ class TestDriftDetector:
 # ---------------------------------------------------------------------------
 # Data loader tests
 # ---------------------------------------------------------------------------
+
 
 class TestDataLoader:
     @pytest.mark.parametrize("key", ["breast_cancer", "iris", "synthetic_clf"])

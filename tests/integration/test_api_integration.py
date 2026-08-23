@@ -89,13 +89,16 @@ class TestPredictV1:
 
     def test_predict_success(self):
         import numpy as np
+
         token = _get_token()
         fake_model = MagicMock()
         fake_model.predict.return_value = np.array([1])
         fake_scaler = MagicMock()
         fake_scaler.transform.return_value = np.array([[1.0, 2.0]])
 
-        with patch("ml_pipeline_monitor.api.main.get_latest_production_model", return_value=(fake_model, fake_scaler, "path")):
+        with patch(
+            "ml_pipeline_monitor.api.main.get_latest_production_model", return_value=(fake_model, fake_scaler, "path")
+        ):
             r = client.post(
                 "/v1/predict",
                 json={"features": {"sepal length (cm)": 5.1, "sepal width (cm)": 3.5}, "dataset": "Iris Species"},
@@ -124,11 +127,16 @@ class TestLegacyPredict:
         assert r.status_code == 401
 
     def test_legacy_with_api_key(self):
-        with patch("ml_pipeline_monitor.services.model_service.predict_from_payload", return_value={"model_id": "m1", "predictions": [1]}):
+        with patch(
+            "ml_pipeline_monitor.services.model_service.predict_from_payload",
+            return_value={"model_id": "m1", "predictions": [1]},
+        ):
             r = client.post("/predict", json={"features": {"x": 1.0}}, headers={"X-API-Key": "test-api-key"})
             assert r.status_code == 200
 
     def test_legacy_validation_error(self):
-        with patch("ml_pipeline_monitor.services.model_service.predict_from_payload", side_effect=ValueError("bad input")):
+        with patch(
+            "ml_pipeline_monitor.services.model_service.predict_from_payload", side_effect=ValueError("bad input")
+        ):
             r = client.post("/predict", json={"features": {"x": 1.0}}, headers={"X-API-Key": "test-api-key"})
             assert r.status_code == 400

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import os
-from pathlib import Path
 from unittest.mock import patch
 
 import pytest
@@ -30,7 +29,9 @@ def test_secrets_manager_local_json_fallback(tmp_path, monkeypatch):
     local = tmp_path / ".secrets.json"
     local.write_text('{"test_key3": "json_value"}', encoding="utf-8")
     mgr = SecretsManager(secrets_dir=str(tmp_path))
-    with patch("ml_pipeline_monitor.core.secrets.Path", side_effect=lambda p: tmp_path / p if isinstance(p, str) else p):
+    with patch(
+        "ml_pipeline_monitor.core.secrets.Path", side_effect=lambda p: tmp_path / p if isinstance(p, str) else p
+    ):
         # patch cwd to tmp_path so .secrets.json is found
         with patch("pathlib.Path.cwd", return_value=tmp_path):
             assert mgr.get("test_key3") == "json_value"

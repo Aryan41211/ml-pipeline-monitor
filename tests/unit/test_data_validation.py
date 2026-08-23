@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
-import pytest
 
 from ml_pipeline_monitor.ml.data_validation import validate_dataset
 
@@ -49,14 +48,13 @@ def test_missing_values_and_duplicates_trigger_fail_reasons():
         task="classification",
         target_name="target",
         missing_total_threshold_pct=0.0001,  # force fail
-        duplicates_threshold_pct=0.0001,     # force fail
-        quality_score_min=100.0,              # force fail by score too
+        duplicates_threshold_pct=0.0001,  # force fail
+        quality_score_min=100.0,  # force fail by score too
     )
     assert res.status == "fail"
     # At least one of these should be present
     assert any(
-        k in res.fail_reasons
-        for k in ("missing_values_too_high", "duplicates_too_high", "quality_score_below_minimum")
+        k in res.fail_reasons for k in ("missing_values_too_high", "duplicates_too_high", "quality_score_below_minimum")
     )
 
 
@@ -108,7 +106,7 @@ def test_outliers_and_invalid_ranges_trigger_reasons():
         target_name="target",
         outlier_method="zscore",
         outlier_z_threshold=2.0,
-        outliers_threshold_total=0,     # force outlier fail
+        outliers_threshold_total=0,  # force outlier fail
         invalid_ranges_features_threshold=0,  # force invalid-range fail
         quantile_low=0.01,
         quantile_high=0.99,

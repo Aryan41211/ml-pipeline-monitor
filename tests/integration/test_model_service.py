@@ -1,5 +1,4 @@
 import numpy as np
-import pandas as pd
 import pytest
 
 from ml_pipeline_monitor.services import model_service

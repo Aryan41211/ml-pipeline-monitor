@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 from ml_pipeline_monitor.core.config_loader import ROOT_DIR, load_config
 from ml_pipeline_monitor.core.logger import get_app_logger
@@ -18,23 +18,26 @@ def _is_enabled() -> bool:
 def _log_model_to_mlflow(model: Any, artifact_path: str = "model") -> None:
     """Log model using appropriate MLflow flavor based on model type."""
     model_class_name = model.__class__.__name__
-    
+
     if "XGB" in model_class_name or "XGBoost" in model_class_name:
         import mlflow.xgboost
+
         mlflow.xgboost.log_model(model, artifact_path=artifact_path)
     elif "LGBM" in model_class_name:
         import mlflow.lightgbm
+
         mlflow.lightgbm.log_model(model, artifact_path=artifact_path)
     else:
         import mlflow.sklearn
+
         mlflow.sklearn.log_model(model, artifact_path=artifact_path)
 
 
 def log_pipeline_run(
     *,
     run_name: str,
-    params: Dict[str, Any],
-    metrics: Dict[str, Any],
+    params: dict[str, Any],
+    metrics: dict[str, Any],
     artifact_path: str,
     model: Any,
 ) -> None:

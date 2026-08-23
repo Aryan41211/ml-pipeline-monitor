@@ -142,7 +142,9 @@ def test_run_drift_and_persist_propagates_failures(monkeypatch):
         "load_config",
         lambda: {"pipeline": {"test_size": 0.4, "random_seed": 42}, "monitoring": {}},
     )
-    monkeypatch.setattr(drift_service, "load_dataset", lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("boom")))
+    monkeypatch.setattr(
+        drift_service, "load_dataset", lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("boom"))
+    )
 
     with pytest.raises(RuntimeError):
         drift_service.run_drift_and_persist(

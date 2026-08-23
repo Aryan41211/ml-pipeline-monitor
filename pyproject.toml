@@ -118,6 +118,31 @@ line-length = 120
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "N", "UP", "B", "A", "SIM"]
 
+# Rules suppressed below are cases where the flagged form is the correct one.
+# Nothing here is silenced merely to make the build pass.
+[tool.ruff.lint.per-file-ignores]
+# N803/N806: X, X_train, X_test are the conventional names for feature matrices
+# across scikit-learn and the wider ML ecosystem. Renaming them to x_train
+# would make this code harder to read, not easier.
+"src/ml_pipeline_monitor/ml/*.py" = ["N803", "N806"]
+"src/ml_pipeline_monitor/services/*.py" = ["N803", "N806"]
+"src/ml_pipeline_monitor/database/*.py" = ["N803", "N806"]
+# SIM117: stacked `with patch(...)` blocks read better one mock per line than
+# collapsed into a single multi-context statement.
+"tests/**/*.py" = ["N803", "N806", "SIM117"]
+# B008: `Depends(...)` / `Security(...)` in a parameter default is FastAPI's
+# required dependency-injection idiom, not an accidental shared mutable.
+"src/ml_pipeline_monitor/api/main.py" = ["B008"]
+# E501: this module is a design system built from inline CSS and HTML string
+# literals, which black cannot wrap and splitting by hand would obscure.
+"src/ml_pipeline_monitor/utils/ui_theme.py" = ["E501"]
+# N818: DataQualityFailed is an exported name used by callers; the "Error"
+# suffix convention is not worth a breaking rename.
+"src/ml_pipeline_monitor/ml/data_validation.py" = ["N803", "N806", "N818"]
+# Streamlit pages embed single-line HTML blocks for headers and cards.
+"pages/*.py" = ["E501"]
+"app.py" = ["E501"]
+
 [tool.black]
 line-length = 120
 target-version = ["py311"]

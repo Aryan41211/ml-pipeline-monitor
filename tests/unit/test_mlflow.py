@@ -2,10 +2,7 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 from unittest.mock import MagicMock, patch
-
-import pytest
 
 from ml_pipeline_monitor.ml.mlflow_tracker import _is_enabled, log_pipeline_run
 
@@ -33,12 +30,31 @@ def test_log_pipeline_run_disabled():
 
 def test_log_pipeline_run_enabled():
     mock_mlflow = MagicMock()
-    with patch("ml_pipeline_monitor.ml.mlflow_tracker._is_enabled", return_value=True):
-        with patch("ml_pipeline_monitor.ml.mlflow_tracker.load_config", return_value={"mlflow": {"tracking_uri": "file:///tmp/mlruns", "experiment": "test-exp"}}):
-            with patch.dict("sys.modules", {"mlflow": mock_mlflow, "mlflow.xgboost": MagicMock(), "mlflow.lightgbm": MagicMock(), "mlflow.sklearn": MagicMock()}):
-                mock_model = MagicMock()
-                mock_model.__class__.__name__ = "RandomForestClassifier"
-                log_pipeline_run(run_name="test-run", params={"n_estimators": 100}, metrics={"accuracy": 0.95}, artifact_path="", model=mock_model)
+    with (
+        patch("ml_pipeline_monitor.ml.mlflow_tracker._is_enabled", return_value=True),
+        patch(
+            "ml_pipeline_monitor.ml.mlflow_tracker.load_config",
+            return_value={"mlflow": {"tracking_uri": "file:///tmp/mlruns", "experiment": "test-exp"}},
+        ),
+        patch.dict(
+            "sys.modules",
+            {
+                "mlflow": mock_mlflow,
+                "mlflow.xgboost": MagicMock(),
+                "mlflow.lightgbm": MagicMock(),
+                "mlflow.sklearn": MagicMock(),
+            },
+        ),
+    ):
+        mock_model = MagicMock()
+        mock_model.__class__.__name__ = "RandomForestClassifier"
+        log_pipeline_run(
+            run_name="test-run",
+            params={"n_estimators": 100},
+            metrics={"accuracy": 0.95},
+            artifact_path="",
+            model=mock_model,
+        )
 
 
 def test_log_pipeline_run_exception():

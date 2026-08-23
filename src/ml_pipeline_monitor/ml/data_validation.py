@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -11,9 +11,9 @@ import pandas as pd
 class ValidationResult:
     quality_score: float  # 0-100
     status: str  # "pass" | "fail"
-    report: Dict[str, Any]
-    recommendations: List[str]
-    fail_reasons: List[str]
+    report: dict[str, Any]
+    recommendations: list[str]
+    fail_reasons: list[str]
 
 
 class DataQualityFailed(Exception):
@@ -28,9 +28,7 @@ class DataQualityFailed(Exception):
         validation_result: ValidationResult,
         fail_stage: str = "Data Validation",
     ) -> None:
-        super().__init__(
-            f"Data quality failed: {quality_score:.2f} < {min_quality_score:.2f} ({dataset})"
-        )
+        super().__init__(f"Data quality failed: {quality_score:.2f} < {min_quality_score:.2f} ({dataset})")
         self.dataset = dataset
         self.quality_score = float(quality_score)
         self.min_quality_score = float(min_quality_score)
@@ -52,7 +50,7 @@ def _safe_jsonable(obj: Any) -> Any:
     return obj
 
 
-def _missing_value_summary(df: pd.DataFrame) -> Dict[str, Any]:
+def _missing_value_summary(df: pd.DataFrame) -> dict[str, Any]:
     per_col_missing = df.isna().sum()
     per_col_missing_pct = (
         (per_col_missing.astype(float) / float(len(df))) * 100.0 if len(df) else np.zeros(len(per_col_missing))
@@ -76,7 +74,7 @@ def _missing_value_summary(df: pd.DataFrame) -> Dict[str, Any]:
     }
 
 
-def _duplicate_report(df: pd.DataFrame) -> Dict[str, Any]:
+def _duplicate_report(df: pd.DataFrame) -> dict[str, Any]:
     if len(df) == 0:
         return {"duplicate_rows": 0, "duplicate_rows_pct": 0.0}
     dup_mask = df.duplicated(keep=False)
@@ -85,7 +83,7 @@ def _duplicate_report(df: pd.DataFrame) -> Dict[str, Any]:
     return {"duplicate_rows": dup_count, "duplicate_rows_pct": dup_pct}
 
 
-def _constant_feature_report(feature_df: pd.DataFrame) -> Dict[str, Any]:
+def _constant_feature_report(feature_df: pd.DataFrame) -> dict[str, Any]:
     if feature_df.empty:
         return {"constant_features": 0, "constant_feature_names": []}
 
@@ -111,7 +109,7 @@ def _constant_feature_report(feature_df: pd.DataFrame) -> Dict[str, Any]:
     }
 
 
-def _type_mismatch_report(feature_df: pd.DataFrame) -> Dict[str, Any]:
+def _type_mismatch_report(feature_df: pd.DataFrame) -> dict[str, Any]:
     """
     Best-effort checks:
     - numeric features should be numeric dtype
@@ -128,12 +126,12 @@ def _type_mismatch_report(feature_df: pd.DataFrame) -> Dict[str, Any]:
     return {"object_columns": len(object_cols), "object_column_names": object_cols}
 
 
-def _outlier_report(feature_df: pd.DataFrame, *, method: str, z_threshold: float) -> Dict[str, Any]:
+def _outlier_report(feature_df: pd.DataFrame, *, method: str, z_threshold: float) -> dict[str, Any]:
     numeric = feature_df.select_dtypes(include=[np.number]).copy()
     if numeric.empty:
         return {"outliers_detected": 0, "outlier_by_feature": []}
 
-    outlier_by_feature: List[Dict[str, Any]] = []
+    outlier_by_feature: list[dict[str, Any]] = []
     n_rows = len(numeric)
 
     for col in numeric.columns:
@@ -157,9 +155,7 @@ def _outlier_report(feature_df: pd.DataFrame, *, method: str, z_threshold: float
                 out_count = int(((s < lower) | (s > upper)).sum())
 
         out_pct = float(out_count / n_rows * 100.0) if n_rows else 0.0
-        outlier_by_feature.append(
-            {"feature": str(col), "outlier_count": out_count, "outlier_pct": out_pct}
-        )
+        outlier_by_feature.append({"feature": str(col), "outlier_count": out_count, "outlier_pct": out_pct})
 
     outlier_by_feature.sort(key=lambda r: (r["outlier_count"], r["feature"]), reverse=True)
     total_outliers = int(sum(r["outlier_count"] for r in outlier_by_feature))
@@ -169,7 +165,9 @@ def _outlier_report(feature_df: pd.DataFrame, *, method: str, z_threshold: float
     }
 
 
-def _invalid_range_report(feature_df: pd.DataFrame, *, quantile_low: float = 0.001, quantile_high: float = 0.999) -> Dict[str, Any]:
+def _invalid_range_report(
+    feature_df: pd.DataFrame, *, quantile_low: float = 0.001, quantile_high: float = 0.999
+) -> dict[str, Any]:
     """
     Use robust quantile-based invalid ranges:
     values outside very low/high quantiles are considered invalid-ish.
@@ -178,7 +176,7 @@ def _invalid_range_report(feature_df: pd.DataFrame, *, quantile_low: float = 0.0
     if numeric.empty:
         return {"features_with_outside_range": 0, "invalid_by_feature": []}
 
-    invalid_by_feature: List[Dict[str, Any]] = []
+    invalid_by_feature: list[dict[str, Any]] = []
     n_rows = len(numeric)
 
     for col in numeric.columns:
@@ -190,9 +188,7 @@ def _invalid_range_report(feature_df: pd.DataFrame, *, quantile_low: float = 0.0
             hi = float(s.quantile(quantile_high))
             invalid_count = int(((s < lo) | (s > hi)).sum())
         invalid_pct = float(invalid_count / n_rows * 100.0) if n_rows else 0.0
-        invalid_by_feature.append(
-            {"feature": str(col), "invalid_count": invalid_count, "invalid_pct": invalid_pct}
-        )
+        invalid_by_feature.append({"feature": str(col), "invalid_count": invalid_count, "invalid_pct": invalid_pct})
 
     invalid_by_feature.sort(key=lambda r: (r["invalid_count"], r["feature"]), reverse=True)
     features_with_outside_range = sum(1 for r in invalid_by_feature if r["invalid_count"] > 0)
@@ -203,7 +199,7 @@ def _invalid_range_report(feature_df: pd.DataFrame, *, quantile_low: float = 0.0
     }
 
 
-def _class_imbalance_report(target: pd.Series) -> Dict[str, Any]:
+def _class_imbalance_report(target: pd.Series) -> dict[str, Any]:
     counts = target.value_counts(dropna=False).sort_values(ascending=False)
     total = int(counts.sum())
     if total == 0:
@@ -211,23 +207,19 @@ def _class_imbalance_report(target: pd.Series) -> Dict[str, Any]:
 
     # imbalance ratio: most common / least common non-zero
     nonzero = counts[counts > 0]
-    if len(nonzero) < 2:
-        imbalance_ratio = None
-    else:
-        imbalance_ratio = float(nonzero.iloc[0] / nonzero.iloc[-1])
+    imbalance_ratio = None if len(nonzero) < 2 else float(nonzero.iloc[0] / nonzero.iloc[-1])
 
     probs = counts / total
     entropy = float(-(probs * np.log2(probs.replace(0, np.nan))).sum(skipna=True))
 
-    dist = (
-        pd.DataFrame({"class": counts.index.astype(str), "count": counts.values, "pct": (probs.values * 100.0)})
-        .to_dict(orient="records")
-    )
+    dist = pd.DataFrame(
+        {"class": counts.index.astype(str), "count": counts.values, "pct": (probs.values * 100.0)}
+    ).to_dict(orient="records")
 
     return {"imbalance_ratio": imbalance_ratio, "entropy": entropy, "distribution": dist}
 
 
-def _high_correlation_report(feature_df: pd.DataFrame, *, threshold: float) -> Dict[str, Any]:
+def _high_correlation_report(feature_df: pd.DataFrame, *, threshold: float) -> dict[str, Any]:
     numeric = feature_df.select_dtypes(include=[np.number]).copy()
     if numeric.shape[1] < 2:
         return {"high_corr_pairs": 0, "high_corr_features": []}
@@ -238,9 +230,7 @@ def _high_correlation_report(feature_df: pd.DataFrame, *, threshold: float) -> D
     upper = corr.where(mask)
 
     high_pairs_df = (
-        upper.stack()
-        .reset_index()
-        .rename(columns={"level_0": "feature_a", "level_1": "feature_b", 0: "abs_corr"})
+        upper.stack().reset_index().rename(columns={"level_0": "feature_a", "level_1": "feature_b", 0: "abs_corr"})
     )
     high_pairs = high_pairs_df[high_pairs_df["abs_corr"] > float(threshold)]
 
@@ -266,10 +256,10 @@ def _compute_quality_score(
     constant_features: int,
     object_columns: int,
     high_corr_pairs: int,
-    imbalance_ratio: Optional[float],
+    imbalance_ratio: float | None,
     invalid_features_with_outside_range: int,
-    weights: Optional[Dict[str, float]] = None,
-) -> Tuple[float, List[str]]:
+    weights: dict[str, float] | None = None,
+) -> tuple[float, list[str]]:
     """
     Convert findings into a 0-100 score with penalty-based reduction.
     """
@@ -284,7 +274,7 @@ def _compute_quality_score(
         "correlation": 0.03,
     }
 
-    penalties: List[Tuple[str, float]] = []
+    penalties: list[tuple[str, float]] = []
 
     # Missing: 0% -> 0 penalty, 20% -> 1 penalty
     missing_pen = min(1.0, missing_total_pct / 20.0) * w["missing"]
@@ -309,11 +299,8 @@ def _compute_quality_score(
     corr_pen = min(1.0, high_corr_pairs / 100.0) * w["correlation"]
     penalties.append(("correlation", corr_pen))
 
-    if imbalance_ratio is None:
-        imb_pen = 0.0
-    else:
-        # imbalance_ratio=1 -> 0, 10 -> 1
-        imb_pen = min(1.0, (imbalance_ratio - 1.0) / 9.0) * w["imbalance"]
+    # imbalance_ratio=1 -> 0, 10 -> 1
+    imb_pen = 0.0 if imbalance_ratio is None else min(1.0, (imbalance_ratio - 1.0) / 9.0) * w["imbalance"]
     penalties.append(("imbalance", imb_pen))
 
     total_penalty = sum(p for _, p in penalties)
@@ -407,14 +394,14 @@ def validate_dataset(
 
     # Class imbalance
     imbalance = {}
-    imbalance_ratio: Optional[float] = None
+    imbalance_ratio: float | None = None
     if task == "classification":
         imbalance = _class_imbalance_report(target)
         imbalance_ratio = imbalance.get("imbalance_ratio")
 
     # Recommendations + fail reasons (threshold-based)
-    fail_reasons: List[str] = []
-    recommendations: List[str] = []
+    fail_reasons: list[str] = []
+    recommendations: list[str] = []
 
     missing_total_pct = float(missing.get("total_missing_pct", 0.0))
     duplicates_pct = float(dup.get("duplicate_rows_pct", 0.0))
@@ -422,9 +409,7 @@ def validate_dataset(
     constant_features = int(constant.get("constant_features", 0))
     object_columns = int(type_mismatch.get("object_columns", 0))
     high_corr_pairs = int(high_corr.get("high_corr_pairs", 0))
-    invalid_features_with_outside_range = int(
-        invalid_ranges.get("features_with_outside_range", 0) or 0
-    )
+    invalid_features_with_outside_range = int(invalid_ranges.get("features_with_outside_range", 0) or 0)
 
     if missing_total_pct > missing_total_threshold_pct:
         fail_reasons.append("missing_values_too_high")
@@ -447,14 +432,13 @@ def validate_dataset(
     if constant_features > constant_features_threshold:
         fail_reasons.append("constant_features_detected")
         recommendations.append("Remove constant (zero-variance) features to improve model reliability.")
+    # Any correlated pair is worth a recommendation; overall strictness is
+    # carried by the quality score. Only a large number of pairs is a failure.
+    # (This was three nested conditions that all re-tested high_corr_pairs > 0.)
     if high_corr_pairs > 0:
-        # For now, we treat any pair > threshold as a recommendation; strictness is handled via quality score.
-        # Still include as a reason if strong.
-        if high_corr_pairs > 0 and float(high_corr_pairs) > (high_corr_pairs * 0 + 0):  # keep stable
-            if high_corr_pairs > 0 and high_corr_pairs >= 1:
-                recommendations.append("Consider removing one of highly correlated features to reduce multicollinearity.")
-                if high_corr_pairs >= 20:
-                    fail_reasons.append("high_correlation_too_many_pairs")
+        recommendations.append("Consider removing one of highly correlated features to reduce multicollinearity.")
+        if high_corr_pairs >= 20:
+            fail_reasons.append("high_correlation_too_many_pairs")
 
     quality_score, _ = _compute_quality_score(
         missing_total_pct=missing_total_pct,

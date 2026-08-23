@@ -2,6 +2,7 @@
 Pipeline Runner — Visual Workflow Orchestration
 Redesigned with reusable enterprise components.
 """
+
 import time
 
 import streamlit as st
@@ -43,16 +44,22 @@ with st.sidebar:
 
 DATASET_OPTIONS = get_dataset_options()
 
+
 def _render_page():
     # ---------------------------------------------------------------------------
     # Header
     # ---------------------------------------------------------------------------
     col_title, col_actions = st.columns([4, 1])
     with col_title:
-        st.markdown('<div class="ui-fade-in"><h1 style="margin:0; font-family:\'Poppins\', sans-serif;">Workflow Orchestrator</h1><p style="color:var(--color-text-tertiary);">Live stage tracking and hyperparameter optimization.</p></div>', unsafe_allow_html=True)
+        st.markdown(
+            '<div class="ui-fade-in"><h1 style="margin:0; font-family:\'Poppins\', sans-serif;">Workflow Orchestrator</h1><p style="color:var(--color-text-tertiary);">Live stage tracking and hyperparameter optimization.</p></div>',
+            unsafe_allow_html=True,
+        )
     with col_actions:
         st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
-        run_btn = st.button("Execute Pipeline", type="primary", use_container_width=True, disabled=not can_run_pipeline())
+        run_btn = st.button(
+            "Execute Pipeline", type="primary", use_container_width=True, disabled=not can_run_pipeline()
+        )
 
     # ---------------------------------------------------------------------------
     # Workspace
@@ -70,21 +77,25 @@ def _render_page():
             task_meta = get_task_and_model_options(ds_key)
             task = task_meta["task"]
             model = st.selectbox("Algorithm", task_meta["model_options"])
-            st.markdown('</div>', unsafe_allow_html=True)
+            st.markdown("</div>", unsafe_allow_html=True)
 
         with c2:
             render_section_title("Execution Strategy")
             st.markdown('<div class="ui-card">', unsafe_allow_html=True)
             test_size = st.slider("Validation Split", 0.1, 0.4, 0.2)
             cv_folds = st.slider("Cross-Validation Folds", 2, 10, 5)
-            random_state = st.number_input("Random Seed", 0, 10000, 42, 1, help="Reproducibility seed for data splits and model training")
-            st.markdown('</div>', unsafe_allow_html=True)
+            random_state = st.number_input(
+                "Random Seed", 0, 10000, 42, 1, help="Reproducibility seed for data splits and model training"
+            )
+            st.markdown("</div>", unsafe_allow_html=True)
 
-            component_insight_panel([
-                f"Orchestrating {task} pipeline.",
-                f"Using {cv_folds}-fold {'Stratified ' if task == 'classification' else ''}CV.",
-                "StandardScaler applied automatically."
-            ])
+            component_insight_panel(
+                [
+                    f"Orchestrating {task} pipeline.",
+                    f"Using {cv_folds}-fold {'Stratified ' if task == 'classification' else ''}CV.",
+                    "StandardScaler applied automatically.",
+                ]
+            )
 
         # Hyperparameter Configuration
         render_spacer("md")
@@ -95,39 +106,63 @@ def _render_page():
         params = {}
 
         if model == "Random Forest":
-            params["n_estimators"] = st.number_input("n_estimators", 10, 500, default_params.get("n_estimators", 100), 10)
+            params["n_estimators"] = st.number_input(
+                "n_estimators", 10, 500, default_params.get("n_estimators", 100), 10
+            )
             _max_depth = st.number_input("max_depth (0=None)", 0, 50, default_params.get("max_depth", 0) or 0)
             params["max_depth"] = None if _max_depth == 0 else _max_depth
-            params["min_samples_split"] = st.number_input("min_samples_split", 2, 20, default_params.get("min_samples_split", 2))
+            params["min_samples_split"] = st.number_input(
+                "min_samples_split", 2, 20, default_params.get("min_samples_split", 2)
+            )
         elif model == "XGBoost":
-            params["n_estimators"] = st.number_input("n_estimators", 10, 500, default_params.get("n_estimators", 100), 10)
-            params["learning_rate"] = st.number_input("learning_rate", 0.01, 1.0, default_params.get("learning_rate", 0.1), 0.01)
+            params["n_estimators"] = st.number_input(
+                "n_estimators", 10, 500, default_params.get("n_estimators", 100), 10
+            )
+            params["learning_rate"] = st.number_input(
+                "learning_rate", 0.01, 1.0, default_params.get("learning_rate", 0.1), 0.01
+            )
             params["max_depth"] = st.number_input("max_depth", 1, 20, default_params.get("max_depth", 6))
         elif model == "Gradient Boosting":
-            params["n_estimators"] = st.number_input("n_estimators", 10, 500, default_params.get("n_estimators", 100), 10)
-            params["learning_rate"] = st.number_input("learning_rate", 0.01, 1.0, default_params.get("learning_rate", 0.1), 0.01)
+            params["n_estimators"] = st.number_input(
+                "n_estimators", 10, 500, default_params.get("n_estimators", 100), 10
+            )
+            params["learning_rate"] = st.number_input(
+                "learning_rate", 0.01, 1.0, default_params.get("learning_rate", 0.1), 0.01
+            )
             params["max_depth"] = st.number_input("max_depth", 1, 10, default_params.get("max_depth", 3))
         elif model == "Logistic Regression":
             params["C"] = st.number_input("C (Inverse Regularization)", 0.01, 10.0, default_params.get("C", 1.0), 0.01)
             params["max_iter"] = st.number_input("max_iter", 100, 5000, default_params.get("max_iter", 1000), 100)
         elif model == "SVM":
             params["C"] = st.number_input("C", 0.01, 10.0, default_params.get("C", 1.0), 0.01)
-            params["kernel"] = st.selectbox("kernel", ["rbf", "linear", "poly", "sigmoid"], index=["rbf", "linear", "poly", "sigmoid"].index(default_params.get("kernel", "rbf")))
+            params["kernel"] = st.selectbox(
+                "kernel",
+                ["rbf", "linear", "poly", "sigmoid"],
+                index=["rbf", "linear", "poly", "sigmoid"].index(default_params.get("kernel", "rbf")),
+            )
         elif model == "Decision Tree":
             _max_depth = st.number_input("max_depth (0=None)", 0, 50, default_params.get("max_depth", 0) or 0)
             params["max_depth"] = None if _max_depth == 0 else _max_depth
-            params["min_samples_split"] = st.number_input("min_samples_split", 2, 20, default_params.get("min_samples_split", 2))
+            params["min_samples_split"] = st.number_input(
+                "min_samples_split", 2, 20, default_params.get("min_samples_split", 2)
+            )
         elif model == "Ridge Regression":
             params["alpha"] = st.number_input("alpha", 0.01, 10.0, default_params.get("alpha", 1.0), 0.01)
         elif model == "SVR":
             params["C"] = st.number_input("C", 0.01, 10.0, default_params.get("C", 1.0), 0.01)
-            params["kernel"] = st.selectbox("kernel", ["rbf", "linear", "poly", "sigmoid"], index=["rbf", "linear", "poly", "sigmoid"].index(default_params.get("kernel", "rbf")))
+            params["kernel"] = st.selectbox(
+                "kernel",
+                ["rbf", "linear", "poly", "sigmoid"],
+                index=["rbf", "linear", "poly", "sigmoid"].index(default_params.get("kernel", "rbf")),
+            )
         elif model == "Decision Tree Regressor":
             _max_depth = st.number_input("max_depth (0=None)", 0, 50, default_params.get("max_depth", 0) or 0)
             params["max_depth"] = None if _max_depth == 0 else _max_depth
-            params["min_samples_split"] = st.number_input("min_samples_split", 2, 20, default_params.get("min_samples_split", 2))
+            params["min_samples_split"] = st.number_input(
+                "min_samples_split", 2, 20, default_params.get("min_samples_split", 2)
+            )
 
-        st.markdown('</div>', unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
 
         if params:
             st.json(params)
@@ -139,24 +174,31 @@ def _render_page():
             timeline_box = st.empty()
 
             stages = []
+
             def _cb(stage, progress, msg):
                 prog.progress(progress)
                 status_box.markdown(f"**Current:** {stage} — {msg}")
                 stages.append({"time": time.strftime("%H:%M:%S"), "label": stage, "status": "success"})
-                with timeline_box.container(): component_timeline(stages[-10:])
+                with timeline_box.container():
+                    component_timeline(stages[-10:])
 
             try:
                 payload = run_pipeline_and_persist(
-                    dataset_label=ds_label, dataset_key=ds_key, model_type=model, task=task,
-                    params=params, test_size=test_size, cv_folds=cv_folds, random_state=random_state,
-                    progress_callback=_cb
+                    dataset_label=ds_label,
+                    dataset_key=ds_key,
+                    model_type=model,
+                    task=task,
+                    params=params,
+                    test_size=test_size,
+                    cv_folds=cv_folds,
+                    random_state=random_state,
+                    progress_callback=_cb,
                 )
                 res = payload["result"]
                 st.success(f"Run {res.run_id} finished in {res.duration:.2f}s")
                 if res.validation is not None:
                     st.caption(
-                        f"Data quality score: {res.validation.quality_score:.1f}/100 "
-                        f"({res.validation.status})"
+                        f"Data quality score: {res.validation.quality_score:.1f}/100 " f"({res.validation.status})"
                     )
                 st.session_state["last_res"] = res
             except DataQualityFailed as e:
@@ -170,14 +212,13 @@ def _render_page():
             render_spacer("md")
             render_section_title(f"Analysis: {last_res.run_id}")
             r1, r2, r3, r4 = st.columns(4)
-            scalar_metrics = [
-                (k, v) for k, v in last_res.metrics.items() if isinstance(v, (int, float))
-            ]
+            scalar_metrics = [(k, v) for k, v in last_res.metrics.items() if isinstance(v, (int, float))]
             for i, (k, v) in enumerate(scalar_metrics[:4]):
                 with [r1, r2, r3, r4][i]:
                     component_kpi_card(k.replace("_", " ").title(), f"{v:.4f}", "Primary metric", tone="success")
 
     st.divider()
     st.caption("⚡ Workflow Engine v2.0-Componentized")
+
 
 safe_render("Pipeline Runner", _render_page)

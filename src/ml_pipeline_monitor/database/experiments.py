@@ -8,8 +8,8 @@ parameters, and execution metadata.
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from datetime import UTC, datetime
+from typing import Any
 
 from ml_pipeline_monitor.database.schema import _get_connection
 
@@ -20,13 +20,13 @@ def save_experiment(
     dataset: str,
     model_type: str,
     task: str,
-    params: Dict[str, Any],
-    metrics: Dict[str, float],
+    params: dict[str, Any],
+    metrics: dict[str, float],
     duration: float,
-    tags: Optional[Dict[str, Any]] = None,
+    tags: dict[str, Any] | None = None,
 ) -> None:
     """Save a completed experiment run."""
-    now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    now = datetime.now(UTC).isoformat(timespec="seconds")
     with _get_connection() as conn:
         conn.execute(
             """
@@ -63,7 +63,7 @@ def save_experiment(
         )
 
 
-def get_experiments(limit: int = 200) -> List[Dict[str, Any]]:
+def get_experiments(limit: int = 200) -> list[dict[str, Any]]:
     """Retrieve recent experiments, ordered by creation date."""
     with _get_connection() as conn:
         rows = conn.execute(
@@ -73,10 +73,8 @@ def get_experiments(limit: int = 200) -> List[Dict[str, Any]]:
     return [dict(r) for r in rows]
 
 
-def get_experiment_by_run_id(run_id: str) -> Optional[Dict[str, Any]]:
+def get_experiment_by_run_id(run_id: str) -> dict[str, Any] | None:
     """Retrieve a single experiment by its run ID."""
     with _get_connection() as conn:
-        row = conn.execute(
-            "SELECT * FROM experiments WHERE run_id = ?", (run_id,)
-        ).fetchone()
+        row = conn.execute("SELECT * FROM experiments WHERE run_id = ?", (run_id,)).fetchone()
     return dict(row) if row else None

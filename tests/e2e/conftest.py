@@ -1,5 +1,6 @@
 """Playwright E2E test configuration."""
 
+import contextlib
 import os
 
 import pytest
@@ -97,8 +98,10 @@ def start_streamlit(request):
         # Redirect to files instead of PIPE: Streamlit logs a lot (file-watcher
         # spam, per-run traces) and an undrained pipe buffer (~64KB) fills up,
         # blocking the server on write and freezing the app mid-suite.
-        stdout=open(str(_e2e_db_dir / "streamlit.stdout.log"), "w", encoding="utf-8"),
-        stderr=open(str(_e2e_db_dir / "streamlit.stderr.log"), "w", encoding="utf-8"),
+        # noqa targets below: these handles must stay open for the lifetime of
+        # the child process, so a context manager would close the redirect.
+        stdout=open(str(_e2e_db_dir / "streamlit.stdout.log"), "w", encoding="utf-8"),  # noqa: SIM115
+        stderr=open(str(_e2e_db_dir / "streamlit.stderr.log"), "w", encoding="utf-8"),  # noqa: SIM115
         text=False,
     )
 
@@ -160,10 +163,8 @@ def start_streamlit(request):
             rc = None
 
         # Ensure process is stopped
-        try:
+        with contextlib.suppress(Exception):
             proc.terminate()
-        except Exception:
-            pass
 
         debug_msg = (
             f"Streamlit failed readiness checks.\nlast_exc={last_exc}\nproc_return_code={rc}\n"
@@ -183,9 +184,7 @@ def start_streamlit(request):
                 f"status={final_root.status_code}\n---stdout_last---\n{out_txt[-4000:]}\n---stderr_last---\n{err_txt[-4000:]}\n"
             )
     except Exception as e:
-        raise RuntimeError(
-            "Streamlit root endpoint not reachable after readiness.\n" + str(e)
-        )
+        raise RuntimeError("Streamlit root endpoint not reachable after readiness.\n" + str(e)) from e
 
     yield port
 

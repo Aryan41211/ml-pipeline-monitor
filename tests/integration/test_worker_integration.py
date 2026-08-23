@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 import tempfile
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from unittest import mock
 
@@ -33,7 +33,7 @@ class TestScheduleClaim:
         self.workspace_id = create_workspace(workspace_name="worker-ws", team_id=team_id)
 
     def test_claim_due_schedule_and_advance_next_run(self):
-        past = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
+        past = (datetime.now(UTC) - timedelta(hours=1)).isoformat()
         schedule_id = create_schedule(
             workspace_id=self.workspace_id,
             schedule_name="due-now",
@@ -49,10 +49,10 @@ class TestScheduleClaim:
         assert updated["last_run_at"] is not None
         assert updated["next_run_at"] is not None
         next_run = worker._parse_dt(updated["next_run_at"])
-        assert next_run is not None and next_run > datetime.now(timezone.utc)
+        assert next_run is not None and next_run > datetime.now(UTC)
 
     def test_not_due_when_next_run_in_future(self):
-        future = (datetime.now(timezone.utc) + timedelta(days=1)).isoformat()
+        future = (datetime.now(UTC) + timedelta(days=1)).isoformat()
         schedule_id = create_schedule(
             workspace_id=self.workspace_id,
             schedule_name="not-due",
@@ -64,7 +64,7 @@ class TestScheduleClaim:
         assert all(int(s["id"]) != schedule_id for s in due)
 
     def test_disabled_schedule_not_claimed(self):
-        past = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
+        past = (datetime.now(UTC) - timedelta(hours=1)).isoformat()
         schedule_id = create_schedule(
             workspace_id=self.workspace_id,
             schedule_name="disabled",
@@ -86,7 +86,7 @@ class TestScheduleExecution:
         self.workspace_id = create_workspace(workspace_name="worker-exec-ws", team_id=team_id)
 
     def test_run_schedule_success_records_run(self):
-        past = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
+        past = (datetime.now(UTC) - timedelta(hours=1)).isoformat()
         schedule_id = create_schedule(
             workspace_id=self.workspace_id,
             schedule_name="exec-success",
@@ -99,7 +99,16 @@ class TestScheduleExecution:
         with mock.patch.object(worker, "run_pipeline_and_persist") as run_mock:
             worker._run_schedule({"id": schedule_id, "schedule_name": "exec-success", "schedule_type": "pipeline_run"})
             run_mock.assert_called_once()
-            run_mock.assert_called_with(dataset_label="iris", dataset_key="iris", model_type="Random Forest", task="classification", params={}, test_size=0.2, cv_folds=5, random_state=42)
+            run_mock.assert_called_with(
+                dataset_label="iris",
+                dataset_key="iris",
+                model_type="Random Forest",
+                task="classification",
+                params={},
+                test_size=0.2,
+                cv_folds=5,
+                random_state=42,
+            )
 
         with governance._get_connection() as conn:
             rows = conn.execute(
@@ -109,7 +118,7 @@ class TestScheduleExecution:
         assert rows[0]["status"] == "success"
 
     def test_run_schedule_failure_records_failed(self):
-        past = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
+        past = (datetime.now(UTC) - timedelta(hours=1)).isoformat()
         schedule_id = create_schedule(
             workspace_id=self.workspace_id,
             schedule_name="exec-fail",

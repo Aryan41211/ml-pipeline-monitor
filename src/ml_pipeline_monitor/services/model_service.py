@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+import contextlib
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import joblib
 import pandas as pd
@@ -12,8 +13,8 @@ from ml_pipeline_monitor.core.metrics import record_model_promotion
 from ml_pipeline_monitor.database import (
     get_latest_production_model,
     get_model_by_id,
-    get_model_stage_events,
     get_model_lineage,
+    get_model_stage_events,
     get_models,
     get_recent_production_models,
     update_model_stage,
@@ -37,7 +38,7 @@ def _validate_dataset(dataset: str) -> None:
         raise ValueError("dataset is required")
 
 
-def list_models(limit: int = 100, dataset: Optional[str] = None) -> List[Dict[str, Any]]:
+def list_models(limit: int = 100, dataset: str | None = None) -> list[dict[str, Any]]:
     """Return model registry records with optional dataset filter."""
     if limit <= 0 or limit > 1000:
         raise ValueError("limit must be between 1 and 1000")
@@ -48,7 +49,7 @@ def list_models(limit: int = 100, dataset: Optional[str] = None) -> List[Dict[st
     return records
 
 
-def list_lineage(limit: int = 200, dataset: Optional[str] = None) -> List[Dict[str, Any]]:
+def list_lineage(limit: int = 200, dataset: str | None = None) -> list[dict[str, Any]]:
     """Return model lineage records."""
     if limit <= 0 or limit > 1000:
         raise ValueError("limit must be between 1 and 1000")
@@ -89,7 +90,7 @@ def set_model_stage(model_id: str, stage: str) -> None:
     )
 
 
-def get_stage_timeline(model_id: str, limit: int = 50) -> List[Dict[str, Any]]:
+def get_stage_timeline(model_id: str, limit: int = 50) -> list[dict[str, Any]]:
     """Return stage change history for a model, newest first."""
     _validate_model_id(model_id)
     if limit <= 0 or limit > 500:
@@ -97,7 +98,7 @@ def get_stage_timeline(model_id: str, limit: int = 50) -> List[Dict[str, Any]]:
     return get_model_stage_events(model_id=model_id, limit=limit)
 
 
-def get_rollback_hint(dataset: str) -> Dict[str, Any]:
+def get_rollback_hint(dataset: str) -> dict[str, Any]:
     """Return current and previous production model hints for rollback UX."""
     _validate_dataset(dataset)
     recent = get_recent_production_models(dataset=dataset, limit=2)
@@ -109,7 +110,7 @@ def get_rollback_hint(dataset: str) -> Dict[str, Any]:
     }
 
 
-def revert_to_previous_production(dataset: str) -> Dict[str, Any]:
+def revert_to_previous_production(dataset: str) -> dict[str, Any]:
     """Promote the previous production model back to production for a dataset."""
     _validate_dataset(dataset)
     hint = get_rollback_hint(dataset)
@@ -136,8 +137,8 @@ def _derive_scaler_path(model_path: Path) -> Path:
 
 
 def load_production_artifacts(
-    dataset: Optional[str] = None,
-) -> Tuple[Any, Optional[Any], Dict[str, Any]]:
+    dataset: str | None = None,
+) -> tuple[Any, Any | None, dict[str, Any]]:
     """Load latest production model (+ optional scaler) and its metadata."""
     if dataset:
         _validate_dataset(dataset)
@@ -193,9 +194,7 @@ def _align_features(model: Any, frame: pd.DataFrame) -> pd.DataFrame:
     expected_cols = [str(col) for col in list(expected)]
     missing = [col for col in expected_cols if col not in frame.columns]
     if missing:
-        raise ValueError(
-            "Missing required features for production model: " + ", ".join(missing)
-        )
+        raise ValueError("Missing required features for production model: " + ", ".join(missing))
 
     aligned = frame.reindex(columns=expected_cols)
     return aligned
@@ -203,11 +202,11 @@ def _align_features(model: Any, frame: pd.DataFrame) -> pd.DataFrame:
 
 def predict_from_payload(
     payload: Any,
-    dataset: Optional[str] = None,
-    model: Optional[Any] = None,
-    scaler: Optional[Any] = None,
-    model_meta: Optional[Dict[str, Any]] = None,
-) -> Dict[str, Any]:
+    dataset: str | None = None,
+    model: Any | None = None,
+    scaler: Any | None = None,
+    model_meta: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """Run prediction against latest production model."""
     if payload is None:
         raise ValueError("payload is required")
@@ -225,7 +224,7 @@ def predict_from_payload(
     X_infer = use_scaler.transform(X) if use_scaler is not None else X
     preds = use_model.predict(X_infer)
 
-    response: Dict[str, Any] = {
+    response: dict[str, Any] = {
         "model_id": (use_meta or {}).get("model_id"),
         "dataset": (use_meta or {}).get("dataset"),
         "version": (use_meta or {}).get("version"),
@@ -234,9 +233,7 @@ def predict_from_payload(
     }
 
     if hasattr(use_model, "predict_proba"):
-        try:
+        with contextlib.suppress(Exception):
             response["probabilities"] = use_model.predict_proba(X_infer).tolist()
-        except Exception:
-            pass
 
     return response

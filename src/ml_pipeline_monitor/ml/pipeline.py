@@ -6,15 +6,18 @@ preprocessing, feature analysis, cross-validation, training, evaluation,
 and feature importance extraction.  A progress callback lets the Streamlit
 front-end update in real time without blocking the event loop.
 """
+
 from __future__ import annotations
 
 import time
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any
 
 import numpy as np
 import pandas as pd
+import xgboost as xgb
 from sklearn.ensemble import (
     GradientBoostingClassifier,
     GradientBoostingRegressor,
@@ -31,25 +34,22 @@ from sklearn.metrics import (
     precision_score,
     r2_score,
     recall_score,
-    roc_curve,
     roc_auc_score,
+    roc_curve,
 )
 from sklearn.model_selection import KFold, StratifiedKFold, cross_val_score
 from sklearn.preprocessing import StandardScaler
 from sklearn.svm import SVC, SVR
 from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor
 
-import xgboost as xgb
-
 from ml_pipeline_monitor.core.metrics import record_dataset_validation, record_pipeline_stage
 from ml_pipeline_monitor.ml.data_validation import DataQualityFailed, ValidationResult, validate_dataset
-
 
 # ---------------------------------------------------------------------------
 # Supported algorithms
 # ---------------------------------------------------------------------------
 
-CLF_REGISTRY: Dict[str, type] = {
+CLF_REGISTRY: dict[str, type] = {
     "Random Forest": RandomForestClassifier,
     "XGBoost": xgb.XGBClassifier,
     "Gradient Boosting": GradientBoostingClassifier,
@@ -58,7 +58,7 @@ CLF_REGISTRY: Dict[str, type] = {
     "Decision Tree": DecisionTreeClassifier,
 }
 
-REG_REGISTRY: Dict[str, type] = {
+REG_REGISTRY: dict[str, type] = {
     "Random Forest": RandomForestRegressor,
     "XGBoost": xgb.XGBRegressor,
     "Gradient Boosting": GradientBoostingRegressor,
@@ -68,7 +68,7 @@ REG_REGISTRY: Dict[str, type] = {
 }
 
 # Default parameter sets per algorithm (overridden by user input)
-DEFAULT_PARAMS: Dict[str, Dict[str, Any]] = {
+DEFAULT_PARAMS: dict[str, dict[str, Any]] = {
     "Random Forest": {"n_estimators": 100, "max_depth": None, "min_samples_split": 2},
     "XGBoost": {"n_estimators": 100, "learning_rate": 0.1, "max_depth": 6},
     "Gradient Boosting": {"n_estimators": 100, "learning_rate": 0.1, "max_depth": 3},
@@ -84,13 +84,14 @@ DEFAULT_PARAMS: Dict[str, Dict[str, Any]] = {
 # Result data classes
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class StageResult:
     name: str
-    status: str          # 'success' | 'failed' | 'skipped'
-    duration: float      # seconds
-    logs: List[str] = field(default_factory=list)
-    artifacts: Dict[str, Any] = field(default_factory=dict)
+    status: str  # 'success' | 'failed' | 'skipped'
+    duration: float  # seconds
+    logs: list[str] = field(default_factory=list)
+    artifacts: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -101,17 +102,17 @@ class PipelineResult:
     task: str
     status: str = "pending"
     duration: float = 0.0
-    params: Dict[str, Any] = field(default_factory=dict)
-    metrics: Dict[str, float] = field(default_factory=dict)
+    params: dict[str, Any] = field(default_factory=dict)
+    metrics: dict[str, float] = field(default_factory=dict)
     # ROC points are arrays, not scalars: keeping them out of ``metrics`` stops
     # them bloating the persisted metrics blob and breaking float formatting in
     # any consumer that iterates it.
-    curves: Dict[str, List[float]] = field(default_factory=dict)
-    validation: Optional[ValidationResult] = None
-    cv_scores: Optional[np.ndarray] = None
-    feature_importances: Optional[pd.Series] = None
-    confusion_mat: Optional[np.ndarray] = None
-    stages: List[StageResult] = field(default_factory=list)
+    curves: dict[str, list[float]] = field(default_factory=dict)
+    validation: ValidationResult | None = None
+    cv_scores: np.ndarray | None = None
+    feature_importances: pd.Series | None = None
+    confusion_mat: np.ndarray | None = None
+    stages: list[StageResult] = field(default_factory=list)
     model: Any = None
     scaler: Any = None
 
@@ -152,11 +153,11 @@ class MLPipeline:
         dataset_name: str,
         model_type: str,
         task: str,
-        params: Dict[str, Any],
+        params: dict[str, Any],
         cv_folds: int = 5,
         random_state: int = 42,
         n_jobs: int | None = None,
-        progress_callback: Optional[ProgressCallback] = None,
+        progress_callback: ProgressCallback | None = None,
         min_quality_score: float = 0.0,
         enforce_quality_gate: bool = False,
     ) -> None:
@@ -193,8 +194,8 @@ class MLPipeline:
         name: str,
         status: str,
         duration: float,
-        logs: List[str],
-        artifacts: Optional[Dict[str, Any]] = None,
+        logs: list[str],
+        artifacts: dict[str, Any] | None = None,
     ) -> None:
         """Append a stage result and publish its duration to Prometheus."""
         result.stages.append(StageResult(name, status, duration, logs, artifacts or {}))
@@ -217,6 +218,7 @@ class MLPipeline:
 
         # Apply random_state where supported
         import inspect
+
         sig = inspect.signature(cls.__init__)
         if "random_state" in sig.parameters:
             base["random_state"] = self.random_state
@@ -267,7 +269,7 @@ class MLPipeline:
         # ------------------------------------------------------------------
         t0 = time.perf_counter()
         self._emit("Data Validation", 0.05, "Verifying schema and data integrity")
-        logs: List[str] = []
+        logs: list[str] = []
 
         n_train, n_test = len(X_train), len(X_test)
         missing = int(X_train.isnull().sum().sum() + X_test.isnull().sum().sum())
@@ -301,9 +303,7 @@ class MLPipeline:
         )
 
         if self.enforce_quality_gate and validation.quality_score < self.min_quality_score:
-            logs.append(
-                f"Quality gate failed: {validation.quality_score:.1f} < {self.min_quality_score:.1f}"
-            )
+            logs.append(f"Quality gate failed: {validation.quality_score:.1f} < {self.min_quality_score:.1f}")
             self._record_stage(result, "Data Validation", "failed", time.perf_counter() - t0, logs)
             result.status = "failed"
             self._emit("Data Validation", 0.12, "Data quality gate failed — stopping run")
@@ -314,9 +314,7 @@ class MLPipeline:
                 validation_result=validation,
             )
 
-        self._emit(
-            "Data Validation", 0.12, f"Validation passed (quality {validation.quality_score:.1f}/100)"
-        )
+        self._emit("Data Validation", 0.12, f"Validation passed (quality {validation.quality_score:.1f}/100)")
         self._record_stage(result, "Data Validation", "success", time.perf_counter() - t0, logs)
 
         # ------------------------------------------------------------------
@@ -339,12 +337,8 @@ class MLPipeline:
         )
 
         logs.append(f"Scaler fitted on {n_train:,} samples")
-        logs.append(
-            f"Feature mean  : [{scaler.mean_.min():.4f}, {scaler.mean_.max():.4f}]"
-        )
-        logs.append(
-            f"Feature scale : [{scaler.scale_.min():.4f}, {scaler.scale_.max():.4f}]"
-        )
+        logs.append(f"Feature mean  : [{scaler.mean_.min():.4f}, {scaler.mean_.max():.4f}]")
+        logs.append(f"Feature scale : [{scaler.scale_.min():.4f}, {scaler.scale_.max():.4f}]")
         result.scaler = scaler
 
         self._emit("Preprocessing", 0.24, "Preprocessing complete")
@@ -364,9 +358,7 @@ class MLPipeline:
 
         logs.append(f"High-correlation pairs (>0.85) : {high_corr_pairs}")
         logs.append(f"Low-variance features (<0.01)  : {low_var_count}")
-        logs.append(
-            f"Variance range : [{X_tr_sc.var().min():.4f}, {X_tr_sc.var().max():.4f}]"
-        )
+        logs.append(f"Variance range : [{X_tr_sc.var().min():.4f}, {X_tr_sc.var().max():.4f}]")
 
         self._emit("Feature Analysis", 0.36, "Feature analysis complete")
         self._record_stage(result, "Feature Analysis", "success", time.perf_counter() - t0, logs)
@@ -381,15 +373,11 @@ class MLPipeline:
         cv_estimator = self._build_estimator()
 
         if self.task == "classification":
-            cv = StratifiedKFold(
-                n_splits=self.cv_folds, shuffle=True, random_state=self.random_state
-            )
+            cv = StratifiedKFold(n_splits=self.cv_folds, shuffle=True, random_state=self.random_state)
             scoring = "f1_weighted"
             scoring_label = "F1 (weighted)"
         else:
-            cv = KFold(
-                n_splits=self.cv_folds, shuffle=True, random_state=self.random_state
-            )
+            cv = KFold(n_splits=self.cv_folds, shuffle=True, random_state=self.random_state)
             scoring = "r2"
             scoring_label = "R²"
 
@@ -402,15 +390,13 @@ class MLPipeline:
             n_jobs=self.n_jobs,
         )
 
-        logs.append(
-            f"CV {scoring_label}: {cv_scores.mean():.4f}"
-            f"  (+/- {cv_scores.std() * 2:.4f})"
-        )
+        logs.append(f"CV {scoring_label}: {cv_scores.mean():.4f}" f"  (+/- {cv_scores.std() * 2:.4f})")
         logs.append(f"Fold scores : {[round(s, 4) for s in cv_scores]}")
         result.cv_scores = cv_scores
 
         self._emit(
-            "Cross-Validation", 0.55,
+            "Cross-Validation",
+            0.55,
             f"CV {scoring_label} = {cv_scores.mean():.4f}",
         )
         self._record_stage(result, "Cross-Validation", "success", time.perf_counter() - t0, logs)
@@ -448,36 +434,26 @@ class MLPipeline:
         t0 = time.perf_counter()
         self._emit("Evaluation", 0.77, "Scoring on held-out test set")
         logs = []
-        metrics: Dict[str, float] = {}
+        metrics: dict[str, float] = {}
 
         y_pred = model.predict(X_te_sc)
 
         if self.task == "classification":
             metrics["accuracy"] = round(accuracy_score(y_test, y_pred), 4)
-            metrics["precision"] = round(
-                precision_score(y_test, y_pred, average="weighted", zero_division=0), 4
-            )
-            metrics["recall"] = round(
-                recall_score(y_test, y_pred, average="weighted", zero_division=0), 4
-            )
-            metrics["f1_score"] = round(
-                f1_score(y_test, y_pred, average="weighted", zero_division=0), 4
-            )
+            metrics["precision"] = round(precision_score(y_test, y_pred, average="weighted", zero_division=0), 4)
+            metrics["recall"] = round(recall_score(y_test, y_pred, average="weighted", zero_division=0), 4)
+            metrics["f1_score"] = round(f1_score(y_test, y_pred, average="weighted", zero_division=0), 4)
 
             try:
                 if hasattr(model, "predict_proba"):
                     y_prob = model.predict_proba(X_te_sc)
                     if y_prob.shape[1] == 2:
-                        metrics["roc_auc"] = round(
-                            roc_auc_score(y_test, y_prob[:, 1]), 4
-                        )
+                        metrics["roc_auc"] = round(roc_auc_score(y_test, y_prob[:, 1]), 4)
                         fpr, tpr, _ = roc_curve(y_test, y_prob[:, 1])
                         result.curves["roc_fpr"] = [round(float(v), 6) for v in fpr.tolist()]
                         result.curves["roc_tpr"] = [round(float(v), 6) for v in tpr.tolist()]
                     else:
-                        metrics["roc_auc"] = round(
-                            roc_auc_score(y_test, y_prob, multi_class="ovr"), 4
-                        )
+                        metrics["roc_auc"] = round(roc_auc_score(y_test, y_prob, multi_class="ovr"), 4)
             except Exception:
                 pass
 
@@ -509,21 +485,14 @@ class MLPipeline:
         logs = []
 
         if hasattr(model, "feature_importances_"):
-            importances = pd.Series(
-                model.feature_importances_, index=X_train.columns
-            ).sort_values(ascending=False)
+            importances = pd.Series(model.feature_importances_, index=X_train.columns).sort_values(ascending=False)
             result.feature_importances = importances
             top3 = importances.head(3)
-            logs.append(
-                "Top features: "
-                + ", ".join(f"{k} ({v:.4f})" for k, v in top3.items())
-            )
+            logs.append("Top features: " + ", ".join(f"{k} ({v:.4f})" for k, v in top3.items()))
         elif hasattr(model, "coef_"):
             coef = model.coef_
             coef_abs = np.abs(coef).mean(axis=0) if np.ndim(coef) > 1 else np.abs(np.ravel(coef))
-            importances = pd.Series(coef_abs, index=X_train.columns).sort_values(
-                ascending=False
-            )
+            importances = pd.Series(coef_abs, index=X_train.columns).sort_values(ascending=False)
             result.feature_importances = importances
             logs.append("Importance derived from model coefficients (absolute values)")
         else:

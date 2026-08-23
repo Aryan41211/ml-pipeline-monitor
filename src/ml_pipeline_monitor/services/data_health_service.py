@@ -4,16 +4,20 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 import numpy as np
 import pandas as pd
 
-from ml_pipeline_monitor.services.pipeline_service import get_dataset_options, get_dataset_preview, get_pipeline_defaults
 from ml_pipeline_monitor.core.config_loader import get_artifact_dirs
+from ml_pipeline_monitor.services.pipeline_service import (
+    get_dataset_options,
+    get_dataset_preview,
+    get_pipeline_defaults,
+)
 
 
-def load_health_input(dataset_key: str, *, test_size: float, random_state: int) -> Dict[str, Any]:
+def load_health_input(dataset_key: str, *, test_size: float, random_state: int) -> dict[str, Any]:
     """Load dataset preview and return unified frame for quality checks."""
     payload = get_dataset_preview(dataset_key, test_size=test_size, random_state=random_state)
     ds = payload["dataset"]
@@ -38,7 +42,7 @@ def load_health_input(dataset_key: str, *, test_size: float, random_state: int) 
     }
 
 
-def missing_value_report(df: pd.DataFrame) -> Dict[str, Any]:
+def missing_value_report(df: pd.DataFrame) -> dict[str, Any]:
     """Return per-column and global missing-value statistics."""
     missing_count = df.isna().sum()
     total_cells = df.shape[0] * df.shape[1] if df.shape[0] and df.shape[1] else 0
@@ -60,7 +64,7 @@ def missing_value_report(df: pd.DataFrame) -> Dict[str, Any]:
     }
 
 
-def class_imbalance_report(target: pd.Series, task: str) -> Dict[str, Any]:
+def class_imbalance_report(target: pd.Series, task: str) -> dict[str, Any]:
     """Return class distribution and imbalance ratio for classification tasks."""
     if task != "classification":
         return {"enabled": False, "distribution": pd.DataFrame(), "imbalance_ratio": None}
@@ -100,9 +104,9 @@ def outlier_report(feature_df: pd.DataFrame, *, method: str = "iqr", z_threshold
     """Return outlier count per numeric feature using IQR or z-score."""
     numeric = feature_df.select_dtypes(include=[np.number]).copy()
     if numeric.empty:
-        return pd.DataFrame(columns=["feature", "outlier_count", "outlier_pct"]) 
+        return pd.DataFrame(columns=["feature", "outlier_count", "outlier_pct"])
 
-    rows: List[Dict[str, Any]] = []
+    rows: list[dict[str, Any]] = []
     n = len(numeric)
 
     for col in numeric.columns:
@@ -137,7 +141,7 @@ def _schema_dir() -> Path:
     return d
 
 
-def load_schema_baseline(dataset_key: str) -> List[str] | None:
+def load_schema_baseline(dataset_key: str) -> list[str] | None:
     """Load saved baseline columns for a dataset, if available."""
     path = _schema_dir() / f"{dataset_key}.json"
     if not path.exists():
@@ -154,14 +158,14 @@ def load_schema_baseline(dataset_key: str) -> List[str] | None:
     return None
 
 
-def save_schema_baseline(dataset_key: str, columns: List[str]) -> None:
+def save_schema_baseline(dataset_key: str, columns: list[str]) -> None:
     """Persist baseline schema for future comparisons."""
     path = _schema_dir() / f"{dataset_key}.json"
     payload = {"dataset_key": dataset_key, "columns": list(columns)}
     path.write_text(json.dumps(payload, ensure_ascii=True, indent=2), encoding="utf-8")
 
 
-def compare_schema(current_columns: List[str], baseline_columns: List[str] | None) -> Dict[str, Any]:
+def compare_schema(current_columns: list[str], baseline_columns: list[str] | None) -> dict[str, Any]:
     """Return schema-drift comparison against saved baseline."""
     if baseline_columns is None:
         return {"has_baseline": False, "new_columns": current_columns, "missing_columns": []}
@@ -179,7 +183,7 @@ def compare_schema(current_columns: List[str], baseline_columns: List[str] | Non
     }
 
 
-def data_health_defaults() -> Dict[str, Any]:
+def data_health_defaults() -> dict[str, Any]:
     """Expose default controls for the Data Health page."""
     p = get_pipeline_defaults()
     return {

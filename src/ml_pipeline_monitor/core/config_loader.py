@@ -43,7 +43,7 @@ def _parse_env_line(line: str) -> str | None:
     key, _, value = stripped.partition("=")
     key = key.strip()
     if key.startswith("export "):
-        key = key[len("export "):].strip()
+        key = key[len("export ") :].strip()
     if not key or not key.replace("_", "").isalnum():
         return None
 

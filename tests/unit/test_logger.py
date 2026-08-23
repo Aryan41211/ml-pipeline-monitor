@@ -3,15 +3,12 @@
 from __future__ import annotations
 
 import logging
-from logging.handlers import RotatingFileHandler
 from io import StringIO
+from logging.handlers import RotatingFileHandler
 from unittest.mock import MagicMock, patch
-
-import pytest
 
 from ml_pipeline_monitor.core.logger import (
     LogContext,
-    LogLevel,
     clear_actor_context,
     clear_correlation_id,
     clear_operation_context,
@@ -23,7 +20,6 @@ from ml_pipeline_monitor.core.logger import (
     get_operation_context,
     get_request_id,
     get_service_context,
-    log_dataset_upload,
     log_dataset_validation,
     log_drift_detection,
     log_experiment_creation,
@@ -106,7 +102,7 @@ def test_get_set_clear_service_context():
 def test_log_context_manager():
     clear_correlation_id()
     clear_request_id()
-    with LogContext(operation="test_op", actor="tester", service="test_service") as ctx:
+    with LogContext(operation="test_op", actor="tester", service="test_service"):
         assert get_operation_context() == "test_op"
         assert get_actor_context() == "tester"
         assert get_service_context() == "test_service"

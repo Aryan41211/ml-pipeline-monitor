@@ -8,8 +8,9 @@ SQLite and PostgreSQL backends.
 from __future__ import annotations
 
 import time
+from collections.abc import Iterator
 from contextlib import contextmanager
-from typing import Any, Iterator
+from typing import Any
 
 from ml_pipeline_monitor.database.connection import get_backend
 
@@ -33,7 +34,7 @@ def _initialize_db_postgres_with_retry(max_retries: int = 5, base_delay: float =
             return
         except Exception as exc:
             last_exc = exc
-            delay = base_delay * (2 ** attempt)
+            delay = base_delay * (2**attempt)
             time.sleep(delay)
     raise last_exc  # type: ignore[misc]
 
@@ -242,10 +243,7 @@ def _do_initialize_db() -> None:
                     ).fetchall()
                 }
             else:
-                existing_columns = {
-                    row["name"]
-                    for row in conn.execute(f"PRAGMA table_info({table})").fetchall()
-                }
+                existing_columns = {row["name"] for row in conn.execute(f"PRAGMA table_info({table})").fetchall()}
 
             if column not in existing_columns:
                 conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
@@ -263,26 +261,17 @@ def _do_initialize_db() -> None:
         ensure_column_exists("model_stage_events", "changed_at", "TIMESTAMP")
         ensure_column_exists("model_stage_events", "note", "TEXT")
 
-        conn.execute(
-            "UPDATE models SET dataset_name = COALESCE(dataset_name, dataset)"
-        )
-        conn.execute(
-            f"UPDATE models SET created_at = COALESCE(created_at, registered_at, {ts_default})"
-        )
-        conn.execute(
-            "UPDATE models SET experiment_id = COALESCE(experiment_id, run_id)"
-        )
-        conn.execute(
-            "UPDATE model_stage_events SET dataset = COALESCE(dataset, '')"
-        )
-        conn.execute(
-            f"UPDATE model_stage_events SET changed_at = COALESCE(changed_at, {ts_default})"
-        )
+        conn.execute("UPDATE models SET dataset_name = COALESCE(dataset_name, dataset)")
+        conn.execute(f"UPDATE models SET created_at = COALESCE(created_at, registered_at, {ts_default})")
+        conn.execute("UPDATE models SET experiment_id = COALESCE(experiment_id, run_id)")
+        conn.execute("UPDATE model_stage_events SET dataset = COALESCE(dataset, '')")
+        conn.execute(f"UPDATE model_stage_events SET changed_at = COALESCE(changed_at, {ts_default})")
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_stage_events_model_changed ON model_stage_events(model_id, changed_at DESC)"
         )
         conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_stage_events_dataset_changed ON model_stage_events(dataset, changed_at DESC)"
+            "CREATE INDEX IF NOT EXISTS idx_stage_events_dataset_changed "
+            "ON model_stage_events(dataset, changed_at DESC)"
         )
 
 
@@ -506,9 +495,7 @@ def initialize_prediction_registry() -> None:
     """
 
     with _get_connection() as conn:
-        conn.executescript(
-            prediction_registry_postgres if backend == "postgres" else prediction_registry_sqlite
-        )
+        conn.executescript(prediction_registry_postgres if backend == "postgres" else prediction_registry_sqlite)
 
 
 def initialize_governance_registry() -> None:

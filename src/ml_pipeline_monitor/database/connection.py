@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import os
 import queue
 import re
@@ -9,9 +10,8 @@ import sqlite3
 import threading
 from pathlib import Path
 
-from ml_pipeline_monitor.database.interfaces import DatabaseBackend, DatabaseConnection
-
 from ml_pipeline_monitor.core.config_loader import ROOT_DIR, load_config
+from ml_pipeline_monitor.database.interfaces import DatabaseBackend, DatabaseConnection
 
 
 class PostgresConnectionAdapter:
@@ -196,9 +196,7 @@ def _resolve_backend_key() -> tuple[str, str]:
     deployment can select PostgreSQL without shipping a different config file.
     """
     storage_cfg = load_config().get("storage", {})
-    backend = str(
-        os.getenv("MLMONITOR_DB_BACKEND") or storage_cfg.get("backend", "sqlite")
-    ).strip().lower()
+    backend = str(os.getenv("MLMONITOR_DB_BACKEND") or storage_cfg.get("backend", "sqlite")).strip().lower()
 
     if backend == "sqlite":
         return backend, resolve_sqlite_db_path()
@@ -212,9 +210,7 @@ def _resolve_backend_key() -> tuple[str, str]:
             )
         return backend, dsn
 
-    raise ValueError(
-        f"Unsupported database backend '{backend}'. Supported backends: 'sqlite', 'postgres'."
-    )
+    raise ValueError(f"Unsupported database backend '{backend}'. Supported backends: 'sqlite', 'postgres'.")
 
 
 def _build_backend(key: tuple[str, str]) -> DatabaseBackend:
@@ -255,10 +251,8 @@ def get_backend() -> DatabaseBackend:
         if cached is not None:
             close_all = getattr(cached[1], "close_all", None)
             if callable(close_all):
-                try:
+                with contextlib.suppress(Exception):  # best-effort teardown
                     close_all()
-                except Exception:  # pragma: no cover - best-effort teardown
-                    pass
 
         backend_instance = _build_backend(key)
         _backend_cache = (key, backend_instance)
@@ -275,7 +269,5 @@ def reset_backend() -> None:
         return
     close_all = getattr(cached[1], "close_all", None)
     if callable(close_all):
-        try:
+        with contextlib.suppress(Exception):  # best-effort teardown
             close_all()
-        except Exception:  # pragma: no cover - best-effort teardown
-            pass

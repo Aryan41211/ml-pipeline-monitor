@@ -6,6 +6,7 @@ and the Population Stability Index (PSI) as a complementary measure.
 A feature is flagged as drifted when either the KS p-value falls below the
 significance level or the PSI exceeds the moderate-change threshold.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -20,6 +21,7 @@ from ml_pipeline_monitor.core.config_loader import load_config
 # ---------------------------------------------------------------------------
 # PSI
 # ---------------------------------------------------------------------------
+
 
 def compute_psi(
     reference: np.ndarray,
@@ -76,6 +78,7 @@ def compute_psi(
 # Per-feature result
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class FeatureDriftResult:
     feature: str
@@ -83,7 +86,7 @@ class FeatureDriftResult:
     p_value: float
     psi: float
     drift_detected: bool
-    severity: str     # 'none' | 'moderate' | 'significant'
+    severity: str  # 'none' | 'moderate' | 'significant'
 
 
 def _classify_severity(
@@ -148,6 +151,7 @@ def analyze_feature(
 # Full dataset drift report
 # ---------------------------------------------------------------------------
 
+
 def run_drift_analysis(
     reference: pd.DataFrame,
     current: pd.DataFrame,
@@ -172,9 +176,7 @@ def run_drift_analysis(
     cfg = load_config().get("monitoring", {})
     moderate_threshold = float(cfg.get("psi_moderate_threshold", moderate_threshold))
     significant_threshold = float(cfg.get("psi_significant_threshold", significant_threshold))
-    feature_ratio_threshold = float(
-        cfg.get("drift_feature_ratio_threshold", feature_ratio_threshold)
-    )
+    feature_ratio_threshold = float(cfg.get("drift_feature_ratio_threshold", feature_ratio_threshold))
 
     common = [c for c in reference.columns if c in current.columns]
     results: list[dict[str, Any]] = []

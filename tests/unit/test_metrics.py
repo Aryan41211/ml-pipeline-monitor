@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from ml_pipeline_monitor.core.metrics import (
     dataset_columns,
     dataset_rows,
@@ -14,13 +12,13 @@ from ml_pipeline_monitor.core.metrics import (
     drift_features_count,
     drift_score,
     experiments_total,
-    models_registered_total,
     model_promotions_total,
+    models_registered_total,
     pipeline_runs_total,
     pipeline_stage_duration_seconds,
     predictions_total,
-    record_api_request,
     record_api_error,
+    record_api_request,
     record_dataset_validation,
     record_drift_detection,
     record_experiment,
@@ -89,7 +87,12 @@ def test_record_model_promotion():
     record_model_promotion(
         dataset="iris", model_type="RF", from_stage="staging", to_stage="production", status="success"
     )
-    assert model_promotions_total.labels(dataset="iris", model_type="RF", from_stage="staging", to_stage="production", status="success")._value.get() > 0
+    assert (
+        model_promotions_total.labels(
+            dataset="iris", model_type="RF", from_stage="staging", to_stage="production", status="success"
+        )._value.get()
+        > 0
+    )
 
 
 def test_record_dataset_validation():
@@ -103,12 +106,16 @@ def test_update_system_metrics():
     with patch("psutil.cpu_percent", return_value=25.0):
         with patch("psutil.sensors_temperatures", return_value={}, create=True):
             with patch("psutil.virtual_memory") as mock_mem:
-                mock_mem.return_value = MagicMock(total=16*1024**3, used=8*1024**3, available=8*1024**3, percent=50.0)
+                mock_mem.return_value = MagicMock(
+                    total=16 * 1024**3, used=8 * 1024**3, available=8 * 1024**3, percent=50.0
+                )
                 with patch("psutil.disk_usage") as mock_disk:
-                    mock_disk.return_value = MagicMock(total=500*1024**3, used=200*1024**3, free=300*1024**3, percent=40.0)
+                    mock_disk.return_value = MagicMock(
+                        total=500 * 1024**3, used=200 * 1024**3, free=300 * 1024**3, percent=40.0
+                    )
                     mock_proc = MagicMock()
                     mock_proc.cpu_percent.return_value = 5.0
-                    mock_proc.memory_info.return_value = MagicMock(rss=1024*1024*100, vms=1024*1024*200)
+                    mock_proc.memory_info.return_value = MagicMock(rss=1024 * 1024 * 100, vms=1024 * 1024 * 200)
                     mock_proc.num_threads.return_value = 4
                     mock_proc.status.return_value = "running"
                     with patch("psutil.Process", return_value=mock_proc):

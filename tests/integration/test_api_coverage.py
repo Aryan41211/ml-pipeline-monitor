@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -39,12 +38,14 @@ class TestAPIAuthPaths:
 
     def test_jwt_expired_token_rejected(self):
         from ml_pipeline_monitor.core.jwt_auth import create_access_token
+
         expired = create_access_token(sub="u", expires_delta=-10)
         r = client.get("/v1/auth/me", headers={"Authorization": f"Bearer {expired}"})
         assert r.status_code == 401
 
     def test_authenticate_with_valid_jwt(self):
         from ml_pipeline_monitor.core.jwt_auth import create_access_token
+
         token = create_access_token(sub="legit", role="admin")
         r = client.get("/v1/auth/me", headers={"Authorization": f"Bearer {token}"})
         assert r.status_code == 200
@@ -53,29 +54,51 @@ class TestAPIAuthPaths:
 
 class TestPredictErrorPaths:
     def test_predict_file_not_found(self):
-        from ml_pipeline_monitor.core.jwt_auth import create_access_token
         import numpy as np
+
+        from ml_pipeline_monitor.core.jwt_auth import create_access_token
+
         token = create_access_token(sub="u")
         fake_model = MagicMock()
         fake_model.feature_names_in_ = np.array(["a", "b"])
         fake_model.predict.return_value = np.array([1])
         fake_scaler = MagicMock()
         fake_scaler.transform.side_effect = FileNotFoundError("no scaler")
-        with patch("ml_pipeline_monitor.api.main.get_latest_production_model", return_value=(fake_model, fake_scaler, {"model_id": "m1", "dataset": "iris", "version": 1, "stage": "production", "artifact_path": "x"})):
-            r = client.post("/v1/predict", json={"features": {"a": 1, "b": 2}}, headers={"Authorization": f"Bearer {token}"})
+        with patch(
+            "ml_pipeline_monitor.api.main.get_latest_production_model",
+            return_value=(
+                fake_model,
+                fake_scaler,
+                {"model_id": "m1", "dataset": "iris", "version": 1, "stage": "production", "artifact_path": "x"},
+            ),
+        ):
+            r = client.post(
+                "/v1/predict", json={"features": {"a": 1, "b": 2}}, headers={"Authorization": f"Bearer {token}"}
+            )
         assert r.status_code == 500
 
     def test_predict_generic_exception(self):
-        from ml_pipeline_monitor.core.jwt_auth import create_access_token
         import numpy as np
+
+        from ml_pipeline_monitor.core.jwt_auth import create_access_token
+
         token = create_access_token(sub="u")
         fake_model = MagicMock()
         fake_model.feature_names_in_ = np.array(["a", "b"])
         fake_model.predict.side_effect = RuntimeError("model error")
         fake_scaler = MagicMock()
         fake_scaler.transform.return_value = np.array([[1.0, 2.0]])
-        with patch("ml_pipeline_monitor.api.main.get_latest_production_model", return_value=(fake_model, fake_scaler, {"model_id": "m1", "dataset": "iris", "version": 1, "stage": "production", "artifact_path": "x"})):
-            r = client.post("/v1/predict", json={"features": {"a": 1, "b": 2}}, headers={"Authorization": f"Bearer {token}"})
+        with patch(
+            "ml_pipeline_monitor.api.main.get_latest_production_model",
+            return_value=(
+                fake_model,
+                fake_scaler,
+                {"model_id": "m1", "dataset": "iris", "version": 1, "stage": "production", "artifact_path": "x"},
+            ),
+        ):
+            r = client.post(
+                "/v1/predict", json={"features": {"a": 1, "b": 2}}, headers={"Authorization": f"Bearer {token}"}
+            )
         assert r.status_code == 500
 
 
@@ -110,11 +133,17 @@ class TestHealthPaths:
 class TestLoginEndpoint:
     def test_login_with_fresh_token(self):
         import ml_pipeline_monitor.api.main as api_app
+
         with patch.object(api_app, "_get_expiration_minutes", return_value=60):
             with patch("ml_pipeline_monitor.core.auth._check_login", return_value=(True, "")):
                 with patch("ml_pipeline_monitor.core.auth._resolve_user", return_value="admin"):
-                    with patch("ml_pipeline_monitor.core.auth._credentials", return_value={"admin": {"password": "x", "role": "admin"}}):
-                        r = client.post("/v1/auth/login", json={"username": "admin", "password": "password", "refresh": False})
+                    with patch(
+                        "ml_pipeline_monitor.core.auth._credentials",
+                        return_value={"admin": {"password": "x", "role": "admin"}},
+                    ):
+                        r = client.post(
+                            "/v1/auth/login", json={"username": "admin", "password": "password", "refresh": False}
+                        )
         assert r.status_code == 200
         body = r.json()
         assert "access_token" in body
@@ -122,6 +151,7 @@ class TestLoginEndpoint:
 
     def test_refresh_endpoint_success(self):
         from ml_pipeline_monitor.core.jwt_auth import create_refresh_token
+
         token = create_refresh_token(sub="admin", role="admin")
         r = client.post("/v1/auth/refresh", json={"refresh_token": token})
         assert r.status_code == 200
@@ -153,13 +183,21 @@ class TestModelServiceCoverage:
 
     def test_revert_to_previous_no_previous(self):
         with patch("ml_pipeline_monitor.services.model_service.get_recent_production_models", return_value=[]):
-            with patch("ml_pipeline_monitor.services.model_service.get_rollback_hint", return_value={"previous_production": None}):
+            with patch(
+                "ml_pipeline_monitor.services.model_service.get_rollback_hint",
+                return_value={"previous_production": None},
+            ):
                 with pytest.raises(ValueError, match="No previous production model"):
                     revert_to_previous_production(dataset="iris")
 
     def test_revert_to_previous_success(self):
         prev = {"model_id": "m-prev", "version": 1}
-        with patch("ml_pipeline_monitor.services.model_service.get_rollback_hint", return_value={"previous_production": prev}):
-            with patch("ml_pipeline_monitor.services.model_service.update_model_stage"):
-                result = revert_to_previous_production(dataset="iris")
+        with (
+            patch(
+                "ml_pipeline_monitor.services.model_service.get_rollback_hint",
+                return_value={"previous_production": prev},
+            ),
+            patch("ml_pipeline_monitor.services.model_service.update_model_stage"),
+        ):
+            result = revert_to_previous_production(dataset="iris")
         assert result["model_id"] == "m-prev"

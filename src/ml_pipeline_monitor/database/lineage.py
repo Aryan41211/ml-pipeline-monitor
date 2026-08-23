@@ -8,7 +8,7 @@ and lineage edges for tracking data provenance.
 from __future__ import annotations
 
 import json
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from ml_pipeline_monitor.database.schema import _get_connection
 
@@ -31,7 +31,7 @@ def create_dataset(dataset_id: str, dataset_name: str) -> int:
 def create_dataset_version(
     dataset_id: str,
     version: int,
-    hash: str,
+    content_hash: str,
     row_count: int,
     column_count: int,
     missing_values_summary: str,
@@ -44,7 +44,7 @@ def create_dataset_version(
             VALUES (?, ?, ?, ?, ?, ?)
             RETURNING id
             """,
-            (dataset_id, version, hash, row_count, column_count, missing_values_summary),
+            (dataset_id, version, content_hash, row_count, column_count, missing_values_summary),
         ).fetchone()
         return int(row["id"])
 
@@ -66,15 +66,16 @@ def save_schema_change(
     dataset_id: str,
     from_version: int,
     to_version: int,
-    added_columns: List[str],
-    removed_columns: List[str],
-    dtype_changes: Dict[str, str],
+    added_columns: list[str],
+    removed_columns: list[str],
+    dtype_changes: dict[str, str],
 ) -> None:
     """Record a schema change between dataset versions."""
     with _get_connection() as conn:
         conn.execute(
             """
-            INSERT INTO dataset_schema_changes (dataset_id, from_version, to_version, added_columns, removed_columns, dtype_changes)
+            INSERT INTO dataset_schema_changes
+                (dataset_id, from_version, to_version, added_columns, removed_columns, dtype_changes)
             VALUES (?, ?, ?, ?, ?, ?)
             """,
             (
@@ -90,15 +91,15 @@ def save_schema_change(
 
 def create_lineage_edge(
     edge_type: str,
-    from_dataset_id: Optional[str] = None,
-    from_version: Optional[int] = None,
-    to_dataset_id: Optional[str] = None,
-    to_version: Optional[int] = None,
-    from_run_id: Optional[str] = None,
-    to_run_id: Optional[str] = None,
-    to_model_id: Optional[str] = None,
-    from_model_id: Optional[str] = None,
-    note: Optional[str] = None,
+    from_dataset_id: str | None = None,
+    from_version: int | None = None,
+    to_dataset_id: str | None = None,
+    to_version: int | None = None,
+    from_run_id: str | None = None,
+    to_run_id: str | None = None,
+    to_model_id: str | None = None,
+    from_model_id: str | None = None,
+    note: str | None = None,
 ) -> int:
     """Create a lineage edge between data assets."""
     with _get_connection() as conn:
@@ -126,7 +127,7 @@ def create_lineage_edge(
         return int(row["id"])
 
 
-def get_dataset_versions(dataset_id: str, limit: int = 50) -> List[Dict[str, Any]]:
+def get_dataset_versions(dataset_id: str, limit: int = 50) -> list[dict[str, Any]]:
     """Get version history for a dataset."""
     with _get_connection() as conn:
         rows = conn.execute(
@@ -141,7 +142,7 @@ def get_dataset_versions(dataset_id: str, limit: int = 50) -> List[Dict[str, Any
     return [dict(r) for r in rows]
 
 
-def get_schema_changes(dataset_id: str, limit: int = 50) -> List[Dict[str, Any]]:
+def get_schema_changes(dataset_id: str, limit: int = 50) -> list[dict[str, Any]]:
     """Get schema change history for a dataset."""
     with _get_connection() as conn:
         rows = conn.execute(
@@ -163,7 +164,7 @@ def get_schema_changes(dataset_id: str, limit: int = 50) -> List[Dict[str, Any]]
     return results
 
 
-def get_lineage_edges(edge_type: Optional[str] = None, limit: int = 100) -> List[Dict[str, Any]]:
+def get_lineage_edges(edge_type: str | None = None, limit: int = 100) -> list[dict[str, Any]]:
     """Get lineage edges, optionally filtered by type."""
     with _get_connection() as conn:
         if edge_type:

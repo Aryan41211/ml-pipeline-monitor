@@ -70,6 +70,7 @@ LOGGER = get_app_logger("api")
 API_KEY_HEADER = APIKeyHeader(name="X-API-Key", auto_error=False)
 JWT_SCHEME = HTTPBearer(auto_error=False)
 
+
 def _rate_limit(env_var: str, config_key: str, fallback: str) -> str:
     """Resolve a rate limit from env, then the api config block, then a default."""
     from_env = os.getenv(env_var, "").strip()
@@ -94,6 +95,7 @@ limiter = Limiter(key_func=get_remote_address, default_limits=[RATE_LIMIT])
 # Models
 # ---------------------------------------------------------------------------
 
+
 class LoginRequest(BaseModel):
     username: str = Field(..., description="Username")
     password: str = Field(..., description="Password")
@@ -113,7 +115,9 @@ class RefreshRequest(BaseModel):
 
 
 class PredictRequest(BaseModel):
-    features: dict[str, float] | list[dict[str, float]] | list[float] | list[list[float]] = Field(..., description="Feature payload for one or many predictions")
+    features: dict[str, float] | list[dict[str, float]] | list[float] | list[list[float]] = Field(
+        ..., description="Feature payload for one or many predictions"
+    )
     dataset: str | None = Field(
         default=None,
         description="Optional dataset name to target production model selection",
@@ -123,6 +127,7 @@ class PredictRequest(BaseModel):
 # ---------------------------------------------------------------------------
 # Auth dependencies
 # ---------------------------------------------------------------------------
+
 
 async def _get_api_key(api_key: str = Security(API_KEY_HEADER)) -> str | None:
     if api_key:
@@ -176,6 +181,7 @@ async def _authenticate(
 # ---------------------------------------------------------------------------
 # Logging helpers
 # ---------------------------------------------------------------------------
+
 
 def log_prediction_request(
     *,
@@ -239,9 +245,9 @@ def _persist_prediction_history(
     """
     try:
         predictions = list((result or {}).get("predictions") or [])
-        payload_digest = hashlib.sha256(
-            json.dumps(payload, sort_keys=True, default=str).encode("utf-8")
-        ).hexdigest()[:32]
+        payload_digest = hashlib.sha256(json.dumps(payload, sort_keys=True, default=str).encode("utf-8")).hexdigest()[
+            :32
+        ]
 
         save_prediction_request(
             request_id=request_id,
@@ -269,6 +275,7 @@ def _persist_prediction_history(
 # Lifespan
 # ---------------------------------------------------------------------------
 
+
 @asynccontextmanager
 async def _lifespan(_: FastAPI):
     """Initialize the schema on startup and release the pool on shutdown.
@@ -292,7 +299,10 @@ async def _lifespan(_: FastAPI):
 
 app = FastAPI(
     title="ML Pipeline Monitor Inference API",
-    description="Production inference API for ML model registry with JWT authentication, model caching, and Prometheus metrics.",
+    description=(
+        "Production inference API for ML model registry with JWT authentication, "
+        "model caching, and Prometheus metrics."
+    ),
     version="1.0.0",
     lifespan=_lifespan,
     docs_url="/v1/docs",
@@ -335,6 +345,7 @@ SECURITY_HEADERS = {
 # ---------------------------------------------------------------------------
 # Middleware
 # ---------------------------------------------------------------------------
+
 
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
@@ -399,6 +410,7 @@ async def log_requests(request: Request, call_next):
 # Exception handlers
 # ---------------------------------------------------------------------------
 
+
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     error_category = get_error_category(exc)
@@ -432,11 +444,13 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 
     errors = []
     for error in exc.errors():
-        errors.append({
-            "field": ".".join(str(x) for x in error["loc"]),
-            "message": error["msg"],
-            "type": error["type"],
-        })
+        errors.append(
+            {
+                "field": ".".join(str(x) for x in error["loc"]),
+                "message": error["msg"],
+                "type": error["type"],
+            }
+        )
 
     LOGGER.warning(
         "Request validation failed",
@@ -506,6 +520,7 @@ async def rate_limit_exceeded_handler(request: Request, exc: RateLimitExceeded):
 # ---------------------------------------------------------------------------
 # Health endpoints (unversioned, always available)
 # ---------------------------------------------------------------------------
+
 
 def _db_status() -> tuple[str, str]:
     db_status = "ok"
@@ -581,10 +596,12 @@ def metrics() -> Response:
 # V1 Auth endpoints
 # ---------------------------------------------------------------------------
 
+
 @app.post("/v1/auth/login", response_model=LoginResponse)
 @limiter.limit(AUTH_RATE_LIMIT)
 async def login(request: Request, body: LoginRequest):
     from ml_pipeline_monitor.core.auth import _check_login, _credentials, _resolve_user
+
     ok, err = _check_login(body.username, body.password)
     if not ok:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=err)
@@ -622,6 +639,7 @@ async def me(token: TokenPayload = Depends(_authenticate)):
 # ---------------------------------------------------------------------------
 # V1 Prediction endpoint
 # ---------------------------------------------------------------------------
+
 
 @app.post("/v1/predict")
 @limiter.limit(RATE_LIMIT)
@@ -747,20 +765,22 @@ async def predict_v1(
 # Backward-compatible legacy endpoints (deprecated)
 # ---------------------------------------------------------------------------
 
+
 @app.post("/predict", deprecated=True)
 @limiter.limit(RATE_LIMIT)
-def predict_legacy(request: Request, request_body: PredictRequest, api_key: str = Depends(_get_api_key)) -> dict[str, Any]:
+def predict_legacy(
+    request: Request, request_body: PredictRequest, api_key: str = Depends(_get_api_key)
+) -> dict[str, Any]:
     if not _api_key_is_valid(api_key):
         raise HTTPException(
             status_code=401,
             detail="Legacy /predict requires a valid X-API-Key. Use /v1/predict with JWT instead.",
         )
-    correlation_id = get_correlation_id()
-    request_id = get_request_id()
     start = time.time()
 
     try:
         import ml_pipeline_monitor.services.model_service as _model_service
+
         result = _model_service.predict_from_payload(payload=request_body.features, dataset=request_body.dataset)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail={"message": str(exc)}) from exc
@@ -791,6 +811,7 @@ def _get_expiration_minutes() -> int:
 # Alertmanager Webhook Receiver
 # ---------------------------------------------------------------------------
 
+
 @app.post("/v1/alerts/webhook")
 async def alertmanager_webhook(request: Request) -> dict[str, Any]:
     """Receive alertmanager webhook notifications and log them."""
@@ -815,12 +836,17 @@ async def alertmanager_webhook(request: Request) -> dict[str, Any]:
         if alert_status == "resolved":
             LOGGER.info(
                 "Alert resolved: %s (severity=%s) - %s",
-                alert_name, severity, summary,
+                alert_name,
+                severity,
+                summary,
             )
         else:
             LOGGER.warning(
                 "Alert firing: %s (severity=%s) - %s | %s",
-                alert_name, severity, summary, description,
+                alert_name,
+                severity,
+                summary,
+                description,
             )
 
     return {"status": "ok", "alerts_received": len(alerts)}

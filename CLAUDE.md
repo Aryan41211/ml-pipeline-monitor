@@ -8,7 +8,7 @@ ML Pipeline Monitor is a production-oriented MLOps observability and operations 
 - Streamlit dashboards for pipeline runs, experiment tracking, model registry, data drift, data health, and governance.
 - Service-layer orchestration (Streamlit UI -> services -> core logic -> persistence).
 - FastAPI inference API with rate limiting, Prometheus metrics, and JWT/auth.
-- Celery background worker for scheduled/automated jobs.
+- Background worker (a polling loop over the `schedules` table, not Celery) for scheduled jobs.
 - Prometheus + Grafana + Alertmanager monitoring stack.
 - SQLite or PostgreSQL backend with connection pooling.
 - E2E test automation via Playwright.
@@ -86,7 +86,7 @@ ML-pipeline-monitor/
 │       │   ├── model_service.py     # Model registry + inference coordination
 │       │   ├── pipeline_service.py  # Orchestrates pipeline runs
 │       │   ├── telemetry_service.py # User action tracking
-│       │   └── worker.py            # Celery background worker
+│       │   └── worker.py            # Polling worker (schedules table, not Celery)
 │       │
 │       └── utils/                   # UI / presentation helpers
 │           ├── __init__.py
@@ -188,6 +188,12 @@ from ..services.drift_service import run_drift_detection
 ## 6) Database Rules
 
 - Use the existing persistence abstractions (do not bypass `database/connection.py`).
+- `get_backend()` is cached per resolved (backend, target) pair and owns the
+  connection pool. Never construct a backend directly: building one per query
+  leaks a whole pool per call.
+- Never swallow a failed statement and continue in the same transaction. On
+  PostgreSQL every subsequent statement in an aborted transaction fails, so a
+  `try/except: pass` around one write silently takes the rest down with it.
 - Prefer parameterized queries / safe patterns used by the project.
 - Ensure schema/lineage operations remain consistent with existing lineage tracking.
 - Keep migrations/DB init consistent with current backend setup.
@@ -205,10 +211,10 @@ PostgreSQL backend (`PostgresBackend`):
 ## 7) API Design Standards (FastAPI)
 
 All endpoints in `src/ml_pipeline_monitor/api/main.py`:
-- `GET /health` -- DB connectivity check
-- `GET /health/live` -- liveness probe
-- `GET /health/ready` -- readiness probe (DB check)
-- `GET /health/detailed` -- system metrics + DB status
+- `GET /health` -- DB connectivity check (503 when degraded)
+- `GET /health/live` -- liveness probe (always 200 while the process is up)
+- `GET /health/ready` -- readiness probe (503 when the DB is unreachable)
+- `GET /health/detailed` -- system metrics + DB status (503 when degraded)
 - `GET /metrics` -- Prometheus metrics endpoint
 - `POST /v1/auth/login` -- JWT login
 - `POST /v1/auth/refresh` -- JWT refresh
@@ -221,9 +227,19 @@ Design rules:
 - Return consistent response shapes; avoid leaking internal exceptions.
 - Keep endpoints thin: route to `services/`.
 - Middleware logs all requests with correlation/request IDs.
-- Rate limiting via `slowapi` (default 60/min, configurable).
+- Rate limiting via `slowapi` (default 60/min, configurable). Note that
+  slowapi's `default_limits` are inert without `SlowAPIMiddleware`: a route is
+  only limited if it carries an explicit `@limiter.limit(...)` decorator.
+- Auth endpoints use a separate, tighter bucket (`MLMONITOR_AUTH_RATE_LIMIT`,
+  default 10/min) because they are the brute-force surface.
+- Health probes must signal status through the HTTP status code, not only the
+  body: a 200 carrying `"not_ready"` reads as healthy to every load balancer.
 - Global exception handlers for: `Exception`, `RequestValidationError`, `RateLimitExceeded`.
-- Graceful shutdown with signal handlers (SIGTERM, SIGINT).
+- Graceful shutdown is handled by uvicorn via the lifespan context manager. Do
+  not install SIGTERM/SIGINT handlers in the app: they replace uvicorn's and
+  prevent in-flight requests from draining.
+- CORS is enabled only when origins are configured (`MLMONITOR_CORS_ORIGINS`
+  or `api.cors_origins`); security response headers are always applied.
 
 ## 8) Streamlit Page Conventions (`pages/*.py`)
 
@@ -251,6 +267,9 @@ Any expensive computation should be delegated to services/core and cached if app
 
 - Use the repository logger abstraction (`ml_pipeline_monitor.core.logger`).
 - Structured logging with JSON file output + colored console output.
+- Handlers live only on the `ml_monitor` root logger; `get_app_logger(name)`
+  returns a propagating child. Never attach a `RotatingFileHandler` per module:
+  multiple rotation controllers on one file race and lose records.
 - Context propagation via `contextvars`: `correlation_id`, `request_id`, `operation_context`, `actor_context`, `service_context`.
 - Use `LogContext` context manager for setting contexts.
 - Log with structured context where possible (IDs: run_id, experiment_id, dataset name, stage).
@@ -264,6 +283,10 @@ Any expensive computation should be delegated to services/core and cached if app
 - Add/extend **integration tests** under `tests/integration/` for service-layer flows.
 - Add/extend **e2e tests** under `tests/e2e/` using Playwright when user-facing flows change.
 - Maintain coverage expectations enforced by `pytest.ini` (80% minimum).
+- `pytest.ini` and `.coveragerc` are the authoritative config; `pyproject.toml`
+  deliberately does not duplicate them.
+- The `test` CI job runs `tests/unit tests/integration`; E2E runs in its own
+  job with a browser.
 - Tests must be deterministic; avoid time-based flakiness.
 - E2E tests use `pytest-playwright` with `playwright.config.ts`.
 
@@ -292,7 +315,12 @@ Use Conventional-like prefixes exactly as below:
 
 ## 14) Security Rules
 
-- **bcrypt only** for password hashing and verification.
+- **bcrypt only** for password hashing and verification. Plaintext
+  credentials are accepted for local development but compared in constant time.
+- Secret comparisons (API keys, plaintext passwords) must use
+  `secrets.compare_digest` / `hmac.compare_digest`, never `==`.
+- Auth checks must **fail closed**: an unset `MLMONITOR_API_KEY` rejects every
+  request rather than accepting any presented key.
 - Secrets come from **environment variables** or `SecretsManager` (priority: env vars -> Docker/K8s secrets -> `.secrets.json`).
 - Input validation everywhere:
   - validate request payloads (Pydantic in API),
@@ -325,18 +353,32 @@ Key config sections:
 
 Environment variables:
 - `CONFIG_PATH` -- override config file path
+- `MLMONITOR_DB_BACKEND` -- override `storage.backend` (`sqlite` | `postgres`)
 - `PIPELINE_DB_DSN` -- PostgreSQL DSN
 - `PIPELINE_DB` -- SQLite path override
 - `MLMONITOR_AUTH_ENABLED`, `AUTH_USERNAME`, `AUTH_PASSWORD`, `AUTH_ROLE`, `AUTH_USERS_JSON`
-- `MLMONITOR_API_KEY`, `MLMONITOR_RATE_LIMIT`
+- `MLMONITOR_API_KEY`, `MLMONITOR_RATE_LIMIT`, `MLMONITOR_AUTH_RATE_LIMIT`
+- `MLMONITOR_CORS_ORIGINS` -- comma-separated; empty disables CORS
+- `MLMONITOR_MODEL_CACHE_SIZE` -- LRU bound for cached models (default 8)
+- `MLMONITOR_API_HOST`, `MLMONITOR_API_PORT` -- `mlmonitor-api` bind address
+- `MLMONITOR_METRICS_PORT` -- Streamlit metrics exporter port (default 8502)
 - `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`
 - `SLACK_WEBHOOK`, `MLFLOW_TRACKING_URI`, `JWT_SECRET`, `JWT_ALGORITHM`
+- `FLOWER_BASIC_AUTH` -- required by the `monitoring` compose profile
+
+`.env` is loaded at import without overriding existing variables. Inline
+comments and surrounding quotes are stripped from values; keep comments on
+their own lines.
 
 ## 16) Monitoring & Observability Stack
 
 ### Prometheus (metrics collection)
 - Scrapes: API (`/metrics`, 10s), Streamlit app (`/metrics`, 30s), self-monitoring
 - Config: `deployment/prometheus/prometheus.yml`
+- Alert rules: `deployment/prometheus/rules/*.yml`, delivered to Alertmanager,
+  which posts to `POST /v1/alerts/webhook` on the API.
+- Any new alert rule must reference a metric that is actually recorded; the CI
+  `config` job runs `promtool check rules`.
 
 ### Grafana (visualization)
 - Provisioned datasource: Prometheus
@@ -360,23 +402,34 @@ Environment variables:
 6. `worker` -- extends production, runs `python -m ml_pipeline_monitor.services.worker`
 
 ### docker-compose.yml Services
-| Service | Target | Port | Profile |
+| Service | Target | Published port | Profile |
 |---|---|---|---|
 | app | production | 8501 | default |
 | api | api | 8000 | default |
 | worker | worker | -- | default |
-| flower | mher/flower:2.0.1 | 5555 | monitoring |
-| postgres | postgres:16-alpine | 5432 | postgres |
-| redis | redis:7-alpine | 6379 | default |
+| postgres | postgres:16-alpine | internal only | default |
+| redis | redis:7-alpine | internal only | default |
 | prometheus | prom/prometheus:v2.54.1 | 9090 | default |
 | grafana | grafana/grafana:11.1.0 | 3000 | default |
+| flower | mher/flower:2.0.1 | 5555 | monitoring |
 | alertmanager | prom/alertmanager:v0.27.0 | 9093 | monitoring |
 | nginx | nginx:alpine | 80/443 | production |
 
+**app, api and worker share one PostgreSQL database.** Postgres is a default
+service, not an optional profile: running these three on separate SQLite files
+gives each container its own private, non-durable database.
+
+Postgres and Redis are not published to the host. Redis has no password, so
+exposing it would be a plain data leak.
+
 Start commands:
-- Development: `docker-compose -f docker-compose.yml -f docker-compose.dev.yml up`
-- Production: `docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d`
-- With Postgres: `docker-compose --profile postgres up -d`
+- Default: `docker compose up -d`
+- Development (SQLite, hot reload): `docker compose -f docker-compose.yml -f docker-compose.dev.yml up`
+- Production: `docker compose -f docker-compose.prod.yml up -d`
+- With flower/alertmanager: `docker compose --profile monitoring up -d`
+
+Flower is included for a future Celery-backed worker; the current polling
+worker publishes no Celery tasks, so its dashboard will be empty.
 
 ## 18) CLI Entry Points
 
@@ -415,7 +468,10 @@ Governance page shows audit trail and stage change history.
 `ml_pipeline_monitor.ml.data_validation`:
 - `ValidationResult` dataclass with quality_score (0-100), status, report, recommendations
 - Missing values, duplicates, outlier detection (IQR + Z-score)
-- `DataQualityFailed` exception stops training when score below threshold
+- `DataQualityFailed` stops training when the score is below the threshold.
+  Invoked from the pipeline's Data Validation stage and gated by
+  `monitoring.data_quality` (`enabled`, `min_quality_score`) -- off in
+  `config.yaml`, on in `config.prod.yaml`.
 
 `ml_pipeline_monitor.services.data_health_service`:
 - `missing_value_report()`, `class_imbalance_report()`, feature analysis, shape validation

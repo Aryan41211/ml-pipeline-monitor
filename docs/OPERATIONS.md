@@ -28,7 +28,7 @@ curl -s http://localhost:8000/health/detailed | jq .
 **Diagnosis**:
 ```bash
 # Check logs
-docker-compose logs api | grep -i error
+docker compose logs api | grep -i error
 
 # Verify model artifacts exist
 ls -la artifacts/models/
@@ -87,14 +87,14 @@ curl -s http://localhost:8000/health/detailed
 
 ```bash
 # View logs
-docker-compose logs -f api
-docker-compose logs -f worker
+docker compose logs -f api
+docker compose logs -f worker
 
 # Database backup
 python -m scripts.backup backup postgres mlmonitor --dsn "$PIPELINE_DB_DSN"
 
 # Run migrations
-docker-compose exec app alembic upgrade head
+docker compose exec app alembic upgrade head
 
 # Check Prometheus targets
 curl -s http://localhost:9090/api/v1/targets | jq '.data.activeTargets'
@@ -105,8 +105,8 @@ curl -X POST http://localhost:8000/v1/predict \
   -H "Content-Type: application/json" \
   -d '{"trigger":"manual"}'
 
-# Celery worker status
-docker-compose exec worker celery -A services.worker inspect active
+# Worker status (a polling loop, so check its logs rather than Celery)
+docker compose logs --tail=50 worker
 ```
 
 ## Performance Baselines

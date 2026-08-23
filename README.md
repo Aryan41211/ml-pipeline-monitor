@@ -60,7 +60,7 @@ ML-pipeline-monitor/
 │       │   ├── drift_service.py
 │       │   ├── data_health_service.py
 │       │   ├── telemetry_service.py
-│       │   └── worker.py      # Celery background worker
+│       │   └── worker.py      # Polling background worker (schedules table)
 │       │
 │       └── utils/
 │           └── ui_theme.py    # Enterprise design system
@@ -148,13 +148,13 @@ uvicorn ml_pipeline_monitor.api.main:app --reload --port 8000
 
 ```bash
 # Full stack with monitoring
-docker-compose up -d
+docker compose up -d
 
 # Development mode
-docker-compose -f docker-compose.yml -f docker-compose.dev.yml up
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up
 
 # With PostgreSQL
-docker-compose --profile postgres up -d
+docker compose --profile monitoring up -d   # adds Flower + Alertmanager
 ```
 
 ## Configuration
@@ -211,8 +211,8 @@ pytest tests/load/ -v
 **Infrastructure:**
 - Docker - Multi-stage containerization
 - PostgreSQL - Production database
-- Redis - Caching & Celery broker
-- Celery - Background tasks
+- Redis - Available for caching and as a broker for a future Celery worker
+- Background worker - Polls the `schedules` table (not Celery today)
 - Prometheus + Grafana - Monitoring & alerting
 
 ## Documentation

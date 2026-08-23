@@ -67,12 +67,12 @@ pytest -q
 ## 6) Docker (if available)
 If you use the provided compose files:
 ```bash
-docker-compose up -d
+docker compose up -d
 ```
 
 For dev stack (if defined in compose.dev.yml):
 ```bash
-docker-compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
 ```
 
 ## Troubleshooting

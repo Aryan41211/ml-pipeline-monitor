@@ -49,18 +49,18 @@ export MLMONITOR_API_KEY=$(openssl rand -hex 32)
 ### 2. Start Services
 ```bash
 # With PostgreSQL
-docker-compose --profile postgres up -d
+docker compose up -d   # Postgres is a default service, not a profile
 
 # With monitoring stack
-docker-compose --profile monitoring up -d
+docker compose --profile monitoring up -d
 
 # Full production stack
-docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+docker compose -f docker compose.yml -f docker compose.prod.yml up -d
 ```
 
 ### 3. Run Migrations
 ```bash
-docker-compose exec app alembic upgrade head
+docker compose exec app alembic upgrade head
 ```
 
 ### 4. Verify
@@ -102,7 +102,7 @@ stringData:
 ### Key Resources
 - `Deployment` for app (Streamlit)
 - `Deployment` for API (FastAPI)
-- `Deployment` for worker (Celery)
+- `Deployment` for the polling worker
 - `Service` for each component
 - `Ingress` with TLS
 - `StatefulSet` for PostgreSQL (or use managed DB)
@@ -133,7 +133,7 @@ storage:
 
 ### Using Let's Encrypt
 ```yaml
-# In docker-compose.prod.yml nginx section
+# In docker compose.prod.yml nginx section
 certbot:
   image: certbot/certbot
   volumes:
@@ -159,7 +159,7 @@ certbot:
 All services expose health endpoints:
 - **App**: `GET /health` (Streamlit)
 - **API**: `GET /health/live`, `GET /health/ready`
-- **Worker**: Celery Flower at `:5555`
+- **Worker**: container healthcheck only (the polling worker exposes no HTTP port). Flower at `:5555` is for a future Celery-backed worker and shows nothing today.
 
 ## Scaling
 
@@ -167,7 +167,7 @@ All services expose health endpoints:
 |---|---|---|
 | App (Streamlit) | Limited | Use session affinity |
 | API (FastAPI) | Yes | Behind load balancer |
-| Worker (Celery) | Yes | Add more worker replicas |
+| Worker | No | The polling loop is not yet coordinated across replicas; run a single instance until schedule claiming is made atomic |
 | PostgreSQL | Read replicas | Use managed service recommended |
 
 ## Rollback Procedure
@@ -177,10 +177,10 @@ All services expose health endpoints:
 docker images | grep ml-pipeline-monitor
 
 # 2. Rollback deployment
-docker-compose up -d --force-recreate app
+docker compose up -d --force-recreate app
 
 # 3. Run migrations (if needed)
-docker-compose exec app alembic downgrade -1
+docker compose exec app alembic downgrade -1
 ```
 
 ## Disaster Recovery

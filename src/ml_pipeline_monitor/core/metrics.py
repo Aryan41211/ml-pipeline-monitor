@@ -490,7 +490,9 @@ def start_metrics_server(port: int | None = None) -> None:
             def log_message(self, format: str, *args: object) -> None:  # noqa: A002
                 """Suppress per-request access logging from the exporter."""
 
-        server = ThreadingHTTPServer(("0.0.0.0", resolved_port), _MetricsHandler)
+        # Binding all interfaces is required inside a container so Prometheus
+        # can reach the exporter; the port is not published to the host.
+        server = ThreadingHTTPServer(("0.0.0.0", resolved_port), _MetricsHandler)  # nosec B104
         thread = threading.Thread(target=server.serve_forever, daemon=True, name="metrics-exporter")
         thread.start()
         _metrics_server = server

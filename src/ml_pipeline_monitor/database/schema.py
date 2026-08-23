@@ -249,6 +249,8 @@ def _do_initialize_db() -> None:
                 conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
 
         ensure_column_exists("models", "dataset_name", "TEXT")
+        # A backend-selected SQL literal, never user input. It is interpolated
+        # because a DEFAULT clause cannot be bound as a parameter.
         ts_default = "CURRENT_TIMESTAMP" if backend == "sqlite" else "CURRENT_TIMESTAMP::text"
         ensure_column_exists("models", "created_at", f"TEXT DEFAULT {ts_default}")
         ensure_column_exists("models", "params", "TEXT")
@@ -262,10 +264,11 @@ def _do_initialize_db() -> None:
         ensure_column_exists("model_stage_events", "note", "TEXT")
 
         conn.execute("UPDATE models SET dataset_name = COALESCE(dataset_name, dataset)")
-        conn.execute(f"UPDATE models SET created_at = COALESCE(created_at, registered_at, {ts_default})")
+        # nosec B608 below: ts_default is a fixed literal chosen above, not input.
+        conn.execute(f"UPDATE models SET created_at = COALESCE(created_at, registered_at, {ts_default})")  # nosec B608
         conn.execute("UPDATE models SET experiment_id = COALESCE(experiment_id, run_id)")
         conn.execute("UPDATE model_stage_events SET dataset = COALESCE(dataset, '')")
-        conn.execute(f"UPDATE model_stage_events SET changed_at = COALESCE(changed_at, {ts_default})")
+        conn.execute(f"UPDATE model_stage_events SET changed_at = COALESCE(changed_at, {ts_default})")  # nosec B608
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_stage_events_model_changed ON model_stage_events(model_id, changed_at DESC)"
         )

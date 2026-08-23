@@ -215,7 +215,9 @@ def update_schedule(
         return
     params.append(schedule_id)
     with _get_connection() as conn:
+        # Only the column list is interpolated, and every fragment in `updates`
+        # is a hardcoded "col = ?" literal built above. All values are bound.
         conn.execute(
-            f"UPDATE schedules SET {', '.join(updates)}, updated_at=CURRENT_TIMESTAMP WHERE id = ?",
+            f"UPDATE schedules SET {', '.join(updates)}, updated_at=CURRENT_TIMESTAMP WHERE id = ?",  # nosec B608
             params,
         )

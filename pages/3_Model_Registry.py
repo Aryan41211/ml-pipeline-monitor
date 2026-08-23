@@ -23,6 +23,7 @@ from ml_pipeline_monitor.utils.ui_theme import (
     component_empty_state,
     component_kpi_card,
     component_registry_card,
+    page_header,
     render_loading_skeleton,
     render_section_title,
     render_sidebar_nav,
@@ -89,10 +90,7 @@ def _render_page():
     # ---------------------------------------------------------------------------
     col_title, col_actions = st.columns([4, 1])
     with col_title:
-        st.markdown(
-            '<div class="ui-fade-in"><h1 style="margin:0; font-family:\'Poppins\', sans-serif;">Model Inventory</h1><p style="color:var(--color-text-tertiary);">Enterprise model governance and versioned lineage.</p></div>',
-            unsafe_allow_html=True,
-        )
+        page_header("Model Inventory", "Enterprise model governance and versioned lineage.")
     with col_actions:
         st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
         if st.button("Sync Registry", type="primary", use_container_width=True):
@@ -101,28 +99,20 @@ def _render_page():
     # KPI Row
     c1, c2, c3, c4 = st.columns(4)
     with c1:
-        component_kpi_card("Total Models", str(len(df)), "Versions tracked", icon="📦")
+        component_kpi_card("Total Models", str(len(df)), "Versions tracked")
     with c2:
-        component_kpi_card(
-            "Production", str(len(df[df["stage"] == "production"])), "Active serving", icon="🚀", tone="success"
-        )
+        component_kpi_card("Production", str(len(df[df["stage"] == "production"])), "Active serving", tone="success")
     with c3:
-        component_kpi_card(
-            "Staging", str(len(df[df["stage"] == "staging"])), "Release testing", icon="🧪", tone="warning"
-        )
+        component_kpi_card("Staging", str(len(df[df["stage"] == "staging"])), "Release testing", tone="warning")
     with c4:
-        component_kpi_card(
-            "Development", str(len(df[df["stage"] == "development"])), "Unpromoted", icon="🧬", tone="info"
-        )
+        component_kpi_card("Development", str(len(df[df["stage"] == "development"])), "Unpromoted", tone="info")
 
     render_spacer("md")
 
     # ---------------------------------------------------------------------------
     # Workspace
     # ---------------------------------------------------------------------------
-    tab_grid, tab_lineage, tab_governance = st.tabs(
-        ["📋 Inventory Grid", "⛓️ Production Lineage", "🛡️ Compliance & Management"]
-    )
+    tab_grid, tab_lineage, tab_governance = st.tabs(["Inventory Grid", "Production Lineage", "Compliance & Management"])
 
     with tab_grid:
         render_section_title("Model Cards")
@@ -187,7 +177,6 @@ def _render_page():
                     st.rerun()
 
     st.divider()
-    st.caption("🛡️ Model Governance Core v2.0-Componentized")
 
 
 safe_render("Model Registry", _render_page)

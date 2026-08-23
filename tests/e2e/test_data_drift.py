@@ -46,10 +46,11 @@ def test_run_drift_scan(page: Page):
 
     _run_scan(page)
 
-    # Check KPI cards appear (icon-prefixed regex avoids KPI collisions)
-    expect(page.get_by_text(re.compile(r"🔢\s*Analyzed", re.I))).to_be_visible()
-    expect(page.get_by_text(re.compile(r"⚠️\s*Drifted", re.I))).to_be_visible()
-    expect(page.get_by_text(re.compile(r"📊\s*Avg PSI", re.I))).to_be_visible()
+    # The design system carries no decorative icons; match the KPI labels,
+    # which are rendered uppercase by CSS but remain title-case in the DOM.
+    expect(page.get_by_text("Analyzed", exact=True)).to_be_visible()
+    expect(page.get_by_text("Drifted", exact=True)).to_be_visible()
+    expect(page.get_by_text("Avg PSI", exact=True)).to_be_visible()
 
 
 def test_drift_history_tab(page: Page):

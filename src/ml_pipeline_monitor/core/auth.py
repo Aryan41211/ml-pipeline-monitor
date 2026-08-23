@@ -330,7 +330,11 @@ def render_auth_controls() -> bool:
                 st.rerun()
             return True
 
+        # Auth is disabled, so the dashboard is already reachable. Keep the
+        # prompt (the sign-in form still records an identity) but say plainly
+        # that access is not gated, rather than implying a login is required.
         st.warning("Please log in to access the dashboard.")
+        st.caption("Authentication is disabled; signing in only records an identity for this session.")
         username = st.text_input("Username", key="login_username")
         st.markdown(
             """

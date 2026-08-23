@@ -19,6 +19,7 @@ from ml_pipeline_monitor.utils.ui_theme import (
     component_health_score,
     component_insight_panel,
     component_kpi_card,
+    page_header,
     render_section_title,
     render_sidebar_nav,
     render_spacer,
@@ -50,10 +51,7 @@ def _render_page():
 
     col_title, col_actions = st.columns([4, 1])
     with col_title:
-        st.markdown(
-            '<div class="ui-fade-in"><h1 style="margin:0; font-family:\'Poppins\', sans-serif;">Data Observability</h1><p style="color:var(--color-text-tertiary);">Distribution shift analysis using Kolmogorov-Smirnov and PSI.</p></div>',
-            unsafe_allow_html=True,
-        )
+        page_header("Data Observability", "Distribution shift analysis using Kolmogorov-Smirnov and PSI.")
     with col_actions:
         st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
         dataset_label = st.selectbox("Target Dataset", list(dataset_options.keys()))
@@ -98,13 +96,12 @@ def _render_page():
         # KPI Row
         k1, k2, k3, k4 = st.columns(4)
         with k1:
-            component_kpi_card("Analyzed", str(report["features_analyzed"]), "Dimensions", icon="🔢")
+            component_kpi_card("Analyzed", str(report["features_analyzed"]), "Dimensions")
         with k2:
             component_kpi_card(
                 "Drifted",
                 str(report["features_drifted"]),
                 "Flagged",
-                icon="⚠️",
                 tone="danger" if report["features_drifted"] > 0 else "success",
             )
         with k3:
@@ -112,7 +109,6 @@ def _render_page():
                 "Avg PSI",
                 f"{report['average_psi']:.4f}",
                 "Stability Index",
-                icon="📊",
                 tone="warning" if report["average_psi"] > 0.1 else "success",
             )
         with k4:
@@ -120,12 +116,11 @@ def _render_page():
                 "Severity",
                 report["overall_severity"].upper(),
                 "Platform Risk",
-                icon="⚖️",
                 tone="danger" if report["overall_severity"] == "critical" else "success",
             )
 
         render_spacer("md")
-        t_feat, t_hist = st.tabs(["🧬 Feature Stability", "📜 Analysis History"])
+        t_feat, t_hist = st.tabs(["Feature Stability", "Analysis History"])
 
         with t_feat:
             col_list, col_insights = st.columns([2, 1], gap="medium")
@@ -155,7 +150,6 @@ def _render_page():
                 render_summary_table(h_df, columns=["Dataset", "Features Drifted", "Drift Score", "Created At"])
 
     st.divider()
-    st.caption("📈 Statistical Observability Core v2.0-Componentized")
 
 
 safe_render("Data Drift", _render_page)

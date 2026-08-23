@@ -1,0 +1,28 @@
+# =============================================================================
+# Streamlit theme + server settings
+# =============================================================================
+# These values style Streamlit's OWN widgets (buttons, inputs, tabs, sliders).
+# CSS in utils/ui_theme.py cannot reach all of them reliably, so the palette is
+# declared here as well and the two are kept in sync deliberately.
+# =============================================================================
+
+[theme]
+base = "light"
+primaryColor = "#4F46E5"
+backgroundColor = "#FFFFFF"
+secondaryBackgroundColor = "#FAFAFA"
+textColor = "#18181B"
+font = "sans serif"
+
+[client]
+# Hide the developer toolbar (Deploy / Rerun / source menu) from viewers.
+toolbarMode = "minimal"
+showErrorDetails = false
+
+[server]
+headless = true
+enableXsrfProtection = true
+enableCORS = true
+
+[browser]
+gatherUsageStats = false

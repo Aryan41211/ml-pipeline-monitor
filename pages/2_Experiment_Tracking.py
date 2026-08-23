@@ -17,6 +17,7 @@ from ml_pipeline_monitor.utils.ui_theme import (
     component_empty_state,
     component_insight_panel,
     component_kpi_card,
+    page_header,
     render_loading_skeleton,
     render_section_title,
     render_sidebar_nav,
@@ -87,10 +88,7 @@ def _render_page():
     # ---------------------------------------------------------------------------
     col_title, col_actions = st.columns([4, 1])
     with col_title:
-        st.markdown(
-            '<div class="ui-fade-in"><h1 style="margin:0; font-family:\'Poppins\', sans-serif;">Experiment Workspace</h1><p style="color:var(--color-text-tertiary);">High-density analysis of metric performance and training history.</p></div>',
-            unsafe_allow_html=True,
-        )
+        page_header("Experiment Workspace", "High-density analysis of metric performance and training history.")
     with col_actions:
         st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
         if st.button("Refresh Grid", type="primary", use_container_width=True):
@@ -99,26 +97,22 @@ def _render_page():
     # KPI Row
     c1, c2, c3, c4 = st.columns(4)
     with c1:
-        component_kpi_card("Total Runs", str(len(df)), "All-time history", icon="🔢")
+        component_kpi_card("Total Runs", str(len(df)), "All-time history")
     with c2:
         component_kpi_card(
             "Best Accuracy",
             f"{df['accuracy'].max():.4f}" if not df["accuracy"].isna().all() else "—",
             "Primary Metric",
-            icon="🏆",
             tone="success",
         )
     with c3:
-        component_kpi_card("Avg Latency", f"{df['duration'].mean():.2f}s", "Compute time", icon="⏱️")
-    with c4:
-        component_kpi_card("System Health", "94%", "Platform stability", icon="🛡️", tone="info")
-
+        component_kpi_card("Avg Latency", f"{df['duration'].mean():.2f}s", "Compute time")
     render_spacer("md")
 
     # ---------------------------------------------------------------------------
     # Workspace Grid
     # ---------------------------------------------------------------------------
-    tab_grid, tab_analytics = st.tabs(["📑 Data Grid", "📈 Interactive Visuals"])
+    tab_grid, tab_analytics = st.tabs(["Data Grid", "Interactive Visuals"])
 
     with tab_grid:
         render_section_title("All Recorded Experiments")
@@ -147,7 +141,6 @@ def _render_page():
             )
 
     st.divider()
-    st.caption("📊 Experiment Tracking Core v2.0-Componentized")
 
 
 safe_render("Experiment Tracking", _render_page)

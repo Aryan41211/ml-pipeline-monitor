@@ -13,6 +13,7 @@ from ml_pipeline_monitor.utils.ui_theme import (
     apply_ui_theme,
     component_insight_panel,
     component_timeline,
+    page_header,
     render_section_title,
     render_sidebar_nav,
     render_spacer,
@@ -64,10 +65,7 @@ def _render_page():
     # ---------------------------------------------------------------------------
     col_title, col_actions = st.columns([4, 1])
     with col_title:
-        st.markdown(
-            '<div class="ui-fade-in"><h1 style="margin:0; font-family:\'Poppins\', sans-serif;">Platform Health</h1><p style="color:var(--color-text-tertiary);">Infrastructure telemetry and system event auditing.</p></div>',
-            unsafe_allow_html=True,
-        )
+        page_header("Platform Health", "Infrastructure telemetry and system event auditing.")
     with col_actions:
         st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
         if st.button("Refresh Telemetry", type="primary", use_container_width=True):
@@ -125,7 +123,6 @@ def _render_page():
         )
 
     st.divider()
-    st.caption("🖥️ Platform Telemetry Core v2.0-Componentized")
 
 
 safe_render("System Health", _render_page)

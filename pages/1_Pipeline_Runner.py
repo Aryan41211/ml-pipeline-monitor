@@ -21,6 +21,7 @@ from ml_pipeline_monitor.utils.ui_theme import (
     component_insight_panel,
     component_kpi_card,
     component_timeline,
+    page_header,
     render_section_title,
     render_sidebar_nav,
     render_spacer,
@@ -51,10 +52,7 @@ def _render_page():
     # ---------------------------------------------------------------------------
     col_title, col_actions = st.columns([4, 1])
     with col_title:
-        st.markdown(
-            '<div class="ui-fade-in"><h1 style="margin:0; font-family:\'Poppins\', sans-serif;">Workflow Orchestrator</h1><p style="color:var(--color-text-tertiary);">Live stage tracking and hyperparameter optimization.</p></div>',
-            unsafe_allow_html=True,
-        )
+        page_header("Workflow Orchestrator", "Live stage tracking and hyperparameter optimization.")
     with col_actions:
         st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
         run_btn = st.button(
@@ -64,7 +62,7 @@ def _render_page():
     # ---------------------------------------------------------------------------
     # Workspace
     # ---------------------------------------------------------------------------
-    tab_exec, tab_config = st.tabs(["⚡ Live Execution", "⚙️ Architecture Config"])
+    tab_exec, tab_config = st.tabs(["Live Execution", "Architecture Config"])
 
     with tab_config:
         c1, c2 = st.columns([2, 1], gap="large")
@@ -218,7 +216,6 @@ def _render_page():
                     component_kpi_card(k.replace("_", " ").title(), f"{v:.4f}", "Primary metric", tone="success")
 
     st.divider()
-    st.caption("⚡ Workflow Engine v2.0-Componentized")
 
 
 safe_render("Pipeline Runner", _render_page)

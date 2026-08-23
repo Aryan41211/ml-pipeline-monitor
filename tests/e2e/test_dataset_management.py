@@ -28,11 +28,11 @@ def test_dataset_selection(page: Page):
 
     _select_dataset(page)
 
-    # Check KPI cards (icon-prefixed regex avoids colliding with the Basic Info lines)
-    expect(page.get_by_text(re.compile(r"📊\s*Samples", re.I))).to_be_visible()
-    expect(page.get_by_text(re.compile(r"🔢\s*Features", re.I))).to_be_visible()
-    expect(page.get_by_text(re.compile(r"🎯\s*Task", re.I))).to_be_visible()
-    expect(page.get_by_text(re.compile(r"⚠️\s*Missing", re.I))).to_be_visible()
+    # Scope to the KPI label element: the design system carries no icons, and
+    # bare text like "Samples"/"Missing" also appears in the Basic Info lines.
+    labels = page.locator(".ui-metric .label")
+    for name in ("Samples", "Features", "Task", "Missing"):
+        expect(labels.filter(has_text=re.compile(rf"^{name}$", re.I)).first).to_be_visible()
 
 
 def test_overview_tab(page: Page):
@@ -58,7 +58,8 @@ def test_feature_statistics_tab(page: Page):
 
     expect(page.get_by_role("heading", name="Feature Statistics")).to_be_visible()
     # Check for table
-    expect(page.locator(".hp-table")).to_be_visible()
+    # .hp-table was renamed to .ui-table in the design system rewrite.
+    expect(page.locator(".ui-table").first).to_be_visible()
 
 
 def test_train_test_split_tab(page: Page):

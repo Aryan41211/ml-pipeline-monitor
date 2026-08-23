@@ -12,6 +12,7 @@ from ml_pipeline_monitor.utils.ui_theme import (
     apply_ui_theme,
     component_insight_panel,
     component_kpi_card,
+    page_header,
     render_loading_skeleton,
     render_section_title,
     render_sidebar_nav,
@@ -50,10 +51,7 @@ def _load_dataset_preview(dataset_key: str):
 # ---------------------------------------------------------------------------
 col_title, col_actions = st.columns([4, 1])
 with col_title:
-    st.markdown(
-        '<div class="ui-fade-in"><h1 style="margin:0; font-family:\'Poppins\', sans-serif;">Dataset Hub</h1><p style="color:var(--color-text-tertiary);">Explore, validate, and manage training datasets.</p></div>',
-        unsafe_allow_html=True,
-    )
+    page_header("Dataset Hub", "Explore, validate, and manage training datasets.")
 with col_actions:
     st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
     if st.button("Refresh", type="primary", use_container_width=True):
@@ -86,17 +84,16 @@ except Exception as e:
 c1, c2, c3, c4 = st.columns(4)
 stats = ds.get("stats", {})
 with c1:
-    component_kpi_card("Samples", f"{stats.get('n_samples', 0):,}", "Total rows", icon="📊")
+    component_kpi_card("Samples", f"{stats.get('n_samples', 0):,}", "Total rows")
 with c2:
-    component_kpi_card("Features", f"{stats.get('n_features', 0)}", "Columns", icon="🔢")
+    component_kpi_card("Features", f"{stats.get('n_features', 0)}", "Columns")
 with c3:
-    component_kpi_card("Task", ds.get("task", "classification").title(), "Problem type", icon="🎯")
+    component_kpi_card("Task", ds.get("task", "classification").title(), "Problem type")
 with c4:
     component_kpi_card(
         "Missing",
         f"{stats.get('missing_values', 0)}",
         "Null values",
-        icon="⚠️",
         tone="danger" if stats.get("missing_values", 0) > 0 else "success",
     )
 
@@ -105,7 +102,7 @@ render_spacer("md")
 # ---------------------------------------------------------------------------
 # Tabs
 # ---------------------------------------------------------------------------
-tab_overview, tab_features, tab_split = st.tabs(["📋 Overview", "🔬 Feature Statistics", "✂️ Train/Test Split"])
+tab_overview, tab_features, tab_split = st.tabs(["Overview", "Feature Statistics", "Train/Test Split"])
 
 with tab_overview:
     render_section_title(f"Dataset: {selected_label}")
@@ -152,11 +149,9 @@ with tab_split:
 
     c1, c2 = st.columns(2)
     with c1:
-        component_kpi_card(
-            "Train Set", f"{train_size:,}", f"{train_size/stats.get('n_samples', 1)*100:.1f}%", icon="📚"
-        )
+        component_kpi_card("Train Set", f"{train_size:,}", f"{train_size/stats.get('n_samples', 1)*100:.1f}%")
     with c2:
-        component_kpi_card("Test Set", f"{test_size:,}", f"{test_size/stats.get('n_samples', 1)*100:.1f}%", icon="🧪")
+        component_kpi_card("Test Set", f"{test_size:,}", f"{test_size/stats.get('n_samples', 1)*100:.1f}%")
 
     st.markdown("**Sample Data (Train)**")
     if len(ds["X_train"]) > 0:
@@ -177,4 +172,3 @@ component_insight_panel(
 )
 
 st.divider()
-st.caption("🗂️ Dataset Hub v2.0-Componentized")

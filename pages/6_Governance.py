@@ -16,6 +16,7 @@ from ml_pipeline_monitor.utils.ui_theme import (
     component_insight_panel,
     component_kpi_card,
     hp_status_badge,
+    page_header,
     render_loading_skeleton,
     render_section_title,
     render_sidebar_nav,
@@ -87,10 +88,7 @@ def _render_page():
     # ---------------------------------------------------------------------------
     col_title, col_actions = st.columns([4, 1])
     with col_title:
-        st.markdown(
-            '<div class="ui-fade-in"><h1 style="margin:0; font-family:\'Poppins\', sans-serif;">Governance & Compliance</h1><p style="color:var(--color-text-tertiary);">Model audit trails, policy enforcement, and regulatory compliance.</p></div>',
-            unsafe_allow_html=True,
-        )
+        page_header("Governance & Compliance", "Model audit trails, policy enforcement, and regulatory compliance.")
     with col_actions:
         st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
         if st.button("Refresh", type="primary", use_container_width=True):
@@ -99,13 +97,12 @@ def _render_page():
     # KPI Row
     c1, c2, c3, c4 = st.columns(4)
     with c1:
-        component_kpi_card("Total Models", f"{len(models_df)}", "Registered", icon="📦")
+        component_kpi_card("Total Models", f"{len(models_df)}", "Registered")
     with c2:
         component_kpi_card(
             "Production",
             f"{len(models_df[models_df.get('stage')=='production'])}",
             "Active serving",
-            icon="🚀",
             tone="success",
         )
     with c3:
@@ -113,12 +110,11 @@ def _render_page():
             "Staging",
             f"{len(models_df[models_df.get('stage')=='staging'])}",
             "Pending approval",
-            icon="🧪",
             tone="warning",
         )
     with c4:
         component_kpi_card(
-            "Archived", f"{len(models_df[models_df.get('stage')=='archived'])}", "Retired", icon="📦", tone="neutral"
+            "Archived", f"{len(models_df[models_df.get('stage')=='archived'])}", "Retired", tone="neutral"
         )
 
     render_spacer("md")
@@ -126,7 +122,7 @@ def _render_page():
     # ---------------------------------------------------------------------------
     # Tabs
     # ---------------------------------------------------------------------------
-    tab_audit, tab_policy, tab_compliance = st.tabs(["📋 Audit Trail", "🛡️ Policy Enforcement", "📜 Compliance Report"])
+    tab_audit, tab_policy, tab_compliance = st.tabs(["Audit Trail", "Policy Enforcement", "Compliance Report"])
 
     with tab_audit:
         render_section_title("Model Stage Change History")
@@ -144,12 +140,12 @@ def _render_page():
         render_section_title("Promotion Policies")
 
         st.markdown("**Current Promotion Rules**")
-        st.markdown("""
-        - **Development → Staging**: Requires passing all pipeline stages (CV, evaluation, feature importance)
-        - **Staging → Production**: Requires admin approval + performance benchmark vs current production
-        - **Production → Archived**: Automatic when new model promoted to production
-        - **Rollback**: Admin-only, promotes previous production model
-        """)
+        st.markdown(
+            """- **Development  Staging**: Requires passing all pipeline stages (CV, evaluation, feature importance)
+        - **Staging  Production**: Requires admin approval + performance benchmark vs current production
+        - **Production  Archived**: Automatic when new model promoted to production
+        - **Rollback**: Admin-only, promotes previous production model"""
+        )
 
         render_spacer("md")
         render_section_title("Configure Policy Thresholds")
@@ -234,7 +230,6 @@ def _render_page():
     )
 
     st.divider()
-    st.caption("⚖️ Governance Core v2.0-Componentized")
 
 
 safe_render("Governance", _render_page)

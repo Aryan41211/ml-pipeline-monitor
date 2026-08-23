@@ -70,10 +70,24 @@ LOGGER = get_app_logger("api")
 API_KEY_HEADER = APIKeyHeader(name="X-API-Key", auto_error=False)
 JWT_SCHEME = HTTPBearer(auto_error=False)
 
-RATE_LIMIT = os.getenv("MLMONITOR_RATE_LIMIT", "60/minute")
+def _rate_limit(env_var: str, config_key: str, fallback: str) -> str:
+    """Resolve a rate limit from env, then the api config block, then a default."""
+    from_env = os.getenv(env_var, "").strip()
+    if from_env:
+        return from_env
+    try:
+        from ml_pipeline_monitor.core.config_loader import load_config
+
+        configured = str(load_config().get("api", {}).get(config_key, "")).strip()
+    except Exception:
+        configured = ""
+    return configured or fallback
+
+
+RATE_LIMIT = _rate_limit("MLMONITOR_RATE_LIMIT", "rate_limit", "60/minute")
 # Auth endpoints get their own, much tighter bucket: they are the brute-force
 # surface, and slowapi's default_limits do not apply without SlowAPIMiddleware.
-AUTH_RATE_LIMIT = os.getenv("MLMONITOR_AUTH_RATE_LIMIT", "10/minute")
+AUTH_RATE_LIMIT = _rate_limit("MLMONITOR_AUTH_RATE_LIMIT", "auth_rate_limit", "10/minute")
 limiter = Limiter(key_func=get_remote_address, default_limits=[RATE_LIMIT])
 
 # ---------------------------------------------------------------------------

@@ -44,6 +44,12 @@ monitoring:
     drift_threshold: 0.20
     min_performance_improvement: 0.02
     cooldown_seconds: 300
+  # Data-quality gate applied in the pipeline's Data Validation stage.
+  # When enabled, a run whose quality score falls below min_quality_score is
+  # stopped with DataQualityFailed instead of training on bad data.
+  data_quality:
+    enabled: false
+    min_quality_score: 75.0
 
 storage:
   backend: "sqlite"

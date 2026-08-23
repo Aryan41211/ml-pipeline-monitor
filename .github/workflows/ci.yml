@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [main, develop]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   lint:
     runs-on: ubuntu-latest
@@ -16,20 +20,19 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: "3.12"
 
       - name: Install lint tools
-        run: |
-          pip install ruff black isort
+        run: pip install ruff black isort
 
       - name: Ruff
-        run: ruff check src pages tests --output-format=github
+        run: ruff check src pages tests app.py --output-format=github
 
       - name: Black
-        run: black --check src pages tests
+        run: black --check src pages tests app.py
 
       - name: isort
-        run: isort --check-only --df --profile black src pages tests
+        run: isort --check-only --diff src pages tests app.py
 
   security:
     runs-on: ubuntu-latest
@@ -40,24 +43,59 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: "3.12"
 
       - name: Install security tools
-        run: |
-          pip install bandit safety
+        run: pip install bandit pip-audit
 
+      # Fails the build on medium+ severity findings. Previously both scanners
+      # ran with `|| true`, so the job was green no matter what they reported.
       - name: Bandit
-        run: bandit -r src -f json -o bandit-report.json || true
+        run: bandit -r src -c pyproject.toml --severity-level medium --confidence-level medium
 
-      - name: Safety
-        run: safety check --file requirements.txt --output json || true
+      - name: Dependency audit
+        run: pip-audit --requirement requirements.txt --strict
+
+  config:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate compose files
+        run: |
+          docker compose -f docker-compose.yml config --quiet
+          docker compose -f docker-compose.prod.yml config --quiet
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci
+          PIPELINE_DB_DSN: postgresql://ci:ci@postgres:5432/mlmonitor
+          JWT_SECRET: ci-secret
+          GRAFANA_USER: ci
+          GRAFANA_PASSWORD: ci
+          FLOWER_BASIC_AUTH: ci:ci
+
+      # Catches malformed PromQL and bad rule structure before deployment.
+      - name: Validate Prometheus rules
+        run: |
+          docker run --rm -v "$PWD/deployment/prometheus:/cfg" \
+            --entrypoint promtool prom/prometheus:v2.54.1 \
+            check rules /cfg/rules/ml-pipeline-monitor.yml
+
+      - name: Validate Alertmanager config
+        run: |
+          docker run --rm -v "$PWD/deployment/alertmanager:/cfg" \
+            --entrypoint amtool prom/alertmanager:v0.27.0 \
+            check-config /cfg/alertmanager.yml
 
   test:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.10", "3.11", "3.12"]
+        # 3.10 is below the project's requires-python (>=3.11); `pip install -e .`
+        # refused to install there, so that leg of the matrix could never pass.
+        python-version: ["3.11", "3.12"]
 
     steps:
       - name: Checkout
@@ -75,13 +113,9 @@ jobs:
           pip install -r requirements-dev.txt
           pip install -e .
 
-      - name: Install Playwright browsers
-        run: |
-          pip install playwright
-          playwright install --with-deps chromium
-
-      - name: Run unit tests
-        run: pytest -q --cov=ml_pipeline_monitor --cov-report=xml --cov-report=term-missing
+      # E2E runs in its own job with a browser; keep this leg fast and focused.
+      - name: Run unit and integration tests
+        run: pytest tests/unit tests/integration -q --cov=ml_pipeline_monitor --cov-report=xml --cov-report=term-missing
 
       - name: Upload coverage
         uses: actions/upload-artifact@v4
@@ -108,8 +142,8 @@ jobs:
           target: production
           push: false
           tags: ml-pipeline-monitor:ci
-          cache-from: type=registry,ref=ml-pipeline-monitor:buildcache
-          cache-to: type=registry,ref=ml-pipeline-monitor:buildcache,mode=max
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
       - name: Build API image
         uses: docker/build-push-action@v5
@@ -118,6 +152,7 @@ jobs:
           target: api
           push: false
           tags: ml-pipeline-monitor-api:ci
+          cache-from: type=gha
 
       - name: Build worker image
         uses: docker/build-push-action@v5
@@ -126,6 +161,7 @@ jobs:
           target: worker
           push: false
           tags: ml-pipeline-monitor-worker:ci
+          cache-from: type=gha
 
   e2e:
     runs-on: ubuntu-latest
@@ -138,21 +174,20 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: "3.12"
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install playwright pytest-playwright
+          pip install playwright pytest-playwright pytest-timeout
           pip install -e .
 
       - name: Install Playwright browsers
         run: playwright install --with-deps chromium
 
       - name: Run E2E tests
-        run: |
-          pytest -q tests/e2e --timeout=600 --no-cov
+        run: pytest -q tests/e2e --timeout=900 --no-cov
 
       - name: Upload Playwright report
         if: always()

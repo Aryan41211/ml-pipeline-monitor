@@ -30,7 +30,10 @@ types-python-dateutil>=2.8.19,<3.0.0
 # --- Database Migrations (also needed in production for worker/API) ---
 alembic>=1.13.0,<2.0.0
 
-# --- Background Jobs (Worker service) ---
+# --- Background Jobs ---
+# NOTE: the worker in services/worker.py is a plain polling loop, not a Celery
+# worker, so nothing in src/ imports these today. They are kept for the Flower
+# compose profile and for a future Celery-backed worker.
 celery>=5.3.0,<6.0.0
 redis>=5.0.0,<6.0.0
 flower>=2.0.0,<3.0.0
@@ -40,4 +43,6 @@ locust>=2.20.0,<3.0.0
 
 # --- Security Scanning ---
 bandit>=1.7.0,<2.0.0
-safety>=3.2.0,<4.0.0
+# pip-audit replaces `safety`, whose `check` subcommand is deprecated and now
+# requires an account, which is why the CI step could only ever be advisory.
+pip-audit>=2.7.0,<3.0.0

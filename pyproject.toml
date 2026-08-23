@@ -27,7 +27,9 @@ dependencies = [
     "pandas>=2.0.0,<3.0.0",
     "scikit-learn>=1.5.0,<2.0.0",
     "scipy>=1.13.0,<2.0.0",
-    "xgboost>=2.0.0,<4.0.0",
+    # Pinned <2.1.0: 2.1+ pulls the NVIDIA CUDA runtime as a hard dependency,
+    # adding ~2GB to the image. Keep in sync with requirements.txt.
+    "xgboost>=2.0.0,<2.1.0",
     "joblib>=1.3.0,<2.0.0",
     # Web Framework
     "streamlit>=1.35.0,<2.0.0",
@@ -106,38 +108,8 @@ exclude = ["tests*"]
 [tool.setuptools.package-data]
 "*" = ["*.yaml", "*.yml"]
 
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-addopts = [
-    "--cov=ml_pipeline_monitor",
-    "--cov-config=.coveragerc",
-    "--cov-report=term-missing",
-    "--cov-report=html",
-    "--cov-fail-under=80",
-    "--ignore=tests/load",
-]
-
-[tool.coverage.run]
-source = ["src/ml_pipeline_monitor"]
-omit = [
-    "*/tests/*",
-    "*/test_*",
-    "src/ml_pipeline_monitor/core/auth.py",
-    "src/ml_pipeline_monitor/utils/ui_theme.py",
-    "src/ml_pipeline_monitor/services/worker.py",
-]
-
-[tool.coverage.report]
-exclude_lines = [
-    "pragma: no cover",
-    "def __repr__",
-    "raise AssertionError",
-    "raise NotImplementedError",
-    "if __name__ == .__main__.",
-    "if TYPE_CHECKING:",
-    "@abstractmethod",
-]
-fail_under = 80
+# pytest configuration lives in pytest.ini and coverage settings in .coveragerc;
+# both took precedence over duplicates here, so the copies only ever drifted.
 
 [tool.ruff]
 target-version = "py311"
@@ -159,3 +131,9 @@ python_version = "3.11"
 warn_return_any = true
 warn_unused_configs = true
 ignore_missing_imports = true
+
+[tool.bandit]
+exclude_dirs = ["tests", ".venv", "build", "dist"]
+# B101 (assert) is not meaningful outside tests; B104 is the intentional
+# 0.0.0.0 bind of the containerised metrics exporter.
+skips = ["B101"]

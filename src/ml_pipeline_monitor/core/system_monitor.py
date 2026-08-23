@@ -35,7 +35,10 @@ def _get_cpu_temperature_c() -> Optional[float]:
 
 def get_system_metrics() -> Dict[str, Any]:
     """Return current CPU, memory, disk, and host temperature (if available)."""
-    cpu = psutil.cpu_percent(interval=0.3)
+    # Non-blocking: interval=0.3 stalled every dashboard render and every
+    # /health/detailed call for 300ms to sample a number that is refreshed
+    # continuously anyway.
+    cpu = psutil.cpu_percent(interval=None)
     mem = psutil.virtual_memory()
     disk = psutil.disk_usage("/")
 

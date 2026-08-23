@@ -47,6 +47,13 @@ monitoring:
     drift_threshold: 0.20
     min_performance_improvement: 0.02
     cooldown_seconds: 300
+  # Data-quality gate applied in the pipeline's Data Validation stage.
+  # Enabled in production: a run whose quality score falls below
+  # min_quality_score is stopped with DataQualityFailed rather than training
+  # on data that failed validation.
+  data_quality:
+    enabled: true
+    min_quality_score: 75.0
 
 storage:
   backend: "postgres"
@@ -92,8 +99,11 @@ ui:
 
 api:
   rate_limit: "100/minute"
-  cors_origins:
-    - "https://your-domain.com"
+  # Tighter bucket for /v1/auth/*; override with MLMONITOR_AUTH_RATE_LIMIT.
+  auth_rate_limit: "10/minute"
+  # Read by the API's CORS middleware. Leave the list empty to disable CORS
+  # entirely; override with MLMONITOR_CORS_ORIGINS (comma-separated).
+  cors_origins: []
   api_key_header: "X-API-Key"
   jwt_secret: ""  # Set via JWT_SECRET secret
   jwt_algorithm: "HS256"

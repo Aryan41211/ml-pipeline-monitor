@@ -1,12 +1,9 @@
-
-
-
 """
 Prometheus metrics for ML Pipeline Monitor.
 
-This module defines all Prometheus metrics exposed by the application.
-Metrics are registered with the default Prometheus registry and exposed
-via the /metrics endpoint on the FastAPI service.
+All metrics are registered against this module's dedicated CollectorRegistry
+(not the prometheus_client default registry) and exposed via /metrics on the
+FastAPI service and via start_metrics_server() in the Streamlit process.
 """
 
 from __future__ import annotations
@@ -102,7 +99,7 @@ drift_detections_total = Counter(
 
 drift_score = Gauge(
     "ml_drift_score",
-    "Current drift score (PSI) for dataset_d)",
+    "Current drift score (PSI) for a dataset",
     ["dataset"],
     registry=registry,
 )
@@ -277,8 +274,10 @@ def update_system_metrics() -> None:
     """
     import psutil
 
-    # CPU
-    system_cpu_percent.set(psutil.cpu_percent(interval=0.1))
+    # interval=None samples against the previous call instead of blocking. The
+    # two interval=0.1 calls here added ~0.2s of dead time to every scrape,
+    # which Prometheus performs every 10s.
+    system_cpu_percent.set(psutil.cpu_percent(interval=None))
 
     cpu_temp_c = float("nan")
     if hasattr(psutil, "sensors_temperatures"):
@@ -311,7 +310,7 @@ def update_system_metrics() -> None:
 
     # Process + thread info (for both process and host)
     proc = psutil.Process()
-    process_cpu_percent.set(proc.cpu_percent(interval=0.1))
+    process_cpu_percent.set(proc.cpu_percent(interval=None))
     mem_info = proc.memory_info()
     process_memory_rss_bytes.set(mem_info.rss)
     process_memory_vms_bytes.set(mem_info.vms)

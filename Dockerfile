@@ -81,6 +81,9 @@ COPY --chown=appuser:appuser src/ ./src/
 COPY --chown=appuser:appuser pages/ ./pages/
 COPY --chown=appuser:appuser app.py ./
 COPY --chown=appuser:appuser config/ ./config/
+# Streamlit's own theme/server settings. Without this the deployed image falls
+# back to Streamlit defaults (salmon widgets, visible developer toolbar).
+COPY --chown=appuser:appuser .streamlit/ ./.streamlit/
 COPY --chown=appuser:appuser run_app.py ./
 COPY --chown=appuser:appuser LICENSE ./
 

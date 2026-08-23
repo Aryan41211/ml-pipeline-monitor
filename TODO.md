@@ -26,7 +26,10 @@
 - [x] End to end: train → promote → authenticated `/v1/predict` returns a real
       prediction with probabilities
 - [x] Prediction history persists to the database
-- [x] Full stack restart (`down` then `up -d`) returns every service to healthy
+- [x] Full stack restart (`down` then `up -d`) returns every service to healthy,
+      and data written before the restart is still present
+- [x] `.streamlit/config.toml` is present in the built image and applied (the
+      developer toolbar is hidden and widgets use the project palette)
 
 ## Before going live
 
@@ -62,3 +65,7 @@
   `config/config.prod.yaml` to persist policy thresholds.
 - The API and the Streamlit app maintain separate Prometheus registries, since
   they are separate processes. The worker records metrics but is not scraped.
+- The dashboard login lives in Streamlit's session state, so a **full browser
+  refresh signs the user out**. Navigating with the sidebar links stays in the
+  session. Surviving a reload would require cookie- or token-backed sessions,
+  which Streamlit does not provide natively.

@@ -11,6 +11,7 @@ import pandas as pd
 from ml_pipeline_monitor.core.metrics import record_model_promotion
 from ml_pipeline_monitor.database import (
     get_latest_production_model,
+    get_model_by_id,
     get_model_stage_events,
     get_model_lineage,
     get_models,
@@ -60,13 +61,28 @@ def set_model_stage(model_id: str, stage: str) -> None:
     """Promote/demote model lifecycle stage."""
     _validate_model_id(model_id)
     _validate_stage(stage)
-    records = get_models(limit=1000)
-    record = next((m for m in records if m.get("model_id") == model_id), None)
-    from_stage = str(record.get("stage", "unknown")) if record else "unknown"
-    update_model_stage(model_id=model_id, stage=stage)
+
+    record = get_model_by_id(model_id) or {}
+    from_stage = str(record.get("stage", "unknown"))
+    dataset = str(record.get("dataset", "unknown"))
+    model_type = str(record.get("model_type", "unknown"))
+
+    try:
+        update_model_stage(model_id=model_id, stage=stage)
+    except Exception:
+        # A failed promotion is the interesting one; record it before re-raising.
+        record_model_promotion(
+            dataset=dataset,
+            model_type=model_type,
+            from_stage=from_stage,
+            to_stage=stage,
+            status="failed",
+        )
+        raise
+
     record_model_promotion(
-        dataset=str(record.get("dataset", "unknown")) if record else "unknown",
-        model_type=str(record.get("model_type", "unknown")) if record else "unknown",
+        dataset=dataset,
+        model_type=model_type,
         from_stage=from_stage,
         to_stage=stage,
         status="success",

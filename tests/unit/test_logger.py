@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from logging.handlers import RotatingFileHandler
 from io import StringIO
 from unittest.mock import MagicMock, patch
 
@@ -40,10 +41,22 @@ from ml_pipeline_monitor.core.logger import (
 )
 
 
-def test_get_app_logger_returns_logger():
+def test_get_app_logger_returns_namespaced_child():
+    """Named loggers are children of the package root, which owns the handlers."""
     logger = get_app_logger("test_module")
     assert isinstance(logger, logging.Logger)
-    assert logger.name == "test_module"
+    assert logger.name == "ml_monitor.test_module"
+    assert logger.handlers == []
+    assert logger.propagate is True
+
+
+def test_shared_handlers_are_installed_once():
+    """Only the package root carries handlers, so one file handle rotates the log."""
+    get_app_logger("mod_a")
+    get_app_logger("mod_b")
+    root = logging.getLogger("ml_monitor")
+    rotating = [h for h in root.handlers if isinstance(h, RotatingFileHandler)]
+    assert len(rotating) <= 1
 
 
 def test_get_set_clear_correlation_id():

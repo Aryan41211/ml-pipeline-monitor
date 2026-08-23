@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import os
 import threading
+from collections import OrderedDict
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Optional, Tuple
 
 import joblib
 
@@ -13,8 +15,12 @@ from ml_pipeline_monitor.core.logger import get_app_logger
 
 LOGGER = get_app_logger("model_cache")
 
+# Bounded LRU: sklearn/XGBoost estimators are large, and an unbounded dict kept
+# every model ever served resident for the life of the process.
+MAX_CACHED_MODELS = max(1, int(os.getenv("MLMONITOR_MODEL_CACHE_SIZE", "8")))
+
 _lock = threading.Lock()
-_cache: Dict[str, Tuple[Any, Any, str]] = {}
+_cache: "OrderedDict[str, Tuple[Any, Any, str]]" = OrderedDict()
 
 
 def _resolve_artifact(run_id: str) -> Tuple[Optional[Path], Optional[Path]]:
@@ -33,6 +39,7 @@ def get_model(run_id: str) -> Optional[Tuple[Any, Any, str]]:
     with _lock:
         entry = _cache.get(key)
         if entry is not None:
+            _cache.move_to_end(key)
             LOGGER.debug("Model cache hit", extra={"run_id": key})
             return entry
     model_path, scaler_path = _resolve_artifact(key)
@@ -44,6 +51,10 @@ def get_model(run_id: str) -> Optional[Tuple[Any, Any, str]]:
         entry = (model, scaler, str(model_path))
         with _lock:
             _cache[key] = entry
+            _cache.move_to_end(key)
+            while len(_cache) > MAX_CACHED_MODELS:
+                evicted, _ = _cache.popitem(last=False)
+                LOGGER.debug("Model cache eviction", extra={"run_id": evicted})
         LOGGER.debug("Model cached", extra={"run_id": key})
         return entry
     except Exception as exc:
@@ -51,7 +62,7 @@ def get_model(run_id: str) -> Optional[Tuple[Any, Any, str]]:
         return None
 
 
-def get_latest_production_model(dataset: Optional[str] = None) -> Optional[Tuple[Any, Any, Dict[str, Any]]]:
+def get_latest_production_model(dataset: Optional[str] = None) -> Optional[Tuple[Any, Any, dict]]:
     from ml_pipeline_monitor.database import get_latest_production_model
     record = get_latest_production_model(dataset=dataset)
     if record is None:

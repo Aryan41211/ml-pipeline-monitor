@@ -29,6 +29,7 @@ from ml_pipeline_monitor.database.models import (
     get_recent_production_models,
     get_model_stage_events,
     get_model_lineage,
+    get_model_by_id,
     update_model_stage,
 )
 from ml_pipeline_monitor.database.drift import (
@@ -83,6 +84,7 @@ __all__ = [
     "get_recent_production_models",
     "get_model_stage_events",
     "get_model_lineage",
+    "get_model_by_id",
     "update_model_stage",
     # Drift
     "save_drift_report",

@@ -7,6 +7,7 @@ import json
 import logging
 import sys
 import uuid
+import threading
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -222,33 +223,67 @@ def _resolve_log_path() -> Path:
     return path
 
 
+# All application loggers are children of this one. Handlers live here and
+# nowhere else: giving every named logger its own RotatingFileHandler on the
+# same path means N independent rotation controllers competing over one file,
+# which loses records on POSIX and raises PermissionError on Windows.
+_ROOT_LOGGER_NAME = "ml_monitor"
+_handler_lock = threading.Lock()
+_handlers_installed = False
+
+
+def _install_root_handlers() -> logging.Logger:
+    """Attach the shared file/console handlers to the package root logger once."""
+    global _handlers_installed
+
+    root = logging.getLogger(_ROOT_LOGGER_NAME)
+    if _handlers_installed:
+        return root
+
+    with _handler_lock:
+        if _handlers_installed:
+            return root
+
+        cfg = load_config().get("logging", {})
+        level_name = str(cfg.get("level", "INFO")).upper()
+        root.setLevel(getattr(logging, level_name, logging.INFO))
+
+        if not root.handlers:
+            try:
+                file_handler = RotatingFileHandler(
+                    _resolve_log_path(),
+                    maxBytes=int(cfg.get("max_bytes", 5_000_000)),
+                    backupCount=int(cfg.get("backup_count", 3)),
+                    encoding="utf-8",
+                    delay=True,
+                )
+                file_handler.setFormatter(JsonFormatter())
+                root.addHandler(file_handler)
+            except OSError:
+                # A read-only or unwritable log directory must not stop the app;
+                # stdout still carries everything.
+                pass
+
+            console_handler = logging.StreamHandler(sys.stdout)
+            console_handler.setFormatter(ConsoleFormatter())
+            root.addHandler(console_handler)
+
+        root.propagate = False
+        _handlers_installed = True
+
+    return root
+
+
 def get_app_logger(name: str = "ml_monitor") -> logging.Logger:
-    """Return configured logger instance."""
-    cfg = load_config().get("logging", {})
-    level_name = str(cfg.get("level", "INFO")).upper()
-    level = getattr(logging, level_name, logging.INFO)
+    """Return a namespaced logger that writes through the shared handlers."""
+    _install_root_handlers()
 
-    logger = logging.getLogger(name)
-    if logger.handlers:
-        return logger
+    if name == _ROOT_LOGGER_NAME:
+        return logging.getLogger(_ROOT_LOGGER_NAME)
 
-    logger.setLevel(level)
-
-    file_handler = RotatingFileHandler(
-        _resolve_log_path(),
-        maxBytes=int(cfg.get("max_bytes", 5_000_000)),
-        backupCount=int(cfg.get("backup_count", 3)),
-        encoding="utf-8",
-    )
-    file_handler.setFormatter(JsonFormatter())
-
-    console_handler = logging.StreamHandler(sys.stdout)
-    console_handler.setFormatter(ConsoleFormatter())
-
-    logger.addHandler(file_handler)
-    logger.addHandler(console_handler)
-    logger.propagate = False
-    return logger
+    # Child loggers hold no handlers of their own; records propagate up to the
+    # single set installed on the package root.
+    return logging.getLogger(f"{_ROOT_LOGGER_NAME}.{name}")
 
 
 def log_user_action(action: str, *, page: str, metadata: Dict[str, Any] | None = None) -> None:

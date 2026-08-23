@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hmac
 import json
 import os
 import time
@@ -42,7 +43,20 @@ def verify_password(password: str, hashed: str) -> bool:
 
 def _is_bcrypt_hash(value: str) -> bool:
     """Check if a string appears to be a bcrypt hash."""
-    return value.startswith("$2b$") or value.startswith("$2a$") or value.startswith("$2y$")
+    return value.startswith(("$2b$", "$2a$", "$2y$"))
+
+
+def _password_matches(candidate: str, stored: str) -> bool:
+    """Compare a submitted password against a stored bcrypt hash or literal.
+
+    Plaintext credentials are still accepted for local development, but the
+    comparison is constant time so it cannot be probed character by character.
+    """
+    if not stored:
+        return False
+    if _is_bcrypt_hash(stored):
+        return verify_password(candidate, stored)
+    return hmac.compare_digest(str(candidate), str(stored))
 
 
 def _auth_cfg() -> dict[str, object]:
@@ -274,25 +288,9 @@ def _check_login(username: str, password: str) -> tuple[bool, str]:
     if not allowed:
         return False, msg
 
-    # Try exact match first
-    if user in creds:
-        stored = creds[user].get("password", "")
-        if _is_bcrypt_hash(stored):
-            if verify_password(password, stored):
-                return True, ""
-        elif stored == password:
-            return True, ""
-
-    # Try case-insensitive match
-    lowered = {k.lower(): k for k in creds.keys()}
-    resolved = lowered.get(user.lower())
-    if resolved:
-        stored = creds[resolved].get("password", "")
-        if _is_bcrypt_hash(stored):
-            if verify_password(password, stored):
-                return True, ""
-        elif stored == password:
-            return True, ""
+    resolved = _resolve_user(user)
+    if resolved in creds and _password_matches(password, creds[resolved].get("password", "")):
+        return True, ""
 
     _record_failed_login()
     return False, "Invalid username or password"

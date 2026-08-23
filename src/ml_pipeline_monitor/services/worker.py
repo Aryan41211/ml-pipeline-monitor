@@ -7,6 +7,8 @@ whose ``next_run_at`` timestamp is due, recording each execution in the
 
 from __future__ import annotations
 
+import signal
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
@@ -113,12 +115,24 @@ def _parse_dt(value: Any) -> datetime | None:
 
 def _build_task_config(schedule: Dict[str, Any]) -> Dict[str, Any]:
     """Translate a schedule row into the worker task configuration."""
+    from ml_pipeline_monitor.services.pipeline_service import get_task_and_model_options
+
     schedule_type = str(schedule.get("schedule_type", "pipeline_run"))
+    dataset = schedule.get("pipeline_dataset") or "iris"
+
+    # Resolve the task from dataset config: hardcoding "classification" meant
+    # every scheduled run against a regression dataset failed validation.
+    try:
+        task = get_task_and_model_options(str(dataset))["task"]
+    except Exception:
+        task = "classification"
+
     return {
         "type": schedule_type,
         "params": {
-            "dataset": schedule.get("pipeline_dataset") or "iris",
+            "dataset": dataset,
             "model_type": schedule.get("pipeline_model_type") or "Random Forest",
+            "task": task,
         },
     }
 
@@ -197,25 +211,54 @@ def _execute_scheduled_task(task_config: Dict[str, Any]) -> None:
         LOGGER.warning("Unknown task type: %s", task_type)
 
 
+_shutdown = threading.Event()
+
+
+def request_shutdown() -> None:
+    """Ask the worker loop to finish the current cycle and exit."""
+    _shutdown.set()
+
+
+def _install_signal_handlers() -> None:
+    """Handle SIGTERM as well as SIGINT.
+
+    ``docker stop`` and Kubernetes both send SIGTERM; catching only
+    KeyboardInterrupt meant the worker was always SIGKILLed after the grace
+    period, mid-run, with no chance to record the schedule outcome.
+    """
+
+    def _handler(signum: int, _frame: Any) -> None:
+        LOGGER.info("Worker received signal %s, shutting down after current cycle", signum)
+        request_shutdown()
+
+    for sig in (signal.SIGTERM, signal.SIGINT):
+        try:
+            signal.signal(sig, _handler)
+        except (OSError, ValueError):  # not on the main thread, or unsupported
+            pass
+
+
 def run_worker_loop(concurrency: int = 4, poll_interval: float = 5.0) -> None:
+    """Poll the schedules table until asked to stop."""
     cfg = load_config().get("worker", {})
     concurrency = int(cfg.get("concurrency", concurrency))
     poll_interval = float(cfg.get("poll_interval", poll_interval))
 
+    _shutdown.clear()
+    _install_signal_handlers()
     initialize_governance_registry()
 
     LOGGER.info("Worker starting with concurrency=%d, poll_interval=%.1fs", concurrency, poll_interval)
 
-    running = True
-    while running:
+    while not _shutdown.is_set():
         try:
             _run_once(poll_interval=poll_interval, concurrency=concurrency)
         except KeyboardInterrupt:
             LOGGER.info("Worker received shutdown signal")
-            running = False
+            request_shutdown()
         except Exception as exc:
             LOGGER.exception("Worker loop error: %s", exc)
-            time.sleep(poll_interval)
+            _shutdown.wait(poll_interval)
 
     LOGGER.info("Worker shut down cleanly")
 
@@ -231,7 +274,8 @@ def _run_once(poll_interval: float = 5.0, concurrency: int = 4) -> None:
                     future.result()
                 except Exception as exc:
                     LOGGER.exception("Schedule task error: %s", exc)
-    time.sleep(poll_interval)
+    # Interruptible sleep: a stop signal does not have to wait out the poll.
+    _shutdown.wait(poll_interval)
 
 
 if __name__ == "__main__":

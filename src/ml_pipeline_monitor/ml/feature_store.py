@@ -20,7 +20,7 @@ def _feature_store_root() -> Path:
 
 def make_feature_key(dataset_key: str, test_size: float, random_state: int) -> str:
     raw = f"{dataset_key}|{round(float(test_size), 4)}|{int(random_state)}"
-    return hashlib.sha1(raw.encode("utf-8")).hexdigest()[:16]
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
 
 
 def load_cached_splits(feature_key: str) -> Optional[Dict[str, Any]]:

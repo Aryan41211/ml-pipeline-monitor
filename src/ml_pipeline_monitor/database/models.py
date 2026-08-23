@@ -316,28 +316,6 @@ def update_model_stage(model_id: str, stage: str) -> None:
                     ),
                 )
 
-            try:
-                from ml_pipeline_monitor.ml.data_loader import load_dataset
-                from ml_pipeline_monitor.core.config_loader import load_config
-                pipeline_cfg = load_config().get("pipeline", {})
-                ds = load_dataset(
-                    dataset,
-                    test_size=float(pipeline_cfg.get("test_size", 0.20)),
-                    random_state=int(pipeline_cfg.get("random_seed", 42)),
-                )
-                conn.execute(
-                    """
-                    INSERT INTO drift_references (dataset, feature_names, reference_data)
-                    VALUES (?, ?, ?)
-                    ON CONFLICT(dataset) DO UPDATE SET
-                        feature_names=excluded.feature_names,
-                        reference_data=excluded.reference_data
-                    """,
-                    (dataset, json.dumps(ds["feature_names"]), json.dumps(ds["X_train"].values.tolist())),
-                )
-            except Exception:
-                pass
-
         conn.execute(
             "UPDATE models SET stage = ? WHERE model_id = ?",
             (stage, model_id),
@@ -349,3 +327,60 @@ def update_model_stage(model_id: str, stage: str) -> None:
             """,
             (model_id, dataset, current_stage, stage, now, "manual stage update"),
         )
+
+    # Refreshing the drift baseline loads and re-serialises a full training
+    # split. It is deliberately outside the promotion transaction: it is slow,
+    # it is not part of the stage change, and swallowing a failure inside the
+    # transaction would poison it -- on PostgreSQL every subsequent statement
+    # in an aborted transaction fails, so a bad baseline write used to take the
+    # promotion down with it.
+    if stage == "production":
+        _refresh_drift_reference(dataset)
+
+
+def _refresh_drift_reference(dataset: str) -> None:
+    """Store the current training split as the drift baseline for ``dataset``.
+
+    Best-effort: a promotion is still valid without a refreshed baseline, so a
+    failure here is logged rather than raised.
+    """
+    from ml_pipeline_monitor.core.config_loader import load_config
+    from ml_pipeline_monitor.core.logger import get_app_logger
+    from ml_pipeline_monitor.ml.data_loader import load_dataset
+
+    logger = get_app_logger("model_registry")
+    try:
+        pipeline_cfg = load_config().get("pipeline", {})
+        ds = load_dataset(
+            dataset,
+            test_size=float(pipeline_cfg.get("test_size", 0.20)),
+            random_state=int(pipeline_cfg.get("random_seed", 42)),
+        )
+    except Exception as exc:
+        logger.warning("Skipping drift baseline refresh for %s: %s", dataset, exc)
+        return
+
+    try:
+        with _get_connection() as conn:
+            conn.execute(
+                """
+                INSERT INTO drift_references (dataset, feature_names, reference_data)
+                VALUES (?, ?, ?)
+                ON CONFLICT(dataset) DO UPDATE SET
+                    feature_names=excluded.feature_names,
+                    reference_data=excluded.reference_data
+                """,
+                (dataset, json.dumps(ds["feature_names"]), json.dumps(ds["X_train"].values.tolist())),
+            )
+    except Exception as exc:
+        logger.warning("Failed to persist drift baseline for %s: %s", dataset, exc)
+
+
+def get_model_by_id(model_id: str) -> Optional[Dict[str, Any]]:
+    """Fetch a single model record by its model_id."""
+    with _get_connection() as conn:
+        row = conn.execute(
+            "SELECT * FROM models WHERE model_id = ?",
+            (model_id,),
+        ).fetchone()
+    return dict(row) if row else None

@@ -15,20 +15,47 @@ from ml_pipeline_monitor.core.secrets import get_secrets_manager
 ROOT_DIR = Path(__file__).resolve().parent.parent.parent.parent
 
 
+def _strip_inline_comment(value: str) -> str:
+    """Drop a trailing ``# comment`` from an unquoted .env value.
+
+    Only a ``#`` preceded by whitespace starts a comment, so values that legally
+    contain a hash -- a URL fragment, or a password containing '#' -- survive.
+    """
+    for index, char in enumerate(value):
+        if char == "#" and index > 0 and value[index - 1] in " 	":
+            return value[:index]
+    return value
+
+
 def _parse_env_line(line: str) -> str | None:
     """Parse a single KEY=VALUE line from a .env file.
 
     Returns the ``KEY=VALUE`` assignment, or None for blank lines, comments,
-    and lines without an '=' separator. Quoted values are preserved verbatim.
+    and lines without an '=' separator. Surrounding quotes are removed and
+    trailing inline comments are stripped from unquoted values -- copying
+    .env.example verbatim otherwise assigned the explanatory comment text as
+    the value, silently producing a password of "# REQUIRED: Generate with...".
     """
     stripped = line.strip()
     if not stripped or stripped.startswith("#") or "=" not in stripped:
         return None
+
     key, _, value = stripped.partition("=")
     key = key.strip()
+    if key.startswith("export "):
+        key = key[len("export "):].strip()
     if not key or not key.replace("_", "").isalnum():
         return None
-    return f"{key}={value.strip()}"
+
+    quoted = value.strip()
+    if len(quoted) >= 2 and quoted[0] == quoted[-1] and quoted[0] in ("'", '"'):
+        value = quoted[1:-1]
+    else:
+        # Comment-strip the RAW value: stripping whitespace first would move a
+        # "   # comment" to index 0 and make it look like the value itself.
+        value = _strip_inline_comment(value).strip()
+
+    return f"{key}={value}"
 
 
 def load_env_file(env_path: Path | None = None) -> list[str]:

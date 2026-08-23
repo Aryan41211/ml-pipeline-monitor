@@ -58,6 +58,8 @@ services:
       - ./data:/app/data
       - ./logs:/app/logs
     depends_on:
+      postgres:
+        condition: service_healthy
       redis:
         condition: service_healthy
     restart: unless-stopped
@@ -103,6 +105,8 @@ services:
       - ./data:/app/data
       - ./logs:/app/logs
     depends_on:
+      postgres:
+        condition: service_healthy
       redis:
         condition: service_healthy
     restart: unless-stopped
@@ -139,6 +143,8 @@ services:
       - ./data:/app/data
       - ./logs:/app/logs
     depends_on:
+      postgres:
+        condition: service_healthy
       redis:
         condition: service_healthy
     restart: unless-stopped

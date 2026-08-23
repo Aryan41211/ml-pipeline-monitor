@@ -10,10 +10,11 @@ import yaml
 
 from ml_pipeline_monitor.core.config_loader import (
     DEFAULT_CONFIG,
+    ROOT_DIR,
     _deep_merge,
+    _parse_env_line,
     get_artifact_dirs,
     load_config,
-    ROOT_DIR,
 )
 
 
@@ -64,3 +65,44 @@ def test_get_artifact_dirs(tmp_path, monkeypatch):
         load_config.cache_clear()
     assert dirs["models"].exists()
     assert dirs["scalers"].exists()
+
+
+class TestEnvLineParsing:
+    """Regression tests for .env parsing.
+
+    Copying .env.example verbatim used to assign the explanatory comment text
+    as the value, so POSTGRES_PASSWORD literally became
+    '# REQUIRED: Generate with: ...' instead of empty.
+    """
+
+    def test_inline_comment_after_empty_value_is_not_the_value(self):
+        parsed = _parse_env_line("POSTGRES_PASSWORD=          # REQUIRED: generate one")
+        assert parsed == "POSTGRES_PASSWORD="
+
+    def test_inline_comment_is_stripped(self):
+        assert _parse_env_line("SPACED=abc   # note") == "SPACED=abc"
+
+    def test_double_quotes_are_removed(self):
+        assert _parse_env_line('JWT_SECRET="quoted-value"') == "JWT_SECRET=quoted-value"
+
+    def test_single_quotes_are_removed(self):
+        assert _parse_env_line("AUTH_ROLE='admin'") == "AUTH_ROLE=admin"
+
+    def test_hash_without_leading_space_is_kept(self):
+        """A '#' inside a URL fragment or password is not a comment."""
+        assert _parse_env_line("PW=has#hash") == "PW=has#hash"
+        assert (
+            _parse_env_line("URL=postgresql://u:p@h:5432/db?x=1#frag")
+            == "URL=postgresql://u:p@h:5432/db?x=1#frag"
+        )
+
+    def test_export_prefix_is_accepted(self):
+        assert _parse_env_line("export FOO=bar") == "FOO=bar"
+
+    def test_comments_and_blanks_are_skipped(self):
+        assert _parse_env_line("# just a comment") is None
+        assert _parse_env_line("") is None
+        assert _parse_env_line("no_equals_here") is None
+
+    def test_quoted_value_keeps_inline_hash(self):
+        assert _parse_env_line('PW="abc # notacomment"') == "PW=abc # notacomment"

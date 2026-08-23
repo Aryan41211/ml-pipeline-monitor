@@ -1,0 +1,166 @@
+groups:
+  # ==========================================================================
+  # Service availability
+  # ==========================================================================
+  - name: availability
+    rules:
+      - alert: ServiceDown
+        expr: up == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.job }} is down"
+          description: "Prometheus has failed to scrape {{ $labels.job }} ({{ $labels.instance }}) for 2 minutes."
+
+      - alert: TargetScrapeFlapping
+        expr: changes(up[15m]) > 4
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.job }} is flapping"
+          description: "{{ $labels.job }} has changed availability more than 4 times in 15 minutes."
+
+  # ==========================================================================
+  # Inference API
+  # ==========================================================================
+  - name: api
+    rules:
+      - alert: ApiHighErrorRate
+        expr: |
+          sum(rate(ml_api_requests_total{status_code=~"5.."}[5m]))
+            / clamp_min(sum(rate(ml_api_requests_total[5m])), 0.001) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "API 5xx rate above 5%"
+          description: "More than 5% of API responses have been server errors for 5 minutes."
+
+      - alert: ApiHighLatency
+        expr: |
+          histogram_quantile(
+            0.95, sum(rate(ml_api_request_duration_seconds_bucket[5m])) by (le, endpoint)
+          ) > 2
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "p95 latency above 2s on {{ $labels.endpoint }}"
+          description: "95th percentile request duration for {{ $labels.endpoint }} has exceeded 2s for 10 minutes."
+
+      - alert: ApiRateLimitingHeavily
+        expr: sum(rate(ml_api_errors_total{error_type="http_429"}[5m])) > 1
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Sustained rate limiting"
+          description: "The API has been rejecting more than 1 request/s with HTTP 429 for 10 minutes."
+
+  # ==========================================================================
+  # Predictions
+  # ==========================================================================
+  - name: predictions
+    rules:
+      - alert: PredictionFailureRateHigh
+        expr: |
+          sum(rate(ml_predictions_total{status="failed"}[10m]))
+            / clamp_min(sum(rate(ml_predictions_total[10m])), 0.001) > 0.10
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Over 10% of predictions are failing"
+          description: "The prediction failure ratio has exceeded 10% for 10 minutes."
+
+      - alert: PredictionLatencyHigh
+        expr: |
+          histogram_quantile(
+            0.95, sum(rate(ml_prediction_latency_seconds_bucket[10m])) by (le)
+          ) > 1
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "p95 prediction latency above 1s"
+          description: "95th percentile inference latency has exceeded 1s for 10 minutes."
+
+  # ==========================================================================
+  # Pipelines and data quality
+  # ==========================================================================
+  - name: pipelines
+    rules:
+      - alert: PipelineFailures
+        expr: increase(ml_pipeline_runs_total{status="failed"}[1h]) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Pipeline failures on {{ $labels.dataset }}"
+          description: "{{ $value }} pipeline run(s) failed for {{ $labels.dataset }} / {{ $labels.model_type }} in the last hour."
+
+      - alert: DataQualityFailing
+        expr: increase(ml_dataset_validations_total{status="fail"}[1h]) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Dataset validation failing for {{ $labels.dataset }}"
+          description: "{{ $labels.dataset }} failed data-quality validation in the last hour."
+
+  # ==========================================================================
+  # Drift
+  # ==========================================================================
+  - name: drift
+    rules:
+      - alert: SignificantDataDrift
+        expr: ml_drift_score > 0.25
+        for: 15m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Significant drift on {{ $labels.dataset }}"
+          description: "PSI for {{ $labels.dataset }} is {{ $value | printf \"%.3f\" }}, above the 0.25 significant threshold. Consider retraining."
+
+      - alert: ModerateDataDrift
+        expr: ml_drift_score > 0.10 and ml_drift_score <= 0.25
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Moderate drift on {{ $labels.dataset }}"
+          description: "PSI for {{ $labels.dataset }} is {{ $value | printf \"%.3f\" }}, in the 0.10-0.25 moderate band."
+
+  # ==========================================================================
+  # Host and process resources
+  # ==========================================================================
+  - name: resources
+    rules:
+      - alert: HighMemoryUsage
+        expr: ml_system_memory_percent > 90
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Host memory above 90%"
+          description: "Memory utilisation on {{ $labels.instance }} has been above 90% for 10 minutes."
+
+      - alert: HighCpuUsage
+        expr: ml_system_cpu_percent > 90
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Host CPU above 90%"
+          description: "CPU utilisation on {{ $labels.instance }} has been above 90% for 15 minutes."
+
+      - alert: LowDiskSpace
+        expr: ml_system_disk_percent > 85
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Disk above 85% full"
+          description: "Disk utilisation on {{ $labels.instance }} is {{ $value | printf \"%.1f\" }}%. Artifacts and the metrics TSDB will fail to write when it fills."

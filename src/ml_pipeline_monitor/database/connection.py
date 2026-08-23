@@ -190,9 +190,15 @@ _backend_cache: tuple[tuple[str, str], DatabaseBackend] | None = None
 
 
 def _resolve_backend_key() -> tuple[str, str]:
-    """Return the (backend_name, target) pair identifying the configured backend."""
+    """Return the (backend_name, target) pair identifying the configured backend.
+
+    ``MLMONITOR_DB_BACKEND`` overrides ``storage.backend`` from config, so a
+    deployment can select PostgreSQL without shipping a different config file.
+    """
     storage_cfg = load_config().get("storage", {})
-    backend = str(storage_cfg.get("backend", "sqlite")).strip().lower()
+    backend = str(
+        os.getenv("MLMONITOR_DB_BACKEND") or storage_cfg.get("backend", "sqlite")
+    ).strip().lower()
 
     if backend == "sqlite":
         return backend, resolve_sqlite_db_path()

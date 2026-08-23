@@ -5,14 +5,16 @@ global:
     cluster: 'ml-pipeline-monitor'
     environment: 'production'
 
-# Alertmanager configuration (optional - not configured by default)
-# alerting:
-#   alertmanagers:
-#     - static_configs:
-#         - targets: ['alertmanager:9093']
+# Alertmanager receives every firing rule below. The alertmanager service is
+# behind the "monitoring" compose profile; when it is not running Prometheus
+# simply retries delivery, so leaving this enabled is safe either way.
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ['alertmanager:9093']
 
 rule_files:
-  # - "alerts/*.yml"
+  - "/etc/prometheus/rules/*.yml"
 
 scrape_configs:
   # Prometheus self-monitoring

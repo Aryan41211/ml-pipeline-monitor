@@ -2,15 +2,28 @@
 # ML Pipeline Monitor - Production Docker Compose
 # =============================================================================
 # Usage:
-#   Development:  docker-compose -f docker-compose.yml -f docker-compose.dev.yml up
-#   Production:   docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
-#   With Postgres: docker-compose --profile postgres up -d
+#   Default:      docker compose up -d
+#   Development:  docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+#   Production:   docker compose -f docker-compose.prod.yml up -d
+#   With flower/alertmanager: docker compose --profile monitoring up -d
+#
+# app, api and worker share ONE PostgreSQL database. They previously defaulted
+# to SQLite with no shared volume, which gave each container its own private
+# database inside its own filesystem -- so the three services disagreed about
+# every experiment, model and schedule, and all of it was discarded on restart.
 # =============================================================================
 
 x-common-env: &common-env
   PYTHONDONTWRITEBYTECODE: "1"
   PYTHONUNBUFFERED: "1"
   CONFIG_PATH: "/app/config/config.yaml"
+  MLMONITOR_DB_BACKEND: "postgres"
+
+x-app-depends: &app-depends
+  postgres:
+    condition: service_healthy
+  redis:
+    condition: service_healthy
 
 x-logging: &default-logging
   driver: "json-file"
@@ -40,7 +53,7 @@ services:
       - "8501:8501"
     environment:
       <<: *common-env
-      PIPELINE_DB_DSN: ${PIPELINE_DB_DSN}
+      PIPELINE_DB_DSN: ${PIPELINE_DB_DSN:?PIPELINE_DB_DSN must be set in .env}
       MLMONITOR_AUTH_ENABLED: ${MLMONITOR_AUTH_ENABLED:-true}
       AUTH_USERNAME: ${AUTH_USERNAME}
       AUTH_PASSWORD: ${AUTH_PASSWORD}
@@ -59,9 +72,7 @@ services:
       - ./artifacts:/app/artifacts
       - ./data:/app/data
       - ./logs:/app/logs
-    depends_on:
-      redis:
-        condition: service_healthy
+    depends_on: *app-depends
     restart: unless-stopped
     logging: *default-logging
     healthcheck:
@@ -91,7 +102,7 @@ services:
       - "8000:8000"
     environment:
       <<: *common-env
-      PIPELINE_DB_DSN: ${PIPELINE_DB_DSN}
+      PIPELINE_DB_DSN: ${PIPELINE_DB_DSN:?PIPELINE_DB_DSN must be set in .env}
       MLMONITOR_API_KEY: ${MLMONITOR_API_KEY}
       MLMONITOR_RATE_LIMIT: ${MLMONITOR_RATE_LIMIT:-100/minute}
       JWT_SECRET: ${JWT_SECRET}
@@ -105,9 +116,7 @@ services:
       - ./artifacts:/app/artifacts
       - ./data:/app/data
       - ./logs:/app/logs
-    depends_on:
-      redis:
-        condition: service_healthy
+    depends_on: *app-depends
     restart: unless-stopped
     logging: *default-logging
     healthcheck:
@@ -135,16 +144,14 @@ services:
     container_name: ml-pipeline-monitor-worker
     environment:
       <<: *common-env
-      PIPELINE_DB_DSN: ${PIPELINE_DB_DSN}
+      PIPELINE_DB_DSN: ${PIPELINE_DB_DSN:?PIPELINE_DB_DSN must be set in .env}
       WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-4}
       WORKER_PREFETCH_MULTIPLIER: ${WORKER_PREFETCH_MULTIPLIER:-1}
     volumes:
       - ./artifacts:/app/artifacts
       - ./data:/app/data
       - ./logs:/app/logs
-    depends_on:
-      redis:
-        condition: service_healthy
+    depends_on: *app-depends
     restart: unless-stopped
     logging: *default-logging
     healthcheck:
@@ -164,6 +171,10 @@ services:
 
   # ===========================================================================
   # Flower (Celery broker monitoring dashboard)
+  #
+  # NOTE: the background worker is a plain polling loop, not a Celery worker,
+  # so Flower has no tasks to display. Kept behind the "monitoring" profile for
+  # when a Celery-backed worker is introduced.
   # ===========================================================================
   flower:
     image: mher/flower:2.0.1
@@ -176,7 +187,7 @@ services:
       - --broker=redis://redis:6379/0
       - --port=5555
     environment:
-      FLOWER_BASIC_AUTH: ${FLOWER_BASIC_AUTH:-admin:admin}
+      FLOWER_BASIC_AUTH: ${FLOWER_BASIC_AUTH:?FLOWER_BASIC_AUTH must be set (user:password)}
     depends_on:
       redis:
         condition: service_healthy
@@ -209,8 +220,10 @@ services:
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env}
       - POSTGRES_DB=${POSTGRES_DB:-mlmonitor}
       - POSTGRES_INITDB_ARGS=--auth-host=scram-sha-256
-    ports:
-      - "5432:5432"
+    # Not published to the host: every consumer reaches it over the compose
+    # network. Uncomment only for local inspection.
+    # ports:
+    #   - "127.0.0.1:5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./scripts/database/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
@@ -256,7 +269,6 @@ services:
         reservations:
           cpus: '0.5'
           memory: 512M
-    profiles: ["postgres"]
 
   # ===========================================================================
   # Redis (Cache, Session Store, Celery Broker)
@@ -264,8 +276,9 @@ services:
   redis:
     image: redis:7-alpine
     container_name: ml-pipeline-monitor-redis
-    ports:
-      - "6379:6379"
+    # Unauthenticated Redis must not be reachable from the host network.
+    # ports:
+    #   - "127.0.0.1:6379:6379"
     volumes:
       - redisdata:/data
     command:

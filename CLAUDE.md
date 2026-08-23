@@ -88,9 +88,13 @@ ML-pipeline-monitor/
 │       │   ├── telemetry_service.py # User action tracking
 │       │   └── worker.py            # Polling worker (schedules table, not Celery)
 │       │
+│       ├── ui/                     # Streamlit launcher
+│       │   ├── __init__.py
+│       │   └── __main__.py          # Starts the metrics exporter, then Streamlit
+│       │
 │       └── utils/                   # UI / presentation helpers
 │           ├── __init__.py
-│           └── ui_theme.py          # Enterprise design system (HP-inspired)
+│           └── ui_theme.py          # Design system (tokens + components)
 │
 ├── pages/                           # Streamlit pages (auto-discovered by numbering)
 │   ├── 0_Dataset_Management.py
@@ -112,6 +116,9 @@ ML-pipeline-monitor/
 │   ├── env.py
 │   ├── script.py.mako
 │   └── versions/
+│
+├── .streamlit/
+│   └── config.toml                  # Streamlit theme (mirrors ui_theme tokens)
 │
 ├── config/
 │   ├── config.yaml                  # Development configuration
@@ -251,6 +258,28 @@ Page functions should primarily:
 Do not implement business logic directly in pages.
 Keep UI state localized; do not rely on implicit global mutation.
 Any expensive computation should be delegated to services/core and cached if applicable.
+
+### Design system rules (`utils/ui_theme.py`)
+
+- **Never hardcode a colour in a page or a component.** Read from the `LIGHT`
+  token table, or use `_tone_colors()` for semantic status colours.
+- **Emit component markup on a single line**, via the `_render()` helper.
+  `st.markdown` is parsed as Markdown first: a blank line -- which an empty
+  conditional such as `{x if cond else ""}` produces -- closes the HTML block,
+  and the indented lines that follow are rendered as a code block.
+- **Escape interpolated values with `esc()`.** Component input can be a model
+  name or a dataset column, and it lands in raw HTML.
+- Streamlit's own styles outrank bare element selectors. Overrides must be
+  scoped (`.stApp h1`) and usually need `!important`.
+- Streamlit wraps widget labels in `<p>`; a global `p` colour rule will beat
+  the button's own colour unless the text is set to `inherit`.
+- **No decorative icons or emoji** in the chrome. `component_kpi_card` still
+  accepts `icon=` and `trend=` for compatibility and ignores both.
+- Never display a number that is not computed from data. Placeholder metrics
+  ("94% healthy", "+4", "4.2d avg cycle time") have been removed once; do not
+  reintroduce them.
+- The palette is duplicated in `.streamlit/config.toml`, which styles widgets
+  CSS cannot reliably reach. Change both together.
 
 ### Pages Index
 | File | Purpose |
@@ -411,8 +440,8 @@ their own lines.
 | redis | redis:7-alpine | internal only | default |
 | prometheus | prom/prometheus:v2.54.1 | 9090 | default |
 | grafana | grafana/grafana:11.1.0 | 3000 | default |
-| flower | mher/flower:2.0.1 | 5555 | monitoring |
-| alertmanager | prom/alertmanager:v0.27.0 | 9093 | monitoring |
+| alertmanager | prom/alertmanager:v0.27.0 | 9093 | default |
+| flower | mher/flower:2.0.1 | 5555 | `-f docker-compose.flower.yml` |
 | nginx | nginx:alpine | 80/443 | production |
 
 **app, api and worker share one PostgreSQL database.** Postgres is a default
@@ -426,17 +455,36 @@ Start commands:
 - Default: `docker compose up -d`
 - Development (SQLite, hot reload): `docker compose -f docker-compose.yml -f docker-compose.dev.yml up`
 - Production: `docker compose -f docker-compose.prod.yml up -d`
-- With flower/alertmanager: `docker compose --profile monitoring up -d`
+- With Flower: `docker compose -f docker-compose.yml -f docker-compose.flower.yml up -d`
 
-Flower is included for a future Celery-backed worker; the current polling
-worker publishes no Celery tasks, so its dashboard will be empty.
+Flower ships as an opt-in overlay rather than a compose profile. Compose
+interpolates every service's variables *before* it filters by profile, so a
+profiled service carrying a required variable (`FLOWER_BASIC_AUTH`) makes
+`docker compose up` fail for the default stack. It is included for a future
+Celery-backed worker; the current polling worker publishes no Celery tasks, so
+its dashboard will be empty.
+
+Validate deployment config with the same commands CI runs:
+
+```bash
+docker compose -f docker-compose.yml config --quiet
+promtool check rules deployment/prometheus/rules/*.yml
+amtool check-config deployment/alertmanager/alertmanager.yml
+```
 
 ## 18) CLI Entry Points
 
 ```bash
-mlmonitor-api        # Launch FastAPI server (from setup.py entry_points)
-mlmonitor hash-password <password>  # Generate bcrypt hash (if cli.py exists)
+mlmonitor-api        # Launch the FastAPI server
+mlmonitor-ui         # Launch the Streamlit dashboard
 ```
+
+`mlmonitor-ui` (`python -m ml_pipeline_monitor.ui`) starts the Prometheus
+exporter and then runs Streamlit **in the same process**, so both share one
+metrics registry. Do not launch the dashboard with `streamlit run app.py` in a
+deployment: Streamlit only executes the script once a browser session connects,
+so the exporter -- and the Prometheus target with it -- would stay down on an
+idle container.
 
 ## 19) ML Pipeline Stages
 

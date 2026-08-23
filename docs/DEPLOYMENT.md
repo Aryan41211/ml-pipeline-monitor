@@ -52,7 +52,7 @@ export MLMONITOR_API_KEY=$(openssl rand -hex 32)
 docker compose up -d   # Postgres is a default service, not a profile
 
 # With monitoring stack
-docker compose --profile monitoring up -d
+docker compose -f docker-compose.yml -f docker-compose.flower.yml up -d   # optional Flower
 
 # Full production stack
 docker compose -f docker compose.yml -f docker compose.prod.yml up -d

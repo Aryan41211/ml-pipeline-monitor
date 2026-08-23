@@ -154,7 +154,7 @@ docker compose up -d
 docker compose -f docker-compose.yml -f docker-compose.dev.yml up
 
 # With PostgreSQL
-docker compose --profile monitoring up -d   # adds Flower + Alertmanager
+docker compose -f docker-compose.yml -f docker-compose.flower.yml up -d   # adds Flower
 ```
 
 ## Configuration
@@ -213,6 +213,7 @@ pytest tests/load/ -v
 - PostgreSQL - Production database
 - Redis - Available for caching and as a broker for a future Celery worker
 - Background worker - Polls the `schedules` table (not Celery today)
+- Alertmanager - Receives Prometheus alerts and posts them to the API webhook
 - Prometheus + Grafana - Monitoring & alerting
 
 ## Documentation

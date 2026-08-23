@@ -15,10 +15,16 @@ from ml_pipeline_monitor.core.config_loader import ROOT_DIR, load_config
 
 
 class PostgresConnectionAdapter:
-    """Compatibility adapter to keep sqlite-like calls in persistence layer."""
+    """Compatibility adapter to keep sqlite-like calls in persistence layer.
 
-    def __init__(self, connection) -> None:
+    ``close()`` returns the connection to the owning pool rather than tearing it
+    down, so a pool actually recycles connections instead of draining itself.
+    """
+
+    def __init__(self, connection, pool=None) -> None:
         self._connection = connection
+        self._pool = pool
+        self._closed = False
 
     @staticmethod
     def _normalize_query(query: str) -> str:
@@ -42,7 +48,13 @@ class PostgresConnectionAdapter:
         self._connection.rollback()
 
     def close(self) -> None:
-        self._connection.close()
+        if self._closed:
+            return
+        self._closed = True
+        if self._pool is not None:
+            self._pool.putconn(self._connection)
+        else:
+            self._connection.close()
 
 
 class SQLiteBackend:
@@ -127,16 +139,17 @@ class PostgresBackend:
 
     name = "postgres"
 
-    def __init__(self, dsn: str, pool_size: int = 5) -> None:
+    def __init__(self, dsn: str, pool_size: int = 5, min_size: int = 1) -> None:
         self.dsn = dsn
-        self.pool_size = pool_size
+        self.pool_size = max(1, int(pool_size))
+        self.min_size = max(1, min(int(min_size), self.pool_size))
         self._pool = None
         self._init_pool()
 
     def _init_pool(self) -> None:
         try:
-            from psycopg_pool import ConnectionPool
             from psycopg.rows import dict_row
+            from psycopg_pool import ConnectionPool
         except Exception as exc:
             raise RuntimeError(
                 "PostgreSQL backend requires psycopg-pool. Install with 'pip install psycopg-pool'."
@@ -144,7 +157,7 @@ class PostgresBackend:
 
         self._pool = ConnectionPool(
             self.dsn,
-            min_size=1,
+            min_size=self.min_size,
             max_size=self.pool_size,
             kwargs={"row_factory": dict_row},
         )
@@ -153,7 +166,7 @@ class PostgresBackend:
         if self._pool is None:
             self._init_pool()
         conn = self._pool.getconn()
-        return PostgresConnectionAdapter(conn)
+        return PostgresConnectionAdapter(conn, self._pool)
 
     def close_all(self) -> None:
         """Close all connections in the pool."""
@@ -172,17 +185,17 @@ def resolve_sqlite_db_path() -> str:
     return str((ROOT_DIR / cfg_db).resolve())
 
 
-def get_backend() -> DatabaseBackend:
-    """Return configured DB backend instance.
+_backend_lock = threading.Lock()
+_backend_cache: tuple[tuple[str, str], DatabaseBackend] | None = None
 
-    The project is currently SQLite-only at runtime, but this function provides
-    a single extension point to support PostgreSQL later.
-    """
+
+def _resolve_backend_key() -> tuple[str, str]:
+    """Return the (backend_name, target) pair identifying the configured backend."""
     storage_cfg = load_config().get("storage", {})
     backend = str(storage_cfg.get("backend", "sqlite")).strip().lower()
 
     if backend == "sqlite":
-        return SQLiteBackend(resolve_sqlite_db_path())
+        return backend, resolve_sqlite_db_path()
 
     if backend == "postgres":
         dsn = os.getenv("PIPELINE_DB_DSN") or str(storage_cfg.get("postgres_dsn", "")).strip()
@@ -191,8 +204,72 @@ def get_backend() -> DatabaseBackend:
                 "PostgreSQL backend selected but no DSN configured. "
                 "Set PIPELINE_DB_DSN or storage.postgres_dsn in config.yaml."
             )
-        return PostgresBackend(dsn)
+        return backend, dsn
 
     raise ValueError(
         f"Unsupported database backend '{backend}'. Supported backends: 'sqlite', 'postgres'."
     )
+
+
+def _build_backend(key: tuple[str, str]) -> DatabaseBackend:
+    backend, target = key
+    pool_cfg = load_config().get("storage", {}).get("connection_pool", {}) or {}
+
+    if backend == "sqlite":
+        return SQLiteBackend(target, pool_size=int(pool_cfg.get("max_size", 5)))
+
+    return PostgresBackend(
+        target,
+        pool_size=int(pool_cfg.get("max_size", 5)),
+        min_size=int(pool_cfg.get("min_size", 1)),
+    )
+
+
+def get_backend() -> DatabaseBackend:
+    """Return the process-wide DB backend for the current configuration.
+
+    The backend owns a connection pool, so it must be built once and reused. It
+    is cached against the resolved (backend, target) pair: when the target
+    changes -- a different ``PIPELINE_DB`` in a test, say -- the previous
+    backend is closed and a new one takes its place.
+    """
+    global _backend_cache
+
+    key = _resolve_backend_key()
+
+    cached = _backend_cache
+    if cached is not None and cached[0] == key:
+        return cached[1]
+
+    with _backend_lock:
+        cached = _backend_cache
+        if cached is not None and cached[0] == key:
+            return cached[1]
+
+        if cached is not None:
+            close_all = getattr(cached[1], "close_all", None)
+            if callable(close_all):
+                try:
+                    close_all()
+                except Exception:  # pragma: no cover - best-effort teardown
+                    pass
+
+        backend_instance = _build_backend(key)
+        _backend_cache = (key, backend_instance)
+        return backend_instance
+
+
+def reset_backend() -> None:
+    """Close and forget the cached backend (used by tests and on shutdown)."""
+    global _backend_cache
+    with _backend_lock:
+        cached = _backend_cache
+        _backend_cache = None
+    if cached is None:
+        return
+    close_all = getattr(cached[1], "close_all", None)
+    if callable(close_all):
+        try:
+            close_all()
+        except Exception:  # pragma: no cover - best-effort teardown
+            pass

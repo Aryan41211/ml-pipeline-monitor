@@ -84,13 +84,27 @@ class TestHealthPaths:
         with patch("ml_pipeline_monitor.api.main.get_backend") as mock_b:
             mock_b.return_value.connect.side_effect = Exception("db down")
             r = client.get("/health/detailed")
-        assert r.status_code in (200, 500)
+        assert r.status_code == 503
+        assert r.json()["status"] == "degraded"
 
     def test_health_ready_with_db_error(self):
+        """An unreachable database must fail the readiness probe, not just say so in the body."""
         with patch("ml_pipeline_monitor.api.main.get_backend") as mock_b:
             mock_b.return_value.connect.side_effect = Exception("db down")
             r = client.get("/health/ready")
-        assert r.status_code in (200, 500)
+        assert r.status_code == 503
+        assert r.json()["status"] == "not_ready"
+
+    def test_health_ready_ok_when_db_reachable(self):
+        r = client.get("/health/ready")
+        assert r.status_code == 200
+        assert r.json()["status"] == "ready"
+
+    def test_health_with_db_error(self):
+        with patch("ml_pipeline_monitor.api.main.get_backend") as mock_b:
+            mock_b.return_value.connect.side_effect = Exception("db down")
+            r = client.get("/health")
+        assert r.status_code == 503
 
 
 class TestLoginEndpoint:

@@ -34,6 +34,7 @@ setup(
     entry_points={
         "console_scripts": [
             "mlmonitor-api=ml_pipeline_monitor.api.__main__:run",
+            "mlmonitor-ui=ml_pipeline_monitor.ui.__main__:run",
         ],
     },
 )

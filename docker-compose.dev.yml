@@ -10,7 +10,7 @@ services:
   app:
     build:
       target: development
-    command: ["streamlit", "run", "app.py", "--server.port=8501", "--server.address=0.0.0.0", "--server.runOnSave=true"]
+    command: ["python", "-m", "ml_pipeline_monitor.ui", "--server.port=8501", "--server.address=0.0.0.0", "--server.runOnSave=true"]
     environment:
       - MLMONITOR_AUTH_ENABLED=false
       - MLMONITOR_DB_BACKEND=sqlite

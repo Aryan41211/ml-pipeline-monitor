@@ -66,7 +66,7 @@ EXPOSE 8501 8000 8502
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
     CMD curl -f http://localhost:8501/_stcore/health || exit 1
 
-CMD ["streamlit", "run", "app.py", "--server.port=8501", "--server.address=0.0.0.0", "--server.runOnSave=true"]
+CMD ["python", "-m", "ml_pipeline_monitor.ui", "--server.port=8501", "--server.address=0.0.0.0", "--server.runOnSave=true"]
 
 # =============================================================================
 # Stage 4: Production image (Streamlit UI) - minimal and secure
@@ -95,7 +95,9 @@ EXPOSE 8501 8502
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
     CMD curl -f http://localhost:8501/_stcore/health || exit 1
 
-CMD ["streamlit", "run", "app.py", "--server.port=8501", "--server.address=0.0.0.0", "--server.headless=true", "--browser.gatherUsageStats=false"]
+# Launched through the package so the Prometheus exporter starts with the
+# container rather than on the first browser session.
+CMD ["python", "-m", "ml_pipeline_monitor.ui", "--server.port=8501", "--server.address=0.0.0.0"]
 
 # =============================================================================
 # Stage 5: API-only production image

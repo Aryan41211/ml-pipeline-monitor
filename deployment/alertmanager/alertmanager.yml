@@ -21,8 +21,9 @@ receivers:
     webhook_configs:
       - url: 'http://api:8000/v1/alerts/webhook'
         send_resolved: true
-        http_config:
-          timeout: 5s
+        # `timeout` is not a field of http_config; including it made
+        # Alertmanager reject this file outright and refuse to start.
+        max_alerts: 0
 
 inhibit_rules:
   - source_match:

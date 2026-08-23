@@ -394,7 +394,6 @@ services:
         reservations:
           cpus: '0.1'
           memory: 64M
-    profiles: ["monitoring"]
 
 volumes:
   pgdata:

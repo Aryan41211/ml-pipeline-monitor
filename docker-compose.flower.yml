@@ -1,0 +1,52 @@
+# =============================================================================
+# Flower - Celery task dashboard (opt-in overlay)
+# =============================================================================
+# Run with:
+#   docker compose -f docker-compose.yml -f docker-compose.flower.yml up -d
+#
+# Flower is an OVERLAY rather than a compose profile on purpose. Compose
+# interpolates every service's variables before it filters by profile, so a
+# profiled service carrying a required variable (FLOWER_BASIC_AUTH) makes even
+# `docker compose up` on the default stack fail outright.
+#
+# NOTE: the background worker is a plain polling loop over the schedules table,
+# not a Celery worker, so this dashboard has no tasks to display today. It is
+# kept for when a Celery-backed worker is introduced.
+# =============================================================================
+
+services:
+  flower:
+    image: mher/flower:2.0.1
+    container_name: ml-pipeline-monitor-flower
+    ports:
+      - "5555:5555"
+    command:
+      - celery
+      - flower
+      - --broker=redis://redis:6379/0
+      - --port=5555
+    environment:
+      FLOWER_BASIC_AUTH: ${FLOWER_BASIC_AUTH:?FLOWER_BASIC_AUTH must be set (user:password)}
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5555/')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.1'
+          memory: 64M

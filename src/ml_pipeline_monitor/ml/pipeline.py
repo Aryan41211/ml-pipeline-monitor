@@ -41,6 +41,9 @@ from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor
 
 import xgboost as xgb
 
+from ml_pipeline_monitor.core.metrics import record_dataset_validation, record_pipeline_stage
+from ml_pipeline_monitor.ml.data_validation import DataQualityFailed, ValidationResult, validate_dataset
+
 
 # ---------------------------------------------------------------------------
 # Supported algorithms
@@ -100,6 +103,11 @@ class PipelineResult:
     duration: float = 0.0
     params: Dict[str, Any] = field(default_factory=dict)
     metrics: Dict[str, float] = field(default_factory=dict)
+    # ROC points are arrays, not scalars: keeping them out of ``metrics`` stops
+    # them bloating the persisted metrics blob and breaking float formatting in
+    # any consumer that iterates it.
+    curves: Dict[str, List[float]] = field(default_factory=dict)
+    validation: Optional[ValidationResult] = None
     cv_scores: Optional[np.ndarray] = None
     feature_importances: Optional[pd.Series] = None
     confusion_mat: Optional[np.ndarray] = None
@@ -149,7 +157,11 @@ class MLPipeline:
         random_state: int = 42,
         n_jobs: int | None = None,
         progress_callback: Optional[ProgressCallback] = None,
+        min_quality_score: float = 0.0,
+        enforce_quality_gate: bool = False,
     ) -> None:
+        self.min_quality_score = float(min_quality_score)
+        self.enforce_quality_gate = bool(enforce_quality_gate)
         self.dataset_name = dataset_name
         self.model_type = model_type
         self.task = task
@@ -174,6 +186,24 @@ class MLPipeline:
     def _emit(self, stage: str, progress: float, msg: str) -> None:
         if self._cb is not None:
             self._cb(stage, progress, msg)
+
+    def _record_stage(
+        self,
+        result: PipelineResult,
+        name: str,
+        status: str,
+        duration: float,
+        logs: List[str],
+        artifacts: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        """Append a stage result and publish its duration to Prometheus."""
+        result.stages.append(StageResult(name, status, duration, logs, artifacts or {}))
+        record_pipeline_stage(
+            stage=name,
+            dataset=self.dataset_name,
+            model_type=self.model_type,
+            duration_seconds=duration,
+        )
 
     def _build_estimator(self) -> Any:
         registry = CLF_REGISTRY if self.task == "classification" else REG_REGISTRY
@@ -248,8 +278,46 @@ class MLPipeline:
             dist = y_train.value_counts(normalize=True).round(3).to_dict()
             logs.append(f"Class distribution (train): {dist}")
 
-        self._emit("Data Validation", 0.12, "Validation passed — no schema violations")
-        result.stages.append(StageResult("Data Validation", "success", time.perf_counter() - t0, logs))
+        target_name = str(getattr(y_train, "name", None) or "target")
+        train_frame = X_train.copy()
+        train_frame[target_name] = y_train
+
+        validation = validate_dataset(
+            train_frame,
+            task=self.task,
+            target_name=target_name,
+            quality_score_min=self.min_quality_score,
+        )
+        result.validation = validation
+        logs.append(f"Quality score : {validation.quality_score:.1f}/100 ({validation.status})")
+        for recommendation in validation.recommendations[:5]:
+            logs.append(f"  - {recommendation}")
+
+        record_dataset_validation(
+            dataset=self.dataset_name,
+            status=validation.status,
+            rows=int(len(train_frame)),
+            columns=int(train_frame.shape[1]),
+        )
+
+        if self.enforce_quality_gate and validation.quality_score < self.min_quality_score:
+            logs.append(
+                f"Quality gate failed: {validation.quality_score:.1f} < {self.min_quality_score:.1f}"
+            )
+            self._record_stage(result, "Data Validation", "failed", time.perf_counter() - t0, logs)
+            result.status = "failed"
+            self._emit("Data Validation", 0.12, "Data quality gate failed — stopping run")
+            raise DataQualityFailed(
+                dataset=self.dataset_name,
+                quality_score=validation.quality_score,
+                min_quality_score=self.min_quality_score,
+                validation_result=validation,
+            )
+
+        self._emit(
+            "Data Validation", 0.12, f"Validation passed (quality {validation.quality_score:.1f}/100)"
+        )
+        self._record_stage(result, "Data Validation", "success", time.perf_counter() - t0, logs)
 
         # ------------------------------------------------------------------
         # Stage 2 — Preprocessing
@@ -280,7 +348,7 @@ class MLPipeline:
         result.scaler = scaler
 
         self._emit("Preprocessing", 0.24, "Preprocessing complete")
-        result.stages.append(StageResult("Preprocessing", "success", time.perf_counter() - t0, logs))
+        self._record_stage(result, "Preprocessing", "success", time.perf_counter() - t0, logs)
 
         # ------------------------------------------------------------------
         # Stage 3 — Feature Analysis
@@ -301,7 +369,7 @@ class MLPipeline:
         )
 
         self._emit("Feature Analysis", 0.36, "Feature analysis complete")
-        result.stages.append(StageResult("Feature Analysis", "success", time.perf_counter() - t0, logs))
+        self._record_stage(result, "Feature Analysis", "success", time.perf_counter() - t0, logs)
 
         # ------------------------------------------------------------------
         # Stage 4 — Cross-Validation
@@ -345,7 +413,7 @@ class MLPipeline:
             "Cross-Validation", 0.55,
             f"CV {scoring_label} = {cv_scores.mean():.4f}",
         )
-        result.stages.append(StageResult("Cross-Validation", "success", time.perf_counter() - t0, logs))
+        self._record_stage(result, "Cross-Validation", "success", time.perf_counter() - t0, logs)
 
         # ------------------------------------------------------------------
         # Stage 5 — Model Training
@@ -365,11 +433,13 @@ class MLPipeline:
         result.model = model
 
         self._emit("Training", 0.74, f"Training complete ({fit_duration:.3f} s)")
-        result.stages.append(
-            StageResult(
-                "Training", "success", time.perf_counter() - t0, logs,
-                {"fit_duration_s": round(fit_duration, 3)},
-            )
+        self._record_stage(
+            result,
+            "Training",
+            "success",
+            time.perf_counter() - t0,
+            logs,
+            {"fit_duration_s": round(fit_duration, 3)},
         )
 
         # ------------------------------------------------------------------
@@ -402,8 +472,8 @@ class MLPipeline:
                             roc_auc_score(y_test, y_prob[:, 1]), 4
                         )
                         fpr, tpr, _ = roc_curve(y_test, y_prob[:, 1])
-                        metrics["roc_curve_fpr"] = [round(float(v), 6) for v in fpr.tolist()]
-                        metrics["roc_curve_tpr"] = [round(float(v), 6) for v in tpr.tolist()]
+                        result.curves["roc_fpr"] = [round(float(v), 6) for v in fpr.tolist()]
+                        result.curves["roc_tpr"] = [round(float(v), 6) for v in tpr.tolist()]
                     else:
                         metrics["roc_auc"] = round(
                             roc_auc_score(y_test, y_prob, multi_class="ovr"), 4
@@ -414,10 +484,7 @@ class MLPipeline:
             result.confusion_mat = confusion_matrix(y_test, y_pred)
 
             for k, v in metrics.items():
-                if isinstance(v, list):
-                    logs.append(f"{k:<12}: [{len(v)} points]")
-                else:
-                    logs.append(f"{k:<12}: {float(v):.4f}")
+                logs.append(f"{k:<12}: {float(v):.4f}")
 
         else:
             metrics["rmse"] = round(float(np.sqrt(mean_squared_error(y_test, y_pred))), 4)
@@ -432,7 +499,7 @@ class MLPipeline:
         result.metrics = metrics
 
         self._emit("Evaluation", 0.90, "Evaluation complete")
-        result.stages.append(StageResult("Evaluation", "success", time.perf_counter() - t0, logs))
+        self._record_stage(result, "Evaluation", "success", time.perf_counter() - t0, logs)
 
         # ------------------------------------------------------------------
         # Stage 7 — Feature Importance
@@ -463,7 +530,7 @@ class MLPipeline:
             logs.append("Feature importances not available for this estimator")
 
         self._emit("Feature Importance", 0.98, "Pipeline complete")
-        result.stages.append(StageResult("Feature Importance", "success", time.perf_counter() - t0, logs))
+        self._record_stage(result, "Feature Importance", "success", time.perf_counter() - t0, logs)
 
         result.duration = round(time.perf_counter() - wall_start, 3)
         result.status = "completed"

@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import json
+
+import hashlib
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Dict, Optional
 
@@ -10,7 +13,16 @@ import joblib
 from ml_pipeline_monitor.core.alerts import emit_console_alert, emit_email_alert
 from ml_pipeline_monitor.core.config_loader import get_artifact_dirs, load_config
 from ml_pipeline_monitor.ml.data_loader import DATASET_OPTIONS, get_feature_statistics, load_dataset
-from ml_pipeline_monitor.database import get_experiments, save_experiment, save_model
+from ml_pipeline_monitor.database import (
+    create_dataset,
+    create_dataset_version,
+    create_lineage_edge,
+    get_dataset_versions,
+    get_experiments,
+    save_experiment,
+    save_model,
+    save_schema_snapshot,
+)
 from ml_pipeline_monitor.ml.feature_store import load_cached_splits, make_feature_key, save_cached_splits
 from ml_pipeline_monitor.core.logger import get_app_logger
 from ml_pipeline_monitor.core.metrics import (
@@ -39,6 +51,15 @@ def get_pipeline_defaults() -> Dict[str, Any]:
         "cv_folds": int(cfg.get("cv_folds", 5)),
         "random_seed": int(cfg.get("random_seed", 42)),
         "n_jobs": int(cfg.get("n_jobs", -1)),
+    }
+
+
+def get_quality_gate_settings() -> Dict[str, Any]:
+    """Return data-quality gate settings from the monitoring config block."""
+    cfg = load_config().get("monitoring", {}).get("data_quality", {}) or {}
+    return {
+        "enabled": bool(cfg.get("enabled", False)),
+        "min_quality_score": float(cfg.get("min_quality_score", 75.0)),
     }
 
 
@@ -128,6 +149,7 @@ def run_pipeline_and_persist(
 
     app_cfg = load_config()
     pipeline_cfg = app_cfg.get("pipeline", {})
+    quality_gate = get_quality_gate_settings()
     feature_key = make_feature_key(dataset_key, test_size, random_state)
     ds = load_cached_splits(feature_key)
     if ds is None:
@@ -151,6 +173,8 @@ def run_pipeline_and_persist(
             random_state=int(random_state),
             n_jobs=int(pipeline_cfg.get("n_jobs", -1)),
             progress_callback=progress_callback,
+            min_quality_score=quality_gate["min_quality_score"],
+            enforce_quality_gate=quality_gate["enabled"],
         )
 
         result: PipelineResult = pipeline.run(
@@ -221,10 +245,19 @@ def run_pipeline_and_persist(
     )
 
     # Record model registration
+    # save_model() registers new models in "development"; labelling the metric
+    # "staging" made the registration counter disagree with the registry.
     record_model_registration(
         dataset=dataset_label,
         model_type=model_type,
-        stage="staging",  # Default stage for newly registered models
+        stage="development",
+    )
+
+    _record_lineage(
+        dataset_key=dataset_key,
+        dataset_label=dataset_label,
+        run_id=result.run_id,
+        frame=ds["X_train"],
     )
 
     LOGGER.info(
@@ -267,3 +300,50 @@ def should_trigger_scheduled_run(
 
     now = now or datetime.now(timezone.utc)
     return now >= next_run_at
+
+
+def _record_lineage(*, dataset_key: str, dataset_label: str, run_id: str, frame: Any) -> None:
+    """Record the dataset version, column schema, and dataset -> model edge.
+
+    Lineage is supporting metadata: a training run that otherwise succeeded must
+    not fail because provenance could not be written, so errors are logged.
+    """
+    try:
+        create_dataset(dataset_id=dataset_key, dataset_name=dataset_label)
+
+        existing = get_dataset_versions(dataset_key, limit=1)
+        next_version = int(existing[0]["version"]) + 1 if existing else 1
+
+        column_signature = "|".join(f"{col}:{frame[col].dtype}" for col in frame.columns)
+        checksum = hashlib.sha256(
+            f"{dataset_key}|{len(frame)}|{column_signature}".encode("utf-8")
+        ).hexdigest()[:32]
+
+        version_id = create_dataset_version(
+            dataset_id=dataset_key,
+            version=next_version,
+            hash=checksum,
+            row_count=int(len(frame)),
+            column_count=int(frame.shape[1]),
+            missing_values_summary=json.dumps(
+                {str(col): int(frame[col].isna().sum()) for col in frame.columns}
+            ),
+        )
+
+        for column in frame.columns:
+            save_schema_snapshot(
+                dataset_version_id=version_id,
+                column_name=str(column),
+                dtype=str(frame[column].dtype),
+            )
+
+        create_lineage_edge(
+            edge_type="trained_on",
+            from_dataset_id=dataset_key,
+            from_version=next_version,
+            to_run_id=run_id,
+            to_model_id=run_id,
+            note=f"pipeline run {run_id}",
+        )
+    except Exception as exc:
+        LOGGER.warning("Failed to record lineage for run %s: %s", run_id, exc)

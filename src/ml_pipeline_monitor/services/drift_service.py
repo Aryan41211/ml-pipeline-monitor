@@ -52,16 +52,24 @@ def get_monitoring_defaults() -> Dict[str, Any]:
     }
 
 
-def _severity_from_report(report: Dict[str, Any]) -> str:
-    """Classify overall drift severity for UI alerts."""
-    ratio = float(report.get("drift_ratio", 0.0))
-    avg_psi = float(report.get("average_psi", 0.0))
+def _align_reference(reference: pd.DataFrame, feature_names: list[str], dataset_label: str) -> pd.DataFrame:
+    """Align a stored reference frame to the current feature schema.
 
-    if ratio >= 0.50 or avg_psi >= 0.25:
-        return "critical"
-    if ratio >= 0.20 or avg_psi >= 0.10:
-        return "warning"
-    return "stable"
+    A stored baseline can pre-date a schema change. Reindexing blindly would
+    manufacture all-NaN columns and produce a meaningless comparison, so any
+    mismatch is surfaced instead of silently averaged away.
+    """
+    stored = [str(c) for c in reference.columns]
+    expected = [str(c) for c in feature_names]
+
+    missing = [c for c in expected if c not in stored]
+    if missing:
+        raise ValueError(
+            f"Stored drift reference for '{dataset_label}' is missing features "
+            f"{missing}. Re-promote a model for this dataset to refresh the baseline."
+        )
+
+    return reference.loc[:, expected]
 
 
 def _validate_drift_inputs(
@@ -128,9 +136,11 @@ def run_drift_and_persist(
     else:
         reference = pd.DataFrame(ref_record["reference_data"], columns=ref_record["feature_names"])
 
+    reference = _align_reference(reference, ds["feature_names"], dataset_label)
+
     start_time = time.time()
     report = run_drift_analysis(
-        pd.DataFrame(reference, columns=ds["feature_names"]),
+        reference,
         pd.DataFrame(current, columns=ds["feature_names"]),
         alpha=alpha,
         moderate_threshold=float(monitoring_cfg.get("psi_moderate_threshold", 0.10)),
@@ -138,8 +148,6 @@ def run_drift_and_persist(
         feature_ratio_threshold=float(monitoring_cfg.get("drift_feature_ratio_threshold", 0.20)),
     )
     drift_duration = time.time() - start_time
-
-    report["overall_severity"] = _severity_from_report(report)
 
     report_id = str(uuid.uuid4())[:8].upper()
     save_drift_report(

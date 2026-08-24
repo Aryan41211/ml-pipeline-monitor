@@ -16,6 +16,8 @@ from ml_pipeline_monitor.database import (
     get_model_lineage,
     get_model_stage_events,
     get_models,
+    get_prediction_history,
+    get_prediction_history_by_request_id,
     get_recent_production_models,
     update_model_stage,
 )
@@ -237,3 +239,43 @@ def predict_from_payload(
             response["probabilities"] = use_model.predict_proba(X_infer).tolist()
 
     return response
+
+
+def list_prediction_history(limit: int = 100) -> list[dict[str, Any]]:
+    """Return recent inference requests served by the API, newest first."""
+    if limit <= 0 or limit > 1000:
+        raise ValueError("limit must be between 1 and 1000")
+    return get_prediction_history(limit=limit)
+
+
+def get_prediction_detail(request_id: str) -> dict[str, Any] | None:
+    """Return one inference request together with its per-row predictions."""
+    if not request_id or not request_id.strip():
+        raise ValueError("request_id is required")
+    return get_prediction_history_by_request_id(request_id.strip())
+
+
+def prediction_stats(history: list[dict[str, Any]]) -> dict[str, Any]:
+    """Summarise a page of prediction history for the serving dashboard."""
+    total = len(history)
+    if not total:
+        return {"total": 0, "success": 0, "failed": 0, "success_rate": 0.0, "p50_ms": 0.0, "p95_ms": 0.0}
+
+    success = sum(1 for row in history if str(row.get("status")) == "success")
+    durations = sorted(float(row["duration_ms"]) for row in history if row.get("duration_ms") is not None)
+
+    def _pct(values: list[float], fraction: float) -> float:
+        if not values:
+            return 0.0
+        # Nearest-rank percentile; exact enough for a page-sized sample.
+        index = min(len(values) - 1, max(0, int(round(fraction * (len(values) - 1)))))
+        return round(values[index], 2)
+
+    return {
+        "total": total,
+        "success": success,
+        "failed": total - success,
+        "success_rate": round(success / total * 100.0, 1),
+        "p50_ms": _pct(durations, 0.50),
+        "p95_ms": _pct(durations, 0.95),
+    }

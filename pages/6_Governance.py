@@ -9,6 +9,12 @@ import streamlit as st
 
 from ml_pipeline_monitor.core.auth import current_role, render_auth_controls
 from ml_pipeline_monitor.services.app_service import initialize_application
+from ml_pipeline_monitor.services.governance_service import (
+    alert_summary,
+    list_alerts,
+    list_dataset_versions,
+    list_lineage_edges,
+)
 from ml_pipeline_monitor.services.model_service import get_stage_timeline, list_models
 from ml_pipeline_monitor.utils.ui_theme import (
     apply_ui_theme,
@@ -77,11 +83,11 @@ def _render_page():
     models_raw, audit_rows = _load_governance_data()
     loading.empty()
 
-    if not models_raw:
-        component_alert_card("No models in registry. Train and register models first.", tone="info")
-        st.stop()
-
-    models_df = pd.DataFrame(models_raw)
+    # Deliberately no st.stop() here: Alert History and Data Lineage are
+    # independent of the model registry, and stopping made them unreachable
+    # until a model happened to be registered.
+    has_models = bool(models_raw)
+    models_df = pd.DataFrame(models_raw) if has_models else pd.DataFrame(columns=["stage", "name", "metrics"])
 
     # ---------------------------------------------------------------------------
     # Header
@@ -101,20 +107,23 @@ def _render_page():
     with c2:
         component_kpi_card(
             "Production",
-            f"{len(models_df[models_df.get('stage')=='production'])}",
+            str(int((models_df["stage"] == "production").sum()) if has_models else 0),
             "Active serving",
             tone="success",
         )
     with c3:
         component_kpi_card(
             "Staging",
-            f"{len(models_df[models_df.get('stage')=='staging'])}",
+            str(int((models_df["stage"] == "staging").sum()) if has_models else 0),
             "Pending approval",
             tone="warning",
         )
     with c4:
         component_kpi_card(
-            "Archived", f"{len(models_df[models_df.get('stage')=='archived'])}", "Retired", tone="neutral"
+            "Archived",
+            str(int((models_df["stage"] == "archived").sum()) if has_models else 0),
+            "Retired",
+            tone="neutral",
         )
 
     render_spacer("md")
@@ -122,12 +131,19 @@ def _render_page():
     # ---------------------------------------------------------------------------
     # Tabs
     # ---------------------------------------------------------------------------
-    tab_audit, tab_policy, tab_compliance = st.tabs(["Audit Trail", "Policy Enforcement", "Compliance Report"])
+    tab_audit, tab_alerts, tab_lineage, tab_policy, tab_compliance = st.tabs(
+        ["Audit Trail", "Alert History", "Data Lineage", "Policy Enforcement", "Compliance Report"]
+    )
 
     with tab_audit:
         render_section_title("Model Stage Change History")
 
-        if audit_rows:
+        if not has_models:
+            component_alert_card(
+                "No models in registry yet. Train and register a model to build an audit trail.",
+                tone="info",
+            )
+        elif audit_rows:
             render_summary_table(
                 pd.DataFrame(audit_rows),
                 columns=["Model", "Version", "Dataset", "From Stage", "To Stage", "Changed At", "Note"],
@@ -135,6 +151,89 @@ def _render_page():
             )
         else:
             st.info("No stage change events recorded yet.")
+
+    with tab_alerts:
+        render_section_title("Alert History")
+        alerts = list_alerts(limit=200)
+        if not alerts:
+            st.info(
+                "No alerts recorded yet. Alerts are written when a pipeline run fails "
+                "or a drift scan crosses its threshold."
+            )
+        else:
+            counts = alert_summary(alerts)
+            a1, a2, a3 = st.columns(3)
+            with a1:
+                component_kpi_card("Critical", str(counts.get("critical", 0)), "Highest severity", tone="danger")
+            with a2:
+                component_kpi_card("Warning", str(counts.get("warning", 0)), "Needs attention", tone="warning")
+            with a3:
+                component_kpi_card("Informational", str(counts.get("info", 0)), "Recorded", tone="neutral")
+            render_spacer("sm")
+            render_summary_table(
+                pd.DataFrame(
+                    [
+                        {
+                            "Created At": a.get("created_at", ""),
+                            "Severity": a.get("severity", "info"),
+                            "Type": a.get("alert_type", ""),
+                            "Message": a.get("message", ""),
+                        }
+                        for a in alerts
+                    ]
+                ),
+                columns=["Created At", "Severity", "Type", "Message"],
+                filterable_columns=["Severity", "Type"],
+            )
+
+    with tab_lineage:
+        render_section_title("Dataset to Model Lineage")
+        edges = list_lineage_edges(limit=200)
+        if not edges:
+            st.info("No lineage recorded yet. It is written on each pipeline run.")
+        else:
+            render_summary_table(
+                pd.DataFrame(
+                    [
+                        {
+                            "Created At": e.get("created_at", ""),
+                            "Dataset": e.get("from_dataset_id", "—"),
+                            "Version": e.get("from_version", "—"),
+                            "Edge": e.get("edge_type", ""),
+                            "Model": e.get("to_model_id", "—"),
+                            "Note": e.get("note", ""),
+                        }
+                        for e in edges
+                    ]
+                ),
+                columns=["Created At", "Dataset", "Version", "Edge", "Model", "Note"],
+                filterable_columns=["Dataset", "Edge"],
+            )
+
+            datasets = sorted({str(e.get("from_dataset_id")) for e in edges if e.get("from_dataset_id")})
+            if datasets:
+                render_spacer("sm")
+                render_section_title("Version History")
+                chosen = st.selectbox("Dataset", datasets)
+                versions = list_dataset_versions(chosen, limit=50)
+                if versions:
+                    render_summary_table(
+                        pd.DataFrame(
+                            [
+                                {
+                                    "Version": v.get("version"),
+                                    "Rows": v.get("row_count"),
+                                    "Columns": v.get("column_count"),
+                                    "Checksum": str(v.get("hash", ""))[:16],
+                                    "Created At": v.get("created_at", ""),
+                                }
+                                for v in versions
+                            ]
+                        ),
+                        columns=["Version", "Rows", "Columns", "Checksum", "Created At"],
+                    )
+                else:
+                    st.caption("No versions recorded for this dataset.")
 
     with tab_policy:
         render_section_title("Promotion Policies")
@@ -182,7 +281,9 @@ def _render_page():
         render_section_title("Compliance Status")
 
         # Check each production model
-        prod_models = models_df[models_df.get("stage") == "production"]
+        prod_models = (
+            models_df[models_df["stage"] == "production"] if has_models else pd.DataFrame(columns=models_df.columns)
+        )
         compliance_rows = []
 
         for _, row in prod_models.iterrows():

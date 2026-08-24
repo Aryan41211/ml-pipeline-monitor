@@ -7,7 +7,6 @@ import subprocess
 import sys
 from pathlib import Path
 
-
 START_PORT = 8501
 MAX_PORT_ATTEMPTS = 100
 HOST = "127.0.0.1"
@@ -23,9 +22,7 @@ def _find_open_port(start_port: int = START_PORT) -> int:
     for port in range(start_port, start_port + MAX_PORT_ATTEMPTS):
         if not _is_port_open(port):
             return port
-    raise RuntimeError(
-        f"No open port found in range {start_port}-{start_port + MAX_PORT_ATTEMPTS - 1}."
-    )
+    raise RuntimeError(f"No open port found in range {start_port}-{start_port + MAX_PORT_ATTEMPTS - 1}.")
 
 
 def main() -> int:
@@ -41,12 +38,13 @@ def main() -> int:
     print(f"Launching Streamlit on available port: {port}")
     print(f"App URL: {url}")
 
+    # Launch through the package rather than `streamlit run` directly: the
+    # wrapper starts the Prometheus exporter in the same process first, so the
+    # app's metrics endpoint is up even before a browser connects.
     cmd = [
         sys.executable,
         "-m",
-        "streamlit",
-        "run",
-        str(app_path),
+        "ml_pipeline_monitor.ui",
         "--server.port",
         str(port),
         "--server.address",

@@ -117,3 +117,75 @@ def test_load_production_artifacts_missing_artifact_path(monkeypatch):
     )
     with pytest.raises(ValueError):
         model_service.load_production_artifacts()
+
+
+class TestPredictionHistory:
+    """Covers the serving-history read path used by the Serving page."""
+
+    def test_list_proxies_to_database(self, monkeypatch):
+        monkeypatch.setattr(
+            model_service, "get_prediction_history", lambda limit: [{"request_id": "r1", "status": "success"}]
+        )
+        assert model_service.list_prediction_history(limit=10)[0]["request_id"] == "r1"
+
+    @pytest.mark.parametrize("limit", [0, -5, 1001])
+    def test_list_rejects_out_of_range_limit(self, limit):
+        with pytest.raises(ValueError, match="limit must be between"):
+            model_service.list_prediction_history(limit=limit)
+
+    def test_detail_requires_request_id(self):
+        with pytest.raises(ValueError, match="request_id is required"):
+            model_service.get_prediction_detail("  ")
+
+    def test_detail_trims_and_proxies(self, monkeypatch):
+        seen = {}
+
+        def _fake(request_id):
+            seen["request_id"] = request_id
+            return {"request_id": request_id, "predictions": []}
+
+        monkeypatch.setattr(model_service, "get_prediction_history_by_request_id", _fake)
+        assert model_service.get_prediction_detail("  abc  ")["request_id"] == "abc"
+        assert seen["request_id"] == "abc"
+
+
+class TestPredictionStats:
+    def test_empty_history_is_all_zeroes(self):
+        stats = model_service.prediction_stats([])
+        assert stats == {
+            "total": 0,
+            "success": 0,
+            "failed": 0,
+            "success_rate": 0.0,
+            "p50_ms": 0.0,
+            "p95_ms": 0.0,
+        }
+
+    def test_counts_successes_and_failures(self):
+        history = [
+            {"status": "success", "duration_ms": 10.0},
+            {"status": "success", "duration_ms": 20.0},
+            {"status": "failed", "duration_ms": 30.0},
+            {"status": "failed", "duration_ms": None},
+        ]
+        stats = model_service.prediction_stats(history)
+        assert stats["total"] == 4
+        assert stats["success"] == 2
+        assert stats["failed"] == 2
+        assert stats["success_rate"] == 50.0
+
+    def test_percentiles_ignore_missing_durations(self):
+        """A row with no duration must not be counted as zero milliseconds."""
+        history = [
+            {"status": "success", "duration_ms": 100.0},
+            {"status": "success", "duration_ms": None},
+        ]
+        stats = model_service.prediction_stats(history)
+        assert stats["p50_ms"] == 100.0
+        assert stats["p95_ms"] == 100.0
+
+    def test_p95_tracks_the_slow_tail(self):
+        history = [{"status": "success", "duration_ms": float(i)} for i in range(1, 101)]
+        stats = model_service.prediction_stats(history)
+        assert stats["p50_ms"] < stats["p95_ms"]
+        assert stats["p95_ms"] >= 95.0

@@ -627,6 +627,7 @@ _NAV_SECTIONS: list[tuple[str, list[tuple[str, str]]]] = [
         [
             ("pages/4_Data_Drift.py", "Data Drift"),
             ("pages/5_Data_Health.py", "Data Health"),
+            ("pages/7_Serving.py", "Serving"),
             ("pages/6_Governance.py", "Governance"),
         ],
     ),

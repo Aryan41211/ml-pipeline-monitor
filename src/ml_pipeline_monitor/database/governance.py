@@ -221,3 +221,40 @@ def update_schedule(
             f"UPDATE schedules SET {', '.join(updates)}, updated_at=CURRENT_TIMESTAMP WHERE id = ?",  # nosec B608
             params,
         )
+
+
+def claim_schedule(
+    *,
+    schedule_id: int,
+    expected_next_run_at: str | None,
+    next_run_at: str,
+    last_run_at: str,
+) -> bool:
+    """Atomically claim a due schedule. Returns True if THIS caller won it.
+
+    The claim is a conditional UPDATE guarded on the next_run_at value the
+    caller last saw. Two workers that both read the same due row will both
+    issue this statement, but only the first matches the guard; the second
+    updates zero rows and is told to skip. Without it, every worker replica
+    runs every due schedule -- duplicate training runs and duplicate models.
+    """
+    with _get_connection() as conn:
+        if expected_next_run_at is None:
+            cursor = conn.execute(
+                """
+                UPDATE schedules
+                SET next_run_at = ?, last_run_at = ?, updated_at = CURRENT_TIMESTAMP
+                WHERE id = ? AND next_run_at IS NULL
+                """,
+                (next_run_at, last_run_at, schedule_id),
+            )
+        else:
+            cursor = conn.execute(
+                """
+                UPDATE schedules
+                SET next_run_at = ?, last_run_at = ?, updated_at = CURRENT_TIMESTAMP
+                WHERE id = ? AND next_run_at = ?
+                """,
+                (next_run_at, last_run_at, schedule_id, expected_next_run_at),
+            )
+        return int(getattr(cursor, "rowcount", 0) or 0) > 0

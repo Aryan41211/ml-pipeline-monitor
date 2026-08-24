@@ -23,6 +23,7 @@ from ml_pipeline_monitor.database.experiments import (
     save_experiment,
 )
 from ml_pipeline_monitor.database.governance import (
+    claim_schedule,
     create_schedule,
     create_team,
     create_user,
@@ -103,6 +104,7 @@ __all__ = [
     "log_user_activity",
     "save_alert_event",
     "list_alert_events",
+    "claim_schedule",
     "create_schedule",
     "list_schedules",
     "record_schedule_run",

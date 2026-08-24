@@ -17,10 +17,10 @@ from typing import Any
 from ml_pipeline_monitor.core.config_loader import load_config
 from ml_pipeline_monitor.core.logger import get_app_logger
 from ml_pipeline_monitor.database import (
+    claim_schedule,
     initialize_governance_registry,
     list_schedules,
     record_schedule_run,
-    update_schedule,
 )
 from ml_pipeline_monitor.services.pipeline_service import run_pipeline_and_persist
 
@@ -138,7 +138,13 @@ def _build_task_config(schedule: dict[str, Any]) -> dict[str, Any]:
 
 
 def _claim_due_schedules(now: datetime | None = None) -> list[dict[str, Any]]:
-    """Return enabled schedules due now, advancing their next_run_at to avoid double-fire."""
+    """Return the schedules THIS worker successfully claimed for execution.
+
+    Claiming is a conditional UPDATE guarded on the next_run_at value just
+    read, so two workers cannot both take the same schedule: the loser updates
+    zero rows and skips it. Previously every replica ran every due schedule,
+    producing duplicate training runs and duplicate registered models.
+    """
     now = now or datetime.now(UTC)
     due: list[dict[str, Any]] = []
     for schedule in list_schedules(limit=1000):
@@ -158,11 +164,14 @@ def _claim_due_schedules(now: datetime | None = None) -> list[dict[str, Any]]:
                 schedule.get("cron_expression"),
             )
             continue
-        update_schedule(
+        if not claim_schedule(
             schedule_id=int(schedule["id"]),
-            last_run_at=now.isoformat(),
+            expected_next_run_at=next_run_raw or None,
             next_run_at=next_ts.isoformat(),
-        )
+            last_run_at=now.isoformat(),
+        ):
+            LOGGER.debug("Schedule %s was claimed by another worker", schedule.get("schedule_name"))
+            continue
         due.append(schedule)
     return due
 

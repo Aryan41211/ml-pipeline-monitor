@@ -174,7 +174,7 @@ All services expose health endpoints:
 |---|---|---|
 | App (Streamlit) | Limited | Use session affinity |
 | API (FastAPI) | Yes | Behind load balancer |
-| Worker | No | The polling loop is not yet coordinated across replicas; run a single instance until schedule claiming is made atomic |
+| Worker | Yes | Schedules are claimed atomically, so replicas will not run the same job twice |
 | PostgreSQL | Read replicas | Use managed service recommended |
 
 ## Rollback Procedure

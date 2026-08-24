@@ -60,8 +60,9 @@
 - The background worker is a polling loop, not Celery. Flower ships as an
   opt-in overlay (`docker-compose.flower.yml`) for a future Celery worker and
   has no tasks to display today.
-- `_claim_due_schedules()` is not atomic, so run exactly one worker replica
-  until schedule claiming uses a database-level lock.
+- Worker replicas are safe: schedules are claimed with a conditional UPDATE
+  guarded on the value just read, so only one worker can take a given run.
+  Verified by a concurrency test (tests/integration/test_worker_claim_race.py).
 - Email alerting is simulated to a local JSON-lines file; SMTP settings are
   read from config but nothing sends mail.
 - The Governance "Apply Thresholds" button scopes to the session only; edit

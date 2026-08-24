@@ -11,6 +11,14 @@ This guide covers deploying ML Pipeline Monitor to a production Kubernetes or Do
 - PostgreSQL 16+ (for production data)
 - A domain name with TLS certificate (or use Let's Encrypt)
 
+> **Note on migrations.** The application creates and migrates its own schema
+> at startup: both the API and the worker call `initialize_db()`, which issues
+> idempotent `CREATE TABLE IF NOT EXISTS` / `ensure_column_exists` statements.
+> The `alembic/` directory is present but **nothing invokes it at runtime**, and
+> its two revisions are not the source of truth. Do not run `alembic upgrade
+> head` as a deploy step -- it is not required, and it has not been kept in sync
+> with `database/schema.py`.
+
 ## Environment Variables
 
 ### Required
@@ -60,7 +68,6 @@ docker compose -f docker compose.yml -f docker compose.prod.yml up -d
 
 ### 3. Run Migrations
 ```bash
-docker compose exec app alembic upgrade head
 ```
 
 ### 4. Verify
@@ -180,7 +187,7 @@ docker images | grep ml-pipeline-monitor
 docker compose up -d --force-recreate app
 
 # 3. Run migrations (if needed)
-docker compose exec app alembic downgrade -1
+# (schema is managed by initialize_db(); restore from backup to roll back)
 ```
 
 ## Disaster Recovery

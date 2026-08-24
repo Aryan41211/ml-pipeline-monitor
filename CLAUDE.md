@@ -112,7 +112,7 @@ ML-pipeline-monitor/
 │   ├── load/                        # Load tests
 │   └── e2e/                         # 8 Playwright E2E tests
 │
-├── alembic/                         # Database migrations
+├── alembic/                         # Present but NOT used at runtime; schema.py owns the schema
 │   ├── env.py
 │   ├── script.py.mako
 │   └── versions/

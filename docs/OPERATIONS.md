@@ -94,7 +94,8 @@ docker compose logs -f worker
 python -m scripts.backup backup postgres mlmonitor --dsn "$PIPELINE_DB_DSN"
 
 # Run migrations
-docker compose exec app alembic upgrade head
+# Schema is applied automatically at service startup by initialize_db().
+# To force it, simply restart the API: docker compose restart api
 
 # Check Prometheus targets
 curl -s http://localhost:9090/api/v1/targets | jq '.data.activeTargets'

@@ -340,16 +340,25 @@ services:
     container_name: ml-pipeline-monitor-nginx
     ports:
       - "80:80"
+      - "443:443"
     volumes:
       - ./deployment/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./deployment/nginx/conf.d:/etc/nginx/conf.d:ro
-      - ./deployment/nginx/ssl:/etc/nginx/ssl:ro
-      - ./deployment/nginx/certbot:/var/www/certbot:ro
+      # Certificates issued by certbot. Read-only here: nginx only reads them.
+      - ./deployment/nginx/letsencrypt:/etc/letsencrypt:ro
+      # ACME webroot. Certbot WRITES the challenge file into this directory and
+      # nginx serves it, so it must NOT be mounted read-only.
+      - ./deployment/nginx/certbot:/var/www/certbot
     depends_on:
       - app
       - api
     restart: unless-stopped
     logging: *default-logging
+    # Reload periodically so a certificate renewed by certbot is picked up
+    # without a manual restart.
+    command: >-
+      /bin/sh -c "while :; do sleep 6h & wait $${!}; nginx -s reload; done & nginx -g 'daemon off;'"
+
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://localhost/health"]
       interval: 30s
@@ -366,7 +375,28 @@ services:
           memory: 64M
 
   # ===========================================================================
-  # Alertmanager (for Prometheus alerts) - optional with monitoring profile
+  # Certbot - Let's Encrypt certificate issuance and renewal
+  # ===========================================================================
+  # Issue the first certificate with ./scripts/deployment/enable-tls.sh; that
+  # script runs `certbot certonly` through this same service. Once started
+  # normally, the container retries renewal every 12 hours, which is what
+  # Let's Encrypt recommends: `renew` is a no-op until the certificate is
+  # inside its 30-day renewal window.
+  certbot:
+    image: certbot/certbot:v2.11.0
+    container_name: ml-pipeline-monitor-certbot
+    volumes:
+      - ./deployment/nginx/letsencrypt:/etc/letsencrypt
+      - ./deployment/nginx/certbot:/var/www/certbot
+    depends_on:
+      - nginx
+    restart: unless-stopped
+    logging: *default-logging
+    entrypoint: >-
+      /bin/sh -c "trap exit TERM; while :; do certbot renew --webroot --webroot-path=/var/www/certbot; sleep 12h & wait $${!}; done"
+
+  # ===========================================================================
+  # Alertmanager (for Prometheus alerts)
   # ===========================================================================
   alertmanager:
     image: prom/alertmanager:v0.27.0

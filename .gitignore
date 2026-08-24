@@ -101,3 +101,12 @@ backups/
 
 # --- Deepeval ---
 .deepeval/
+
+# --- TLS certificates (private keys; never commit) ---
+deployment/nginx/letsencrypt/
+!deployment/nginx/letsencrypt/.gitkeep
+deployment/nginx/ssl/*
+!deployment/nginx/ssl/.gitkeep
+deployment/nginx/certbot/*
+!deployment/nginx/certbot/.gitkeep
+deployment/nginx/tls-available/*.bak

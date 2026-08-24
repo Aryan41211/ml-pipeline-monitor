@@ -1,25 +1,91 @@
-# ML Pipeline Monitor - Nginx Site Configuration
-# Handles routing for Streamlit UI, FastAPI, and monitoring endpoints
+# =============================================================================
+# ML Pipeline Monitor - Nginx site configuration WITH TLS
+# =============================================================================
+# This is a TEMPLATE. Do not edit the copy in conf.d/ by hand -- it is generated.
+#
+# Render and install it with:
+#     ./scripts/deployment/enable-tls.sh
+#
+# which substitutes ${DOMAIN}, writes the result to conf.d/ml-monitor.conf,
+# validates it with `nginx -t`, and reloads nginx.
+#
+# The plain-HTTP version lives at tls-available/ml-monitor-http.conf and is
+# restored automatically if validation fails.
+# =============================================================================
 
-# This is the plain-HTTP configuration used BEFORE a certificate exists.
-# Run ./scripts/deployment/enable-tls.sh to obtain a Let's Encrypt certificate
-# and replace this file with the TLS version, which adds a 443 server and
-# redirects HTTP to HTTPS.
-
-# Main application server (HTTP)
+# -----------------------------------------------------------------------------
+# Port 80: ACME challenges only, everything else redirected to HTTPS.
+# -----------------------------------------------------------------------------
 server {
     listen 80;
     listen [::]:80;
-    server_name _;
+    server_name ${DOMAIN};
 
-    # Health check endpoint for load balancer
+    # Certbot renewals must keep working over plain HTTP, so this location is
+    # matched before the redirect below.
+    location /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+    }
+
+    # Load-balancer health check, kept on HTTP so probes need no certificate.
     location /health {
         access_log off;
         return 200 "healthy\n";
         add_header Content-Type text/plain;
     }
 
-    # ACME challenge for Let's Encrypt
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+
+# -----------------------------------------------------------------------------
+# Port 443: the application.
+# -----------------------------------------------------------------------------
+server {
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    http2 on;
+    server_name ${DOMAIN};
+
+    ssl_certificate     /etc/letsencrypt/live/${DOMAIN}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/${DOMAIN}/privkey.pem;
+    ssl_trusted_certificate /etc/letsencrypt/live/${DOMAIN}/chain.pem;
+
+    # Mozilla "intermediate" profile: TLS 1.2+ only, no weak ciphers.
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384;
+    ssl_prefer_server_ciphers off;
+    ssl_session_timeout 1d;
+    ssl_session_cache shared:MozSSL:10m;
+    ssl_session_tickets off;
+
+    # OCSP stapling; needs a resolver to reach the CA's responder.
+    ssl_stapling on;
+    ssl_stapling_verify on;
+    resolver 127.0.0.11 valid=300s;
+    resolver_timeout 5s;
+
+    # nginx inherits add_header from http{} ONLY when this level declares none.
+    # Adding HSTS here would otherwise discard every other security header, so
+    # the shared set is re-included alongside it -- and again in every location
+    # below that sets a header of its own.
+    #
+    # HSTS is TLS-only: it is meaningless over plain HTTP. Start with a short
+    # max-age; a long one with a broken certificate locks users out of the site.
+    include /etc/nginx/conf.d/security-headers.inc;
+    add_header Strict-Transport-Security "max-age=86400; includeSubDomains" always;
+
+    # Health check endpoint for load balancers
+    location /health {
+        access_log off;
+        return 200 "healthy\n";
+        include /etc/nginx/conf.d/security-headers.inc;
+        add_header Strict-Transport-Security "max-age=86400; includeSubDomains" always;
+        add_header Content-Type text/plain;
+    }
+
+    # ACME challenge, in case the CA follows the redirect to HTTPS.
     location /.well-known/acme-challenge/ {
         root /var/www/certbot;
     }
@@ -43,7 +109,6 @@ server {
         proxy_read_timeout 86400;
         proxy_send_timeout 86400;
 
-        # Buffering
         proxy_buffering off;
         proxy_cache off;
     }
@@ -61,12 +126,11 @@ server {
         proxy_set_header X-Request-ID $request_id;
         proxy_set_header X-Correlation-ID $http_x_correlation_id;
 
-        # Timeouts
         proxy_read_timeout 60s;
         proxy_send_timeout 60s;
     }
 
-    # API Health endpoints (no rate limiting for health checks)
+    # API health endpoints (no rate limiting for health checks)
     location /api/health {
         proxy_pass http://api_backend/health;
         proxy_http_version 1.1;
@@ -91,7 +155,7 @@ server {
         access_log off;
     }
 
-    # Prometheus metrics (internal access only)
+    # Prometheus metrics (internal networks only)
     location /api/metrics {
         allow 10.0.0.0/8;
         allow 172.16.0.0/12;
@@ -116,13 +180,12 @@ server {
         proxy_set_header X-Forwarded-Host $host;
         proxy_set_header X-Forwarded-Prefix /grafana;
 
-        # WebSocket support for Grafana live
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
         proxy_read_timeout 86400;
     }
 
-    # Prometheus (internal access only)
+    # Prometheus (internal networks only)
     location /prometheus/ {
         allow 10.0.0.0/8;
         allow 172.16.0.0/12;
@@ -138,9 +201,11 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
     }
 
-    # Static files caching (Streamlit client assets)
+    # Static asset caching (Streamlit client bundle)
     location ~* ^/static/.*\.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {
         expires 1y;
+        include /etc/nginx/conf.d/security-headers.inc;
+        add_header Strict-Transport-Security "max-age=86400; includeSubDomains" always;
         add_header Cache-Control "public, immutable";
         access_log off;
 
@@ -164,7 +229,9 @@ server {
     }
 }
 
-# Prometheus metrics server (separate port for scraping)
+# -----------------------------------------------------------------------------
+# Prometheus scrape endpoint for nginx itself (internal networks only).
+# -----------------------------------------------------------------------------
 server {
     listen 9100;
     server_name _;

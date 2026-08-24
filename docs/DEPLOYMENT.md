@@ -190,6 +190,71 @@ docker compose exec app alembic downgrade -1
 3. **Configuration**: Git-versioned, re-apply from repo
 4. **Secrets**: Re-inject from secrets manager
 
+## TLS / HTTPS
+
+The stack ships plain HTTP and switches to HTTPS in one scripted step, because
+the ordering is a chicken-and-egg: nginx refuses to start with an
+`ssl_certificate` that does not exist yet, and Let's Encrypt cannot validate
+the domain unless nginx is already answering on port 80.
+
+### Prerequisites
+
+1. A public DNS A/AAAA record for your domain pointing at this host.
+2. Inbound port 80 reachable from the internet (the ACME HTTP-01 challenge).
+3. `DOMAIN` and `CERTBOT_EMAIL` set in `.env`.
+
+### Issue the certificate
+
+```bash
+# Rehearse first: production issuance is rate limited to 5 failures per
+# hostname per hour, and a misconfigured attempt burns that budget.
+echo "CERTBOT_STAGING=true" >> .env
+./scripts/deployment/enable-tls.sh
+
+# Happy with the result? Switch to a real certificate.
+sed -i 's/CERTBOT_STAGING=true/CERTBOT_STAGING=false/' .env
+./scripts/deployment/enable-tls.sh
+```
+
+The script starts nginx on :80, requests the certificate through the ACME
+webroot, renders `tls-available/ml-monitor-tls.conf.template` with your domain
+into `conf.d/ml-monitor.conf`, validates it with `nginx -t`, and reloads. If
+validation fails it restores the HTTP-only config, so a bad render cannot take
+the site down.
+
+### Renewal
+
+Automatic. The `certbot` service runs `certbot renew` every 12 hours (a no-op
+until the certificate is within 30 days of expiry) and nginx reloads every 6
+hours to pick up a renewed certificate. Port 80 keeps serving
+`/.well-known/acme-challenge/` after the switch to HTTPS specifically so
+renewals keep working.
+
+Check status:
+
+```bash
+docker compose -f docker-compose.prod.yml logs certbot | tail -20
+docker compose -f docker-compose.prod.yml run --rm certbot certificates
+```
+
+### Security headers and HSTS
+
+`deployment/nginx/conf.d/security-headers.inc` holds the shared header set.
+**nginx inherits `add_header` from an outer level only if the current level
+declares none of its own**, so any server or location that adds a header must
+re-include that file or it silently drops the rest. This is why the TLS
+template includes it three times.
+
+HSTS starts at `max-age=86400` (1 day). Raise it in the template only once you
+have seen a renewal succeed: a long max-age plus a broken certificate locks
+users out of the site, and browsers honour it even after you revert.
+
+### Certificates are not in git
+
+`deployment/nginx/letsencrypt/` is gitignored. Back it up separately: losing it
+means re-issuing, which is subject to the same rate limits.
+
+
 ## Monitoring on Call
 
 - Prometheus: http://prometheus:9090

@@ -39,9 +39,12 @@
       `python -c "import bcrypt;print(bcrypt.hashpw(b'PASSWORD', bcrypt.gensalt(12)).decode())"`
 - [ ] Rotate every secret that has been committed, shared, or used in testing.
       The `.env` in this working tree holds development values.
-- [ ] Terminate TLS. `deployment/nginx/conf.d/ml-monitor.conf` listens on :80
-      only; the HTTPS server block and the HSTS header in `nginx.conf` are
-      commented out pending a certificate.
+- [ ] Terminate TLS: set `DOMAIN` and `CERTBOT_EMAIL` in `.env`, point DNS at
+      the host, then run `./scripts/deployment/enable-tls.sh`. Rehearse with
+      `CERTBOT_STAGING=true` first. See docs/DEPLOYMENT.md.
+      The config, certbot service, redirect and renewal loop are in place and
+      validated; only the real certificate is missing, since issuance needs a
+      public domain.
 - [ ] Set `api.cors_origins` (or `MLMONITOR_CORS_ORIGINS`) only if a browser
       front-end on another origin calls the API. Leave it empty otherwise.
 - [ ] Decide on `MLMONITOR_API_KEY`. Leaving it blank disables the deprecated

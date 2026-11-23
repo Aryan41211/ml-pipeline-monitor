@@ -1,7 +1,5 @@
 """FastAPI inference API with JWT auth, versioning, and model caching."""
 
-from __future__ import annotations
-
 import os
 import time
 from contextlib import asynccontextmanager
@@ -599,7 +597,7 @@ def metrics() -> Response:
 
 @app.post("/v1/auth/login", response_model=LoginResponse)
 @limiter.limit(AUTH_RATE_LIMIT)
-async def login(request: Request, body: LoginRequest):
+async def login(body: LoginRequest, request: Request):
     from ml_pipeline_monitor.core.auth import _check_login, _credentials, _resolve_user
 
     ok, err = _check_login(body.username, body.password)
@@ -620,7 +618,7 @@ async def login(request: Request, body: LoginRequest):
 
 @app.post("/v1/auth/refresh")
 @limiter.limit(AUTH_RATE_LIMIT)
-async def refresh(request: Request, body: RefreshRequest):
+async def refresh(body: RefreshRequest, request: Request):
     try:
         payload = verify_token(body.refresh_token)
         if not payload.refresh:
@@ -644,8 +642,8 @@ async def me(token: TokenPayload = Depends(_authenticate)):
 @app.post("/v1/predict")
 @limiter.limit(RATE_LIMIT)
 async def predict_v1(
-    request: Request,
     body: PredictRequest,
+    request: Request,
     token: TokenPayload = Depends(_authenticate),
 ) -> dict[str, Any]:
     correlation_id = get_correlation_id()
@@ -769,7 +767,7 @@ async def predict_v1(
 @app.post("/predict", deprecated=True)
 @limiter.limit(RATE_LIMIT)
 def predict_legacy(
-    request: Request, request_body: PredictRequest, api_key: str = Depends(_get_api_key)
+    request_body: PredictRequest, request: Request, api_key: str = Depends(_get_api_key)
 ) -> dict[str, Any]:
     if not _api_key_is_valid(api_key):
         raise HTTPException(

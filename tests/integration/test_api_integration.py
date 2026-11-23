@@ -63,7 +63,9 @@ class TestHealth:
 class TestAuthV1:
     def test_login_requires_credentials(self):
         r = client.post("/v1/auth/login", json={"username": "", "password": ""})
-        assert r.status_code in (401, 422)
+        # Empty credentials must not authenticate. 429 is also a valid rejection
+        # when the shared TestClient rate-limit bucket is exhausted by other tests.
+        assert r.status_code in (401, 422, 429)
 
     def test_refresh_requires_token(self):
         r = client.post("/v1/auth/refresh", json={"refresh_token": "bad"})

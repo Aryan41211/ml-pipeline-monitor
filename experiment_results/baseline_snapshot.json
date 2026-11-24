@@ -1,0 +1,54 @@
+{
+  "project": "ML Pipeline Monitor",
+  "phase": 2,
+  "baseline_created": "2026-11-24T20:00:00Z",
+  "git_sha": "85a38c6b1879943b4ee369fd45341cd3b9d5475b",
+  "branch": "main",
+  "environment": {
+    "cpu_cores": 16,
+    "ram_gb": 15.65,
+    "gpu_available": false,
+    "python_version": "3.12",
+    "os": "win32"
+  },
+  "test_status": {
+    "tests_passed": 310,
+    "tests_failed": 0,
+    "tests_errored": 27,
+    "error_reason": "Playwright browser not available (E2E tests)",
+    "coverage": "81.03%"
+  },
+  "pipeline": {
+    "stages": 7,
+    "algorithms": 12,
+    "classification": 6,
+    "regression": 6,
+    "worker_type": "polling (not Celery)"
+  },
+  "drift_detection": {
+    "methods": ["PSI", "KS test"],
+    "psi_identical_dist": 0.0,
+    "psi_shifted_dist": 2.26,
+    "ks_pvalue_shifted": 0.0
+  },
+  "algorithms_classification": [
+    "Random Forest", "XGBoost", "Gradient Boosting",
+    "Logistic Regression", "SVM", "Decision Tree"
+  ],
+  "algorithms_regression": [
+    "Random Forest", "XGBoost", "Gradient Boosting",
+    "Ridge Regression", "SVR", "Decision Tree"
+  ],
+  "docker": {
+    "available": false,
+    "blocker": "Docker Desktop not available on this machine",
+    "config_valid": true
+  },
+  "limitations": [
+    "Docker Desktop unavailable - cannot verify Docker deployment",
+    "No algorithm benchmarking on multiple public datasets",
+    "No advanced drift detection methods (JS divergence, Wasserstein, etc.)",
+    "No pipeline reliability testing (missing values, schema mismatch, etc.)",
+    "No /predict endpoint latency measurement (requires auth + trained model)"
+  ]
+}

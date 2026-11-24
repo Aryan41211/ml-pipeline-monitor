@@ -1,0 +1,152 @@
+{
+  "scenarios": [
+    {
+      "drift_type": "no_drift",
+      "expected_drift": false
+    },
+    {
+      "drift_type": "small_drift",
+      "expected_drift": true
+    },
+    {
+      "drift_type": "moderate_drift",
+      "expected_drift": true
+    },
+    {
+      "drift_type": "severe_drift",
+      "expected_drift": true
+    },
+    {
+      "drift_type": "scale_change",
+      "expected_drift": true
+    },
+    {
+      "drift_type": "covariate_shift",
+      "expected_drift": true
+    },
+    {
+      "drift_type": "feature_level_drift",
+      "expected_drift": true
+    },
+    {
+      "drift_type": "class_imbalance",
+      "expected_drift": true
+    }
+  ],
+  "methods": {
+    "PSI": {
+      "method": "PSI",
+      "threshold": 0.25,
+      "n_scenarios": 8,
+      "n_trials": 5,
+      "total_tests": 40,
+      "true_positives": 20,
+      "false_positives": 0,
+      "true_negatives": 5,
+      "false_negatives": 15,
+      "precision": 1.0,
+      "recall": 0.5714,
+      "f1": 0.7273,
+      "false_positive_rate": 0.0,
+      "false_negative_rate": 0.4286,
+      "mean_runtime_ms": 0.121,
+      "p95_runtime_ms": 0.204
+    },
+    "KS Test": {
+      "method": "KS Test",
+      "threshold": 0.95,
+      "n_scenarios": 8,
+      "n_trials": 5,
+      "total_tests": 40,
+      "true_positives": 35,
+      "false_positives": 0,
+      "true_negatives": 5,
+      "false_negatives": 0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "false_positive_rate": 0.0,
+      "false_negative_rate": 0.0,
+      "mean_runtime_ms": 1.108,
+      "p95_runtime_ms": 1.32
+    },
+    "JS Divergence": {
+      "method": "JS Divergence",
+      "threshold": 0.1,
+      "n_scenarios": 8,
+      "n_trials": 5,
+      "total_tests": 40,
+      "true_positives": 28,
+      "false_positives": 0,
+      "true_negatives": 5,
+      "false_negatives": 7,
+      "precision": 1.0,
+      "recall": 0.8,
+      "f1": 0.8889,
+      "false_positive_rate": 0.0,
+      "false_negative_rate": 0.2,
+      "mean_runtime_ms": 0.129,
+      "p95_runtime_ms": 0.262
+    },
+    "Wasserstein": {
+      "method": "Wasserstein",
+      "threshold": 0.5,
+      "n_scenarios": 8,
+      "n_trials": 5,
+      "total_tests": 40,
+      "true_positives": 20,
+      "false_positives": 0,
+      "true_negatives": 5,
+      "false_negatives": 15,
+      "precision": 1.0,
+      "recall": 0.5714,
+      "f1": 0.7273,
+      "false_positive_rate": 0.0,
+      "false_negative_rate": 0.4286,
+      "mean_runtime_ms": 0.816,
+      "p95_runtime_ms": 0.994
+    }
+  },
+  "psi_magnitudes": {
+    "no_drift": {
+      "mean_psi": 0.01743,
+      "max_psi": 0.02643,
+      "expected_drift": false
+    },
+    "small_drift": {
+      "mean_psi": 0.09119,
+      "max_psi": 0.12236,
+      "expected_drift": true
+    },
+    "moderate_drift": {
+      "mean_psi": 0.455,
+      "max_psi": 0.54089,
+      "expected_drift": true
+    },
+    "severe_drift": {
+      "mean_psi": 1.97956,
+      "max_psi": 2.09539,
+      "expected_drift": true
+    },
+    "scale_change": {
+      "mean_psi": 1.57234,
+      "max_psi": 1.6801,
+      "expected_drift": true
+    },
+    "covariate_shift": {
+      "mean_psi": 3.35175,
+      "max_psi": 3.48558,
+      "expected_drift": true
+    },
+    "feature_level_drift": {
+      "mean_psi": 0.18942,
+      "max_psi": 0.87496,
+      "expected_drift": true
+    },
+    "class_imbalance": {
+      "mean_psi": 0.20913,
+      "max_psi": 0.41141,
+      "expected_drift": true
+    }
+  }
+}

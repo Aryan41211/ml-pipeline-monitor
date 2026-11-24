@@ -1,0 +1,375 @@
+{
+  "classification": {
+    "iris": {
+      "n_samples": 150,
+      "n_features": 4,
+      "n_classes": 3,
+      "models": {
+        "Random Forest": {
+          "model": "Random Forest",
+          "accuracy_mean": 0.9444,
+          "accuracy_std": 0.0314,
+          "precision_mean": 0.9473,
+          "recall_mean": 0.9444,
+          "f1_mean": 0.9443,
+          "roc_auc_mean": 0.9978,
+          "train_time_mean": 0.0877,
+          "inference_latency_mean_ms": 0.4942,
+          "n_runs": 3
+        },
+        "XGBoost": {
+          "model": "XGBoost",
+          "accuracy_mean": 0.9556,
+          "accuracy_std": 0.0157,
+          "precision_mean": 0.9576,
+          "recall_mean": 0.9556,
+          "f1_mean": 0.9555,
+          "roc_auc_mean": 0.9894,
+          "train_time_mean": 0.079,
+          "inference_latency_mean_ms": 0.0317,
+          "n_runs": 3
+        },
+        "Gradient Boosting": {
+          "model": "Gradient Boosting",
+          "accuracy_mean": 0.9667,
+          "accuracy_std": 0.0,
+          "precision_mean": 0.9697,
+          "recall_mean": 0.9667,
+          "f1_mean": 0.9666,
+          "roc_auc_mean": 0.9978,
+          "train_time_mean": 0.123,
+          "inference_latency_mean_ms": 0.0195,
+          "n_runs": 3
+        },
+        "Logistic Regression": {
+          "model": "Logistic Regression",
+          "accuracy_mean": 0.9556,
+          "accuracy_std": 0.0157,
+          "precision_mean": 0.9576,
+          "recall_mean": 0.9556,
+          "f1_mean": 0.9555,
+          "roc_auc_mean": 0.9989,
+          "train_time_mean": 0.0027,
+          "inference_latency_mean_ms": 0.0027,
+          "n_runs": 3
+        },
+        "SVM": {
+          "model": "SVM",
+          "accuracy_mean": 0.9667,
+          "accuracy_std": 0.0,
+          "precision_mean": 0.9697,
+          "recall_mean": 0.9667,
+          "f1_mean": 0.9666,
+          "roc_auc_mean": 0.0,
+          "train_time_mean": 0.0007,
+          "inference_latency_mean_ms": 0.0055,
+          "n_runs": 3
+        },
+        "Decision Tree": {
+          "model": "Decision Tree",
+          "accuracy_mean": 0.9556,
+          "accuracy_std": 0.0157,
+          "precision_mean": 0.9576,
+          "recall_mean": 0.9556,
+          "f1_mean": 0.9555,
+          "roc_auc_mean": 0.9667,
+          "train_time_mean": 0.0005,
+          "inference_latency_mean_ms": 0.0023,
+          "n_runs": 3
+        }
+      }
+    },
+    "breast_cancer": {
+      "n_samples": 569,
+      "n_features": 30,
+      "n_classes": 2,
+      "models": {
+        "Random Forest": {
+          "model": "Random Forest",
+          "accuracy_mean": 0.9561,
+          "accuracy_std": 0.0215,
+          "precision_mean": 0.9561,
+          "recall_mean": 0.9561,
+          "f1_mean": 0.956,
+          "roc_auc_mean": 0.9904,
+          "train_time_mean": 0.0909,
+          "inference_latency_mean_ms": 0.1305,
+          "n_runs": 3
+        },
+        "XGBoost": {
+          "model": "XGBoost",
+          "accuracy_mean": 0.9591,
+          "accuracy_std": 0.0109,
+          "precision_mean": 0.9594,
+          "recall_mean": 0.9591,
+          "f1_mean": 0.9589,
+          "roc_auc_mean": 0.9856,
+          "train_time_mean": 0.0424,
+          "inference_latency_mean_ms": 0.008,
+          "n_runs": 3
+        },
+        "Gradient Boosting": {
+          "model": "Gradient Boosting",
+          "accuracy_mean": 0.962,
+          "accuracy_std": 0.0083,
+          "precision_mean": 0.9626,
+          "recall_mean": 0.962,
+          "f1_mean": 0.9618,
+          "roc_auc_mean": 0.9902,
+          "train_time_mean": 0.2355,
+          "inference_latency_mean_ms": 0.0026,
+          "n_runs": 3
+        },
+        "Logistic Regression": {
+          "model": "Logistic Regression",
+          "accuracy_mean": 0.9766,
+          "accuracy_std": 0.0149,
+          "precision_mean": 0.9769,
+          "recall_mean": 0.9766,
+          "f1_mean": 0.9765,
+          "roc_auc_mean": 0.9918,
+          "train_time_mean": 0.003,
+          "inference_latency_mean_ms": 0.001,
+          "n_runs": 3
+        },
+        "SVM": {
+          "model": "SVM",
+          "accuracy_mean": 0.9737,
+          "accuracy_std": 0.0124,
+          "precision_mean": 0.9739,
+          "recall_mean": 0.9737,
+          "f1_mean": 0.9737,
+          "roc_auc_mean": 0.0,
+          "train_time_mean": 0.0017,
+          "inference_latency_mean_ms": 0.0061,
+          "n_runs": 3
+        },
+        "Decision Tree": {
+          "model": "Decision Tree",
+          "accuracy_mean": 0.9386,
+          "accuracy_std": 0.0189,
+          "precision_mean": 0.9419,
+          "recall_mean": 0.9386,
+          "f1_mean": 0.9386,
+          "roc_auc_mean": 0.9349,
+          "train_time_mean": 0.004,
+          "inference_latency_mean_ms": 0.0022,
+          "n_runs": 3
+        }
+      }
+    },
+    "wine": {
+      "n_samples": 178,
+      "n_features": 13,
+      "n_classes": 3,
+      "models": {
+        "Random Forest": {
+          "model": "Random Forest",
+          "accuracy_mean": 0.9907,
+          "accuracy_std": 0.0131,
+          "precision_mean": 0.9916,
+          "recall_mean": 0.9907,
+          "f1_mean": 0.9908,
+          "roc_auc_mean": 1.0,
+          "train_time_mean": 0.0914,
+          "inference_latency_mean_ms": 0.4218,
+          "n_runs": 3
+        },
+        "XGBoost": {
+          "model": "XGBoost",
+          "accuracy_mean": 0.9907,
+          "accuracy_std": 0.0131,
+          "precision_mean": 0.9914,
+          "recall_mean": 0.9907,
+          "f1_mean": 0.9907,
+          "roc_auc_mean": 0.9992,
+          "train_time_mean": 0.0337,
+          "inference_latency_mean_ms": 0.0224,
+          "n_runs": 3
+        },
+        "Gradient Boosting": {
+          "model": "Gradient Boosting",
+          "accuracy_mean": 0.9444,
+          "accuracy_std": 0.0227,
+          "precision_mean": 0.9508,
+          "recall_mean": 0.9444,
+          "f1_mean": 0.9447,
+          "roc_auc_mean": 0.9977,
+          "train_time_mean": 0.1843,
+          "inference_latency_mean_ms": 0.015,
+          "n_runs": 3
+        },
+        "Logistic Regression": {
+          "model": "Logistic Regression",
+          "accuracy_mean": 0.9722,
+          "accuracy_std": 0.0227,
+          "precision_mean": 0.9759,
+          "recall_mean": 0.9722,
+          "f1_mean": 0.9723,
+          "roc_auc_mean": 1.0,
+          "train_time_mean": 0.0031,
+          "inference_latency_mean_ms": 0.0024,
+          "n_runs": 3
+        },
+        "SVM": {
+          "model": "SVM",
+          "accuracy_mean": 0.9815,
+          "accuracy_std": 0.0131,
+          "precision_mean": 0.9829,
+          "recall_mean": 0.9815,
+          "f1_mean": 0.9814,
+          "roc_auc_mean": 0.0,
+          "train_time_mean": 0.0007,
+          "inference_latency_mean_ms": 0.0048,
+          "n_runs": 3
+        },
+        "Decision Tree": {
+          "model": "Decision Tree",
+          "accuracy_mean": 0.9167,
+          "accuracy_std": 0.0227,
+          "precision_mean": 0.9284,
+          "recall_mean": 0.9167,
+          "f1_mean": 0.9167,
+          "roc_auc_mean": 0.9318,
+          "train_time_mean": 0.0007,
+          "inference_latency_mean_ms": 0.0019,
+          "n_runs": 3
+        }
+      }
+    }
+  },
+  "regression": {
+    "diabetes": {
+      "n_samples": 442,
+      "n_features": 10,
+      "models": {
+        "Random Forest": {
+          "model": "Random Forest",
+          "mae_mean": 44.7745,
+          "mae_std": 0.9399,
+          "rmse_mean": 56.1321,
+          "r2_mean": 0.4418,
+          "train_time_mean": 0.0723,
+          "inference_latency_mean_ms": 0.1727,
+          "n_runs": 3
+        },
+        "XGBoost": {
+          "model": "XGBoost",
+          "mae_mean": 47.8246,
+          "mae_std": 1.4907,
+          "rmse_mean": 60.9483,
+          "r2_mean": 0.3433,
+          "train_time_mean": 0.0584,
+          "inference_latency_mean_ms": 0.0101,
+          "n_runs": 3
+        },
+        "Gradient Boosting": {
+          "model": "Gradient Boosting",
+          "mae_mean": 45.7154,
+          "mae_std": 1.1168,
+          "rmse_mean": 57.1994,
+          "r2_mean": 0.4204,
+          "train_time_mean": 0.0616,
+          "inference_latency_mean_ms": 0.0022,
+          "n_runs": 3
+        },
+        "Ridge Regression": {
+          "model": "Ridge Regression",
+          "mae_mean": 43.3744,
+          "mae_std": 0.8304,
+          "rmse_mean": 52.7192,
+          "r2_mean": 0.5068,
+          "train_time_mean": 0.0005,
+          "inference_latency_mean_ms": 0.0006,
+          "n_runs": 3
+        },
+        "SVR": {
+          "model": "SVR",
+          "mae_mean": 59.3356,
+          "mae_std": 2.7104,
+          "rmse_mean": 70.3037,
+          "r2_mean": 0.1234,
+          "train_time_mean": 0.0025,
+          "inference_latency_mean_ms": 0.0146,
+          "n_runs": 3
+        },
+        "Decision Tree": {
+          "model": "Decision Tree",
+          "mae_mean": 61.2584,
+          "mae_std": 5.2121,
+          "rmse_mean": 78.712,
+          "r2_mean": -0.1022,
+          "train_time_mean": 0.0017,
+          "inference_latency_mean_ms": 0.001,
+          "n_runs": 3
+        }
+      }
+    },
+    "california_housing": {
+      "n_samples": 20640,
+      "n_features": 8,
+      "models": {
+        "Random Forest": {
+          "model": "Random Forest",
+          "mae_mean": 0.3242,
+          "mae_std": 0.0024,
+          "rmse_mean": 0.4939,
+          "r2_mean": 0.8173,
+          "train_time_mean": 0.8897,
+          "inference_latency_mean_ms": 0.0097,
+          "n_runs": 3
+        },
+        "XGBoost": {
+          "model": "XGBoost",
+          "mae_mean": 0.3108,
+          "mae_std": 0.0034,
+          "rmse_mean": 0.4634,
+          "r2_mean": 0.8391,
+          "train_time_mean": 0.0943,
+          "inference_latency_mean_ms": 0.0004,
+          "n_runs": 3
+        },
+        "Gradient Boosting": {
+          "model": "Gradient Boosting",
+          "mae_mean": 0.3652,
+          "mae_std": 0.0046,
+          "rmse_mean": 0.523,
+          "r2_mean": 0.795,
+          "train_time_mean": 2.2771,
+          "inference_latency_mean_ms": 0.0004,
+          "n_runs": 3
+        },
+        "Ridge Regression": {
+          "model": "Ridge Regression",
+          "mae_mean": 0.5297,
+          "mae_std": 0.0025,
+          "rmse_mean": 0.7303,
+          "r2_mean": 0.6007,
+          "train_time_mean": 0.0012,
+          "inference_latency_mean_ms": 0.0,
+          "n_runs": 3
+        },
+        "SVR": {
+          "model": "SVR",
+          "mae_mean": 0.3946,
+          "mae_std": 0.0033,
+          "rmse_mean": 0.589,
+          "r2_mean": 0.7403,
+          "train_time_mean": 4.4111,
+          "inference_latency_mean_ms": 0.4821,
+          "n_runs": 3
+        },
+        "Decision Tree": {
+          "model": "Decision Tree",
+          "mae_mean": 0.4525,
+          "mae_std": 0.0041,
+          "rmse_mean": 0.7034,
+          "r2_mean": 0.6296,
+          "train_time_mean": 0.1077,
+          "inference_latency_mean_ms": 0.0003,
+          "n_runs": 3
+        }
+      }
+    }
+  }
+}

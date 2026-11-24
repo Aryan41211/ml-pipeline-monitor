@@ -1,0 +1,29 @@
+{
+  "pipeline_stages": [
+    "Data Validation",
+    "Preprocessing",
+    "Feature Analysis",
+    "Cross-Validation",
+    "Training",
+    "Evaluation",
+    "Feature Importance"
+  ],
+  "benchmark_datasets": 13,
+  "algorithms_benchmarked": 20,
+  "classification_algorithms": 10,
+  "regression_algorithms": 10,
+  "drift_detection_methods": 7,
+  "drift_scenarios": 10,
+  "random_seed": 42,
+  "n_bootstrap": 1000,
+  "n_repeats": 3,
+  "key_findings": {
+    "svm_roc_auc_bug_fixed": true,
+    "wine_dataset_too_easy": true,
+    "noisy_data_reduces_performance": true,
+    "concept_drift_reduces_performance": true,
+    "ks_test_best_drift_detector": true,
+    "calibration_metrics_added": true,
+    "nested_cross_validation_added": true
+  }
+}

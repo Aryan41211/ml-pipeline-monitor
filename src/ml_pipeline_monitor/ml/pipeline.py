@@ -471,9 +471,17 @@ class MLPipeline:
                         result.curves["roc_fpr"] = [round(float(v), 6) for v in fpr.tolist()]
                         result.curves["roc_tpr"] = [round(float(v), 6) for v in tpr.tolist()]
                     else:
-                        metrics["roc_auc"] = round(roc_auc_score(y_test, y_prob, multi_class="ovr"), 4)
+                        # Multi-class ROC-AUC: only computable if all classes present in test set
+                        if len(np.unique(y_test)) > 1:
+                            metrics["roc_auc"] = round(
+                                roc_auc_score(y_test, y_prob, multi_class="ovr"), 4
+                            )
+            except ValueError:
+                # ROC-AUC undefined when a class is missing from test set — do not silently zero it
+                metrics["roc_auc"] = float("nan")
             except Exception:
-                pass
+                # Other unexpected errors — also do not silently zero
+                metrics["roc_auc"] = float("nan")
 
             result.confusion_mat = confusion_matrix(y_test, y_pred)
 

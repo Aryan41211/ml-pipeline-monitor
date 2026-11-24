@@ -13,8 +13,8 @@
           "recall_mean": 0.9444,
           "f1_mean": 0.9443,
           "roc_auc_mean": 0.9978,
-          "train_time_mean": 0.0877,
-          "inference_latency_mean_ms": 0.4942,
+          "train_time_mean": 0.1157,
+          "inference_latency_mean_ms": 0.6742,
           "n_runs": 3
         },
         "XGBoost": {
@@ -25,8 +25,8 @@
           "recall_mean": 0.9556,
           "f1_mean": 0.9555,
           "roc_auc_mean": 0.9894,
-          "train_time_mean": 0.079,
-          "inference_latency_mean_ms": 0.0317,
+          "train_time_mean": 0.1213,
+          "inference_latency_mean_ms": 0.0491,
           "n_runs": 3
         },
         "Gradient Boosting": {
@@ -37,8 +37,44 @@
           "recall_mean": 0.9667,
           "f1_mean": 0.9666,
           "roc_auc_mean": 0.9978,
-          "train_time_mean": 0.123,
-          "inference_latency_mean_ms": 0.0195,
+          "train_time_mean": 0.1509,
+          "inference_latency_mean_ms": 0.0234,
+          "n_runs": 3
+        },
+        "Extra Trees": {
+          "model": "Extra Trees",
+          "accuracy_mean": 0.9556,
+          "accuracy_std": 0.0157,
+          "precision_mean": 0.9576,
+          "recall_mean": 0.9556,
+          "f1_mean": 0.9555,
+          "roc_auc_mean": 0.9969,
+          "train_time_mean": 0.092,
+          "inference_latency_mean_ms": 0.5525,
+          "n_runs": 3
+        },
+        "AdaBoost": {
+          "model": "AdaBoost",
+          "accuracy_mean": 0.9444,
+          "accuracy_std": 0.0157,
+          "precision_mean": 0.9455,
+          "recall_mean": 0.9444,
+          "f1_mean": 0.9444,
+          "roc_auc_mean": 0.9894,
+          "train_time_mean": 0.0497,
+          "inference_latency_mean_ms": 0.0779,
+          "n_runs": 3
+        },
+        "K-Nearest Neighbors": {
+          "model": "K-Nearest Neighbors",
+          "accuracy_mean": 0.9556,
+          "accuracy_std": 0.0157,
+          "precision_mean": 0.9613,
+          "recall_mean": 0.9556,
+          "f1_mean": 0.9553,
+          "roc_auc_mean": 0.9872,
+          "train_time_mean": 0.001,
+          "inference_latency_mean_ms": 0.6315,
           "n_runs": 3
         },
         "Logistic Regression": {
@@ -49,8 +85,8 @@
           "recall_mean": 0.9556,
           "f1_mean": 0.9555,
           "roc_auc_mean": 0.9989,
-          "train_time_mean": 0.0027,
-          "inference_latency_mean_ms": 0.0027,
+          "train_time_mean": 0.0052,
+          "inference_latency_mean_ms": 0.0032,
           "n_runs": 3
         },
         "SVM": {
@@ -61,8 +97,8 @@
           "recall_mean": 0.9667,
           "f1_mean": 0.9666,
           "roc_auc_mean": 0.0,
-          "train_time_mean": 0.0007,
-          "inference_latency_mean_ms": 0.0055,
+          "train_time_mean": 0.0011,
+          "inference_latency_mean_ms": 0.0057,
           "n_runs": 3
         },
         "Decision Tree": {
@@ -74,7 +110,7 @@
           "f1_mean": 0.9555,
           "roc_auc_mean": 0.9667,
           "train_time_mean": 0.0005,
-          "inference_latency_mean_ms": 0.0023,
+          "inference_latency_mean_ms": 0.0024,
           "n_runs": 3
         }
       }
@@ -92,8 +128,8 @@
           "recall_mean": 0.9561,
           "f1_mean": 0.956,
           "roc_auc_mean": 0.9904,
-          "train_time_mean": 0.0909,
-          "inference_latency_mean_ms": 0.1305,
+          "train_time_mean": 0.1114,
+          "inference_latency_mean_ms": 0.1488,
           "n_runs": 3
         },
         "XGBoost": {
@@ -104,8 +140,8 @@
           "recall_mean": 0.9591,
           "f1_mean": 0.9589,
           "roc_auc_mean": 0.9856,
-          "train_time_mean": 0.0424,
-          "inference_latency_mean_ms": 0.008,
+          "train_time_mean": 0.0532,
+          "inference_latency_mean_ms": 0.0075,
           "n_runs": 3
         },
         "Gradient Boosting": {
@@ -116,8 +152,44 @@
           "recall_mean": 0.962,
           "f1_mean": 0.9618,
           "roc_auc_mean": 0.9902,
-          "train_time_mean": 0.2355,
-          "inference_latency_mean_ms": 0.0026,
+          "train_time_mean": 0.2841,
+          "inference_latency_mean_ms": 0.0025,
+          "n_runs": 3
+        },
+        "Extra Trees": {
+          "model": "Extra Trees",
+          "accuracy_mean": 0.9591,
+          "accuracy_std": 0.018,
+          "precision_mean": 0.9594,
+          "recall_mean": 0.9591,
+          "f1_mean": 0.9589,
+          "roc_auc_mean": 0.9908,
+          "train_time_mean": 0.0816,
+          "inference_latency_mean_ms": 0.1358,
+          "n_runs": 3
+        },
+        "AdaBoost": {
+          "model": "AdaBoost",
+          "accuracy_mean": 0.9532,
+          "accuracy_std": 0.0109,
+          "precision_mean": 0.9544,
+          "recall_mean": 0.9532,
+          "f1_mean": 0.9531,
+          "roc_auc_mean": 0.9846,
+          "train_time_mean": 0.1058,
+          "inference_latency_mean_ms": 0.0297,
+          "n_runs": 3
+        },
+        "K-Nearest Neighbors": {
+          "model": "K-Nearest Neighbors",
+          "accuracy_mean": 0.9532,
+          "accuracy_std": 0.018,
+          "precision_mean": 0.9549,
+          "recall_mean": 0.9532,
+          "f1_mean": 0.9528,
+          "roc_auc_mean": 0.9759,
+          "train_time_mean": 0.0003,
+          "inference_latency_mean_ms": 6.5721,
           "n_runs": 3
         },
         "Logistic Regression": {
@@ -128,7 +200,7 @@
           "recall_mean": 0.9766,
           "f1_mean": 0.9765,
           "roc_auc_mean": 0.9918,
-          "train_time_mean": 0.003,
+          "train_time_mean": 0.0041,
           "inference_latency_mean_ms": 0.001,
           "n_runs": 3
         },
@@ -140,8 +212,8 @@
           "recall_mean": 0.9737,
           "f1_mean": 0.9737,
           "roc_auc_mean": 0.0,
-          "train_time_mean": 0.0017,
-          "inference_latency_mean_ms": 0.0061,
+          "train_time_mean": 0.0026,
+          "inference_latency_mean_ms": 0.0089,
           "n_runs": 3
         },
         "Decision Tree": {
@@ -152,8 +224,8 @@
           "recall_mean": 0.9386,
           "f1_mean": 0.9386,
           "roc_auc_mean": 0.9349,
-          "train_time_mean": 0.004,
-          "inference_latency_mean_ms": 0.0022,
+          "train_time_mean": 0.0051,
+          "inference_latency_mean_ms": 0.0018,
           "n_runs": 3
         }
       }
@@ -171,8 +243,8 @@
           "recall_mean": 0.9907,
           "f1_mean": 0.9908,
           "roc_auc_mean": 1.0,
-          "train_time_mean": 0.0914,
-          "inference_latency_mean_ms": 0.4218,
+          "train_time_mean": 0.126,
+          "inference_latency_mean_ms": 0.4469,
           "n_runs": 3
         },
         "XGBoost": {
@@ -183,8 +255,8 @@
           "recall_mean": 0.9907,
           "f1_mean": 0.9907,
           "roc_auc_mean": 0.9992,
-          "train_time_mean": 0.0337,
-          "inference_latency_mean_ms": 0.0224,
+          "train_time_mean": 0.0935,
+          "inference_latency_mean_ms": 0.0266,
           "n_runs": 3
         },
         "Gradient Boosting": {
@@ -195,8 +267,44 @@
           "recall_mean": 0.9444,
           "f1_mean": 0.9447,
           "roc_auc_mean": 0.9977,
-          "train_time_mean": 0.1843,
-          "inference_latency_mean_ms": 0.015,
+          "train_time_mean": 0.219,
+          "inference_latency_mean_ms": 0.0194,
+          "n_runs": 3
+        },
+        "Extra Trees": {
+          "model": "Extra Trees",
+          "accuracy_mean": 0.9907,
+          "accuracy_std": 0.0131,
+          "precision_mean": 0.9916,
+          "recall_mean": 0.9907,
+          "f1_mean": 0.9908,
+          "roc_auc_mean": 1.0,
+          "train_time_mean": 0.0896,
+          "inference_latency_mean_ms": 0.4442,
+          "n_runs": 3
+        },
+        "AdaBoost": {
+          "model": "AdaBoost",
+          "accuracy_mean": 0.9722,
+          "accuracy_std": 0.0393,
+          "precision_mean": 0.9742,
+          "recall_mean": 0.9722,
+          "f1_mean": 0.9722,
+          "roc_auc_mean": 0.9989,
+          "train_time_mean": 0.0503,
+          "inference_latency_mean_ms": 0.0828,
+          "n_runs": 3
+        },
+        "K-Nearest Neighbors": {
+          "model": "K-Nearest Neighbors",
+          "accuracy_mean": 0.963,
+          "accuracy_std": 0.0131,
+          "precision_mean": 0.9677,
+          "recall_mean": 0.963,
+          "f1_mean": 0.9632,
+          "roc_auc_mean": 0.9868,
+          "train_time_mean": 0.0004,
+          "inference_latency_mean_ms": 0.4689,
           "n_runs": 3
         },
         "Logistic Regression": {
@@ -207,8 +315,8 @@
           "recall_mean": 0.9722,
           "f1_mean": 0.9723,
           "roc_auc_mean": 1.0,
-          "train_time_mean": 0.0031,
-          "inference_latency_mean_ms": 0.0024,
+          "train_time_mean": 0.004,
+          "inference_latency_mean_ms": 0.0039,
           "n_runs": 3
         },
         "SVM": {
@@ -219,8 +327,8 @@
           "recall_mean": 0.9815,
           "f1_mean": 0.9814,
           "roc_auc_mean": 0.0,
-          "train_time_mean": 0.0007,
-          "inference_latency_mean_ms": 0.0048,
+          "train_time_mean": 0.0009,
+          "inference_latency_mean_ms": 0.0059,
           "n_runs": 3
         },
         "Decision Tree": {
@@ -231,8 +339,123 @@
           "recall_mean": 0.9167,
           "f1_mean": 0.9167,
           "roc_auc_mean": 0.9318,
-          "train_time_mean": 0.0007,
-          "inference_latency_mean_ms": 0.0019,
+          "train_time_mean": 0.0008,
+          "inference_latency_mean_ms": 0.0025,
+          "n_runs": 3
+        }
+      }
+    },
+    "digits": {
+      "n_samples": 1797,
+      "n_features": 64,
+      "n_classes": 10,
+      "models": {
+        "Random Forest": {
+          "model": "Random Forest",
+          "accuracy_mean": 0.9741,
+          "accuracy_std": 0.0107,
+          "precision_mean": 0.9749,
+          "recall_mean": 0.9741,
+          "f1_mean": 0.974,
+          "roc_auc_mean": 0.9996,
+          "train_time_mean": 0.137,
+          "inference_latency_mean_ms": 0.0825,
+          "n_runs": 3
+        },
+        "XGBoost": {
+          "model": "XGBoost",
+          "accuracy_mean": 0.9556,
+          "accuracy_std": 0.006,
+          "precision_mean": 0.9563,
+          "recall_mean": 0.9556,
+          "f1_mean": 0.9553,
+          "roc_auc_mean": 0.9985,
+          "train_time_mean": 0.5533,
+          "inference_latency_mean_ms": 0.0072,
+          "n_runs": 3
+        },
+        "Gradient Boosting": {
+          "model": "Gradient Boosting",
+          "accuracy_mean": 0.962,
+          "accuracy_std": 0.0065,
+          "precision_mean": 0.963,
+          "recall_mean": 0.962,
+          "f1_mean": 0.962,
+          "roc_auc_mean": 0.9993,
+          "train_time_mean": 5.2452,
+          "inference_latency_mean_ms": 0.0077,
+          "n_runs": 3
+        },
+        "Extra Trees": {
+          "model": "Extra Trees",
+          "accuracy_mean": 0.9778,
+          "accuracy_std": 0.0039,
+          "precision_mean": 0.9782,
+          "recall_mean": 0.9778,
+          "f1_mean": 0.9777,
+          "roc_auc_mean": 0.9997,
+          "train_time_mean": 0.1017,
+          "inference_latency_mean_ms": 0.1023,
+          "n_runs": 3
+        },
+        "AdaBoost": {
+          "model": "AdaBoost",
+          "accuracy_mean": 0.7352,
+          "accuracy_std": 0.0086,
+          "precision_mean": 0.756,
+          "recall_mean": 0.7352,
+          "f1_mean": 0.7312,
+          "roc_auc_mean": 0.9608,
+          "train_time_mean": 0.1447,
+          "inference_latency_mean_ms": 0.0131,
+          "n_runs": 3
+        },
+        "K-Nearest Neighbors": {
+          "model": "K-Nearest Neighbors",
+          "accuracy_mean": 0.9731,
+          "accuracy_std": 0.0065,
+          "precision_mean": 0.9739,
+          "recall_mean": 0.9731,
+          "f1_mean": 0.973,
+          "roc_auc_mean": 0.9951,
+          "train_time_mean": 0.0006,
+          "inference_latency_mean_ms": 0.0331,
+          "n_runs": 3
+        },
+        "Logistic Regression": {
+          "model": "Logistic Regression",
+          "accuracy_mean": 0.9722,
+          "accuracy_std": 0.0,
+          "precision_mean": 0.9727,
+          "recall_mean": 0.9722,
+          "f1_mean": 0.9722,
+          "roc_auc_mean": 0.999,
+          "train_time_mean": 0.0285,
+          "inference_latency_mean_ms": 0.0008,
+          "n_runs": 3
+        },
+        "SVM": {
+          "model": "SVM",
+          "accuracy_mean": 0.9796,
+          "accuracy_std": 0.0047,
+          "precision_mean": 0.9801,
+          "recall_mean": 0.9796,
+          "f1_mean": 0.9796,
+          "roc_auc_mean": 0.0,
+          "train_time_mean": 0.0298,
+          "inference_latency_mean_ms": 0.0464,
+          "n_runs": 3
+        },
+        "Decision Tree": {
+          "model": "Decision Tree",
+          "accuracy_mean": 0.8537,
+          "accuracy_std": 0.0271,
+          "precision_mean": 0.8554,
+          "recall_mean": 0.8537,
+          "f1_mean": 0.853,
+          "roc_auc_mean": 0.9187,
+          "train_time_mean": 0.0153,
+          "inference_latency_mean_ms": 0.0009,
           "n_runs": 3
         }
       }
@@ -249,8 +472,8 @@
           "mae_std": 0.9399,
           "rmse_mean": 56.1321,
           "r2_mean": 0.4418,
-          "train_time_mean": 0.0723,
-          "inference_latency_mean_ms": 0.1727,
+          "train_time_mean": 0.0897,
+          "inference_latency_mean_ms": 0.2817,
           "n_runs": 3
         },
         "XGBoost": {
@@ -259,8 +482,8 @@
           "mae_std": 1.4907,
           "rmse_mean": 60.9483,
           "r2_mean": 0.3433,
-          "train_time_mean": 0.0584,
-          "inference_latency_mean_ms": 0.0101,
+          "train_time_mean": 0.0688,
+          "inference_latency_mean_ms": 0.0102,
           "n_runs": 3
         },
         "Gradient Boosting": {
@@ -269,8 +492,38 @@
           "mae_std": 1.1168,
           "rmse_mean": 57.1994,
           "r2_mean": 0.4204,
-          "train_time_mean": 0.0616,
-          "inference_latency_mean_ms": 0.0022,
+          "train_time_mean": 0.0749,
+          "inference_latency_mean_ms": 0.0025,
+          "n_runs": 3
+        },
+        "Extra Trees": {
+          "model": "Extra Trees",
+          "mae_mean": 44.3243,
+          "mae_std": 1.6502,
+          "rmse_mean": 54.8134,
+          "r2_mean": 0.4689,
+          "train_time_mean": 0.062,
+          "inference_latency_mean_ms": 0.3158,
+          "n_runs": 3
+        },
+        "AdaBoost": {
+          "model": "AdaBoost",
+          "mae_mean": 46.1858,
+          "mae_std": 1.2284,
+          "rmse_mean": 55.8851,
+          "r2_mean": 0.4474,
+          "train_time_mean": 0.0445,
+          "inference_latency_mean_ms": 0.0238,
+          "n_runs": 3
+        },
+        "K-Nearest Neighbors": {
+          "model": "K-Nearest Neighbors",
+          "mae_mean": 44.8839,
+          "mae_std": 1.7678,
+          "rmse_mean": 57.5794,
+          "r2_mean": 0.4123,
+          "train_time_mean": 0.0005,
+          "inference_latency_mean_ms": 0.1818,
           "n_runs": 3
         },
         "Ridge Regression": {
@@ -279,8 +532,28 @@
           "mae_std": 0.8304,
           "rmse_mean": 52.7192,
           "r2_mean": 0.5068,
-          "train_time_mean": 0.0005,
-          "inference_latency_mean_ms": 0.0006,
+          "train_time_mean": 0.0012,
+          "inference_latency_mean_ms": 0.0007,
+          "n_runs": 3
+        },
+        "Lasso Regression": {
+          "model": "Lasso Regression",
+          "mae_mean": 43.2805,
+          "mae_std": 0.9349,
+          "rmse_mean": 52.5579,
+          "r2_mean": 0.5102,
+          "train_time_mean": 0.0012,
+          "inference_latency_mean_ms": 0.0019,
+          "n_runs": 3
+        },
+        "Elastic Net": {
+          "model": "Elastic Net",
+          "mae_mean": 44.6367,
+          "mae_std": 1.2568,
+          "rmse_mean": 53.875,
+          "r2_mean": 0.4851,
+          "train_time_mean": 0.001,
+          "inference_latency_mean_ms": 0.0013,
           "n_runs": 3
         },
         "SVR": {
@@ -289,8 +562,8 @@
           "mae_std": 2.7104,
           "rmse_mean": 70.3037,
           "r2_mean": 0.1234,
-          "train_time_mean": 0.0025,
-          "inference_latency_mean_ms": 0.0146,
+          "train_time_mean": 0.0031,
+          "inference_latency_mean_ms": 0.0186,
           "n_runs": 3
         },
         "Decision Tree": {
@@ -299,8 +572,8 @@
           "mae_std": 5.2121,
           "rmse_mean": 78.712,
           "r2_mean": -0.1022,
-          "train_time_mean": 0.0017,
-          "inference_latency_mean_ms": 0.001,
+          "train_time_mean": 0.0018,
+          "inference_latency_mean_ms": 0.0012,
           "n_runs": 3
         }
       }
@@ -315,8 +588,8 @@
           "mae_std": 0.0024,
           "rmse_mean": 0.4939,
           "r2_mean": 0.8173,
-          "train_time_mean": 0.8897,
-          "inference_latency_mean_ms": 0.0097,
+          "train_time_mean": 1.0086,
+          "inference_latency_mean_ms": 0.0075,
           "n_runs": 3
         },
         "XGBoost": {
@@ -325,8 +598,8 @@
           "mae_std": 0.0034,
           "rmse_mean": 0.4634,
           "r2_mean": 0.8391,
-          "train_time_mean": 0.0943,
-          "inference_latency_mean_ms": 0.0004,
+          "train_time_mean": 0.1407,
+          "inference_latency_mean_ms": 0.0005,
           "n_runs": 3
         },
         "Gradient Boosting": {
@@ -335,8 +608,38 @@
           "mae_std": 0.0046,
           "rmse_mean": 0.523,
           "r2_mean": 0.795,
-          "train_time_mean": 2.2771,
-          "inference_latency_mean_ms": 0.0004,
+          "train_time_mean": 2.6951,
+          "inference_latency_mean_ms": 0.0005,
+          "n_runs": 3
+        },
+        "Extra Trees": {
+          "model": "Extra Trees",
+          "mae_mean": 0.323,
+          "mae_std": 0.0026,
+          "rmse_mean": 0.489,
+          "r2_mean": 0.8209,
+          "train_time_mean": 0.4661,
+          "inference_latency_mean_ms": 0.0097,
+          "n_runs": 3
+        },
+        "AdaBoost": {
+          "model": "AdaBoost",
+          "mae_mean": 0.7348,
+          "mae_std": 0.0621,
+          "rmse_mean": 0.8587,
+          "r2_mean": 0.4466,
+          "train_time_mean": 0.748,
+          "inference_latency_mean_ms": 0.0016,
+          "n_runs": 3
+        },
+        "K-Nearest Neighbors": {
+          "model": "K-Nearest Neighbors",
+          "mae_mean": 0.4402,
+          "mae_std": 0.0042,
+          "rmse_mean": 0.644,
+          "r2_mean": 0.6894,
+          "train_time_mean": 0.0247,
+          "inference_latency_mean_ms": 0.0298,
           "n_runs": 3
         },
         "Ridge Regression": {
@@ -345,7 +648,27 @@
           "mae_std": 0.0025,
           "rmse_mean": 0.7303,
           "r2_mean": 0.6007,
-          "train_time_mean": 0.0012,
+          "train_time_mean": 0.0016,
+          "inference_latency_mean_ms": 0.0,
+          "n_runs": 3
+        },
+        "Lasso Regression": {
+          "model": "Lasso Regression",
+          "mae_mean": 0.9164,
+          "mae_std": 0.0094,
+          "rmse_mean": 1.1561,
+          "r2_mean": -0.0001,
+          "train_time_mean": 0.0024,
+          "inference_latency_mean_ms": 0.0,
+          "n_runs": 3
+        },
+        "Elastic Net": {
+          "model": "Elastic Net",
+          "mae_mean": 0.8153,
+          "mae_std": 0.0091,
+          "rmse_mean": 1.0307,
+          "r2_mean": 0.2051,
+          "train_time_mean": 0.005,
           "inference_latency_mean_ms": 0.0,
           "n_runs": 3
         },
@@ -355,8 +678,8 @@
           "mae_std": 0.0033,
           "rmse_mean": 0.589,
           "r2_mean": 0.7403,
-          "train_time_mean": 4.4111,
-          "inference_latency_mean_ms": 0.4821,
+          "train_time_mean": 5.4258,
+          "inference_latency_mean_ms": 0.5966,
           "n_runs": 3
         },
         "Decision Tree": {
@@ -365,7 +688,7 @@
           "mae_std": 0.0041,
           "rmse_mean": 0.7034,
           "r2_mean": 0.6296,
-          "train_time_mean": 0.1077,
+          "train_time_mean": 0.1247,
           "inference_latency_mean_ms": 0.0003,
           "n_runs": 3
         }

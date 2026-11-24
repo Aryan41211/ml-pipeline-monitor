@@ -19,12 +19,16 @@ import numpy as np
 import pandas as pd
 import xgboost as xgb
 from sklearn.ensemble import (
+    AdaBoostClassifier,
+    AdaBoostRegressor,
+    ExtraTreesClassifier,
+    ExtraTreesRegressor,
     GradientBoostingClassifier,
     GradientBoostingRegressor,
     RandomForestClassifier,
     RandomForestRegressor,
 )
-from sklearn.linear_model import LogisticRegression, Ridge
+from sklearn.linear_model import ElasticNet, Lasso, LogisticRegression, Ridge
 from sklearn.metrics import (
     accuracy_score,
     confusion_matrix,
@@ -38,6 +42,7 @@ from sklearn.metrics import (
     roc_curve,
 )
 from sklearn.model_selection import KFold, StratifiedKFold, cross_val_score
+from sklearn.neighbors import KNeighborsClassifier, KNeighborsRegressor
 from sklearn.preprocessing import StandardScaler
 from sklearn.svm import SVC, SVR
 from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor
@@ -53,6 +58,9 @@ CLF_REGISTRY: dict[str, type] = {
     "Random Forest": RandomForestClassifier,
     "XGBoost": xgb.XGBClassifier,
     "Gradient Boosting": GradientBoostingClassifier,
+    "Extra Trees": ExtraTreesClassifier,
+    "AdaBoost": AdaBoostClassifier,
+    "K-Nearest Neighbors": KNeighborsClassifier,
     "Logistic Regression": LogisticRegression,
     "SVM": SVC,
     "Decision Tree": DecisionTreeClassifier,
@@ -62,7 +70,12 @@ REG_REGISTRY: dict[str, type] = {
     "Random Forest": RandomForestRegressor,
     "XGBoost": xgb.XGBRegressor,
     "Gradient Boosting": GradientBoostingRegressor,
+    "Extra Trees": ExtraTreesRegressor,
+    "AdaBoost": AdaBoostRegressor,
+    "K-Nearest Neighbors": KNeighborsRegressor,
     "Ridge Regression": Ridge,
+    "Lasso Regression": Lasso,
+    "Elastic Net": ElasticNet,
     "SVR": SVR,
     "Decision Tree": DecisionTreeRegressor,
 }
@@ -72,10 +85,15 @@ DEFAULT_PARAMS: dict[str, dict[str, Any]] = {
     "Random Forest": {"n_estimators": 100, "max_depth": None, "min_samples_split": 2},
     "XGBoost": {"n_estimators": 100, "learning_rate": 0.1, "max_depth": 6},
     "Gradient Boosting": {"n_estimators": 100, "learning_rate": 0.1, "max_depth": 3},
+    "Extra Trees": {"n_estimators": 100, "max_depth": None, "min_samples_split": 2},
+    "AdaBoost": {"n_estimators": 50, "learning_rate": 1.0},
+    "K-Nearest Neighbors": {"n_neighbors": 5},
     "Logistic Regression": {"C": 1.0, "max_iter": 1000},
     "SVM": {"C": 1.0, "kernel": "rbf"},
     "Decision Tree": {"max_depth": None, "min_samples_split": 2},
     "Ridge Regression": {"alpha": 1.0},
+    "Lasso Regression": {"alpha": 1.0, "max_iter": 10000},
+    "Elastic Net": {"alpha": 1.0, "l1_ratio": 0.5, "max_iter": 10000},
     "SVR": {"C": 1.0, "kernel": "rbf"},
 }
 

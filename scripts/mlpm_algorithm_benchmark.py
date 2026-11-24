@@ -21,6 +21,7 @@ import numpy as np
 from sklearn.datasets import (
     load_breast_cancer,
     load_diabetes,
+    load_digits,
     load_iris,
     load_wine,
     fetch_california_housing,
@@ -70,6 +71,11 @@ def load_classification_datasets() -> dict[str, tuple]:
     try:
         wine = load_wine()
         datasets["wine"] = (wine.data, wine.target)
+    except Exception:
+        pass
+    try:
+        digits = load_digits()
+        datasets["digits"] = (digits.data, digits.target)
     except Exception:
         pass
     return datasets

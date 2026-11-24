@@ -1,0 +1,15 @@
+Drift Type,Expected Drift,PSI Mean,PSI Max,PSI Detected (>0.25),KS Detected (p<0.05),JS Detected (>0.1),Wasserstein Detected (>0.5)
+no_drift,False,0.01743,0.02643,No,No,No,No
+small_drift,True,0.09119,0.12236,No,Yes,Yes,No
+moderate_drift,True,0.45500,0.54089,Yes,Yes,Yes,Yes
+severe_drift,True,1.97956,2.09539,Yes,Yes,Yes,Yes
+scale_change,True,1.57234,1.68010,Yes,Yes,Yes,Yes
+covariate_shift,True,3.35175,3.48558,Yes,Yes,Yes,Yes
+feature_level_drift,True,0.18942,0.87496,No,Yes,Yes,Yes
+class_imbalance,True,0.20913,0.41141,No,Yes,Yes,Yes
+
+Method,Threshold,Precision,Recall,F1,FPR,FNR,Mean Runtime (ms),P95 Runtime (ms),Total Tests
+PSI,0.25,1.0000,0.5714,0.7273,0.0000,0.4286,0.000,0.000,40
+KS Test,0.95,1.0000,1.0000,1.0000,0.0000,0.0000,0.000,0.000,40
+JS Divergence,0.1,1.0000,0.8000,0.8889,0.0000,0.2000,0.000,0.000,40
+Wasserstein,0.5,1.0000,0.5714,0.7273,0.0000,0.4286,0.000,0.000,40

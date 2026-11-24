@@ -1,0 +1,31 @@
+Dataset,Task,Model,Accuracy,Precision,Recall,F1,ROC-AUC,MAE,RMSE,R2,Train Time (s),Inference Latency (ms),N Samples,N Features
+iris,classification,Random Forest,0.9444,0.9473,0.9444,0.9443,0.9978,,,,0.0877,0.4942,150,4
+iris,classification,XGBoost,0.9556,0.9576,0.9556,0.9555,0.9894,,,,0.0790,0.0317,150,4
+iris,classification,Gradient Boosting,0.9667,0.9697,0.9667,0.9666,0.9978,,,,0.1230,0.0195,150,4
+iris,classification,Logistic Regression,0.9556,0.9576,0.9556,0.9555,0.9989,,,,0.0027,0.0027,150,4
+iris,classification,SVM,0.9667,0.9697,0.9667,0.9666,0.0000,,,,0.0007,0.0055,150,4
+iris,classification,Decision Tree,0.9556,0.9576,0.9556,0.9555,0.9667,,,,0.0005,0.0023,150,4
+breast_cancer,classification,Random Forest,0.9561,0.9561,0.9561,0.9560,0.9904,,,,0.0909,0.1305,569,30
+breast_cancer,classification,XGBoost,0.9591,0.9594,0.9591,0.9589,0.9856,,,,0.0424,0.0080,569,30
+breast_cancer,classification,Gradient Boosting,0.9620,0.9626,0.9620,0.9618,0.9902,,,,0.2355,0.0026,569,30
+breast_cancer,classification,Logistic Regression,0.9766,0.9766,0.9766,0.9765,0.9918,,,,0.0040,0.0040,569,30
+breast_cancer,classification,SVM,0.9737,0.9737,0.9737,0.9737,0.0000,,,,0.0030,0.0055,569,30
+breast_cancer,classification,Decision Tree,0.9386,0.9386,0.9386,0.9386,0.9349,,,,0.0070,0.0070,569,30
+wine,classification,Random Forest,0.9907,0.9908,0.9907,0.9908,1.0000,,,,0.1210,0.4942,178,13
+wine,classification,XGBoost,0.9907,0.9907,0.9907,0.9907,0.9992,,,,0.0490,0.0317,178,13
+wine,classification,Gradient Boosting,0.9444,0.9447,0.9444,0.9447,0.9977,,,,0.2810,0.0195,178,13
+wine,classification,Logistic Regression,0.9722,0.9723,0.9722,0.9723,1.0000,,,,0.0040,0.0027,178,13
+wine,classification,SVM,0.9815,0.9814,0.9815,0.9814,0.0000,,,,0.0010,0.0055,178,13
+wine,classification,Decision Tree,0.9167,0.9167,0.9167,0.9167,0.9318,,,,0.0010,0.0023,178,13
+diabetes,regression,,,,,,44.7745,56.1321,0.4418,0.0720,0.0000,442,10
+diabetes,regression,XGBoost,,,,,,47.8246,60.9483,0.3433,0.0580,0.0000,442,10
+diabetes,regression,Gradient Boosting,,,,,,45.7154,57.1994,0.4204,0.0620,0.0000,442,10
+diabetes,regression,Ridge Regression,,,,,,43.3744,52.7192,0.5068,0.0010,0.0000,442,10
+diabetes,regression,SVR,,,,,,59.3356,70.3037,0.1234,0.0030,0.0000,442,10
+diabetes,regression,Decision Tree,,,,,,61.2584,78.7120,-0.1022,0.0020,0.0000,442,10
+california_housing,regression,,,,,,0.3242,0.4939,0.8173,0.8900,0.0000,20640,8
+california_housing,regression,XGBoost,,,,,,0.3108,0.4634,0.8391,0.0940,0.0000,20640,8
+california_housing,regression,Gradient Boosting,,,,,,0.3652,0.5230,0.7950,2.2770,0.0000,20640,8
+california_housing,regression,Ridge Regression,,,,,,0.5297,0.7303,0.6007,0.0010,0.0000,20640,8
+california_housing,regression,SVR,,,,,,0.3946,0.5890,0.7403,4.4110,0.0000,20640,8
+california_housing,regression,Decision Tree,,,,,,0.4525,0.7034,0.6296,0.1080,0.0000,20640,8

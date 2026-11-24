@@ -1,0 +1,93 @@
+{
+  "project": "ML Pipeline Monitor",
+  "phase": 2,
+  "date": "2026-11-24",
+  "git_sha": "31d2281",
+  "pipeline": {
+    "stages": 7,
+    "stage_names": [
+      "Data Validation",
+      "Preprocessing",
+      "Feature Analysis",
+      "Cross-Validation",
+      "Training",
+      "Evaluation",
+      "Feature Importance"
+    ],
+    "algorithms": 12,
+    "classification_algorithms": [
+      "Random Forest", "XGBoost", "Gradient Boosting",
+      "Logistic Regression", "SVM", "Decision Tree"
+    ],
+    "regression_algorithms": [
+      "Random Forest", "XGBoost", "Gradient Boosting",
+      "Ridge Regression", "SVR", "Decision Tree"
+    ],
+    "worker_type": "polling (not Celery)"
+  },
+  "test_status": {
+    "tests_passed": 310,
+    "tests_failed": 0,
+    "tests_errored": 27,
+    "error_reason": "Playwright browser not available (E2E tests)",
+    "coverage": "81.03%"
+  },
+  "algorithm_benchmark_summary": {
+    "classification_best_accuracy": {
+      "iris": "Gradient Boosting (0.9667)",
+      "breast_cancer": "Gradient Boosting (0.9620)",
+      "wine": "Random Forest / XGBoost (0.9907)"
+    },
+    "classification_fastest_train": {
+      "iris": "Decision Tree (0.0005s)",
+      "breast_cancer": "Decision Tree (0.0070s)",
+      "wine": "Decision Tree (0.0010s)"
+    },
+    "regression_best_r2": {
+      "diabetes": "Ridge Regression (0.5068)",
+      "california_housing": "XGBoost (0.8391)"
+    },
+    "regression_fastest_train": {
+      "diabetes": "Ridge Regression (0.001s)",
+      "california_housing": "Ridge Regression (0.001s)"
+    }
+  },
+  "drift_detection_summary": {
+    "methods_tested": ["PSI", "KS Test", "JS Divergence", "Wasserstein Distance"],
+    "best_method": "KS Test (F1=1.0, FPR=0.0)",
+    "psi_threshold": 0.25,
+    "psi_missed_scenarios": ["small_drift", "feature_level_drift", "class_imbalance"],
+    "psi_magnitude_no_drift": 0.01743,
+    "psi_magnitude_severe_drift": 1.97956
+  },
+  "docker": {
+    "available": false,
+    "blocker": "Docker Desktop not available on this machine",
+    "compose_config_valid": true,
+    "compose_files": [
+      "docker-compose.yml",
+      "docker-compose.dev.yml",
+      "docker-compose.prod.yml",
+      "docker-compose.flower.yml",
+      "docker-compose.override.yml"
+    ]
+  },
+  "limitations": [
+    "Docker Desktop unavailable - cannot verify Docker deployment",
+    "No /predict endpoint latency measurement (requires JWT auth + trained model)",
+    "No pipeline reliability testing for missing values, schema mismatch, corrupted input",
+    "E2E Playwright tests cannot run (no browser)",
+    "Algorithm benchmarking limited to sklearn built-in datasets"
+  ],
+  "key_files": {
+    "pipeline": "src/ml_pipeline_monitor/ml/pipeline.py",
+    "drift_detector": "src/ml_pipeline_monitor/ml/drift_detector.py",
+    "data_loader": "src/ml_pipeline_monitor/ml/data_loader.py",
+    "data_validation": "src/ml_pipeline_monitor/ml/data_validation.py",
+    "algorithm_benchmark": "scripts/mlpm_algorithm_benchmark.py",
+    "drift_benchmark": "scripts/mlpm_drift_benchmark.py",
+    "algorithm_results": "experiment_results/mlpm_algorithm_benchmark.json",
+    "drift_results": "experiment_results/mlpm_drift_benchmark.json",
+    "baseline_snapshot": "experiment_results/baseline_snapshot.json"
+  }
+}
